@@ -60,18 +60,21 @@ class Looper(ExplicitComponent):
         self.options.declare('names', [])
 
     def setup(self):
-
-        size = 3
         self.options['names'] = ['a', 'b', 'c', 'd']
+
+        self.add_input('W_in', val=30.0, units='lbm/s', desc='entrance mass flow')
+        self.add_output('W_out', val=0.0, units='lbm/s', desc='exit mass flow')
 
         # primary inputs and outputs
         for n in self.options['names']:
-            self.add_input(n + '_in', val=np.ones(size))
-            self.add_output(n + '_out', val=np.zeros(size))
+            self.add_input(n + '_in', val=1.0)
+            self.add_output(n + '_out', val=0.0)
 
         self.declare_partials(of='*', wrt='*')
 
     def compute(self, inputs, outputs):
+
+        outputs['W_out'] = inputs['W_in']
 
         insum = 0.0
         names = self.options['names']
@@ -80,6 +83,31 @@ class Looper(ExplicitComponent):
 
         for n in names:
             outputs[n + '_out'] = insum + 3.0 * inputs[n + '_in']
+            outputs['W_out'] = outputs['W_out'] - outputs[n+'_out']
+
+    # The version below passes but the one above, with the addition of W_out and W_in, fails.
+
+    # def setup(self):
+
+    #     size = 3
+    #     self.options['names'] = ['a', 'b', 'c', 'd']
+
+    #     # primary inputs and outputs
+    #     for n in self.options['names']:
+    #         self.add_input(n + '_in', val=np.ones(size))
+    #         self.add_output(n + '_out', val=np.zeros(size))
+
+    #     self.declare_partials(of='*', wrt='*')
+
+    # def compute(self, inputs, outputs):
+
+    #     insum = 0.0
+    #     names = self.options['names']
+    #     for n in names:
+    #         insum = insum + inputs[n + '_in']
+
+    #     for n in names:
+    #         outputs[n + '_out'] = insum + 3.0 * inputs[n + '_in']
 
 
 class ForCond(ExplicitComponent):
