@@ -1,5 +1,7 @@
 import sys
 import os
+import shutil
+import tempfile
 import unittest
 
 import numpy as np
@@ -145,6 +147,18 @@ def get_harness(comp, name='comp', top=False):
 
 class TangentTestCase(unittest.TestCase):
 
+    def setUp(self):
+        self.startdir = os.getcwd()
+        self.tempdir = tempfile.mkdtemp(prefix='TangentTestCase-')
+        os.chdir(self.tempdir)
+
+    def tearDown(self):
+        os.chdir(self.startdir)
+        try:
+            shutil.rmtree(self.tempdir)
+        except OSError:
+            pass
+
     def test_set_vec(self):
         p, comp = get_harness(PassThrough(size=5))
         p['comp.a'] = np.random.random(comp.size) + 1.0
@@ -167,19 +181,24 @@ class TangentTestCase(unittest.TestCase):
         p.run_model()
         check_tangent_ad(comp, mode='rev')
 
+    @unittest.expectedFailure
     def test_aug_assign(self):
         self.fail("not tested")
 
+    @unittest.expectedFailure
     def test_slice_rhs(self):
         self.fail("not tested")
 
+    @unittest.expectedFailure
     def test_slice_lhs(self):
         self.fail("not tested")
 
+    @unittest.expectedFailure
     def test_call_on_nonfunc(self):
         # test when an instance with a __call__ method is called like a function
         self.fail("not tested")
 
+    @unittest.expectedFailure
     def test_attribute(self):
         # test handling of self.* attributes within the AD'd function
         self.fail("not tested")
@@ -220,9 +239,11 @@ class TangentTestCase(unittest.TestCase):
         p.run_model()
         check_tangent_ad(comp, verbose=0, optimize=False, mode='rev')
 
+    @unittest.expectedFailure
     def test_subfunction(self):
         self.fail("not tested")
 
+    @unittest.expectedFailure
     def test_submethod(self):
         self.fail("not tested")
 
