@@ -1529,7 +1529,7 @@ class System(object):
             return get_relevant_vars(self._conn_global_abs_in2out, desvars, responses,
                                      mode)
         else:
-            relevant = defaultdict(dict)
+            relevant = {}
             relevant['nonlinear'] = {'@all': ({'input': ContainsAll(), 'output': ContainsAll()},
                                               ContainsAll())}
             return relevant
@@ -1561,10 +1561,11 @@ class System(object):
             if self.pathname in relsys:
                 self._rel_vec_name_list.append(vec_name)
             for type_ in ('input', 'output'):
+                rel_t = rel[type_]
                 self._var_allprocs_relevant_names[vec_name][type_].extend(
-                    v for v in self._var_allprocs_abs_names[type_] if v in rel[type_])
+                    v for v in self._var_allprocs_abs_names[type_] if v in rel_t)
                 self._var_relevant_names[vec_name][type_].extend(
-                    v for v in self._var_abs_names[type_] if v in rel[type_])
+                    v for v in self._var_abs_names[type_] if v in rel_t)
 
         self._rel_vec_names = frozenset(self._rel_vec_name_list)
         self._lin_rel_vec_name_list = self._rel_vec_name_list[1:]
@@ -3599,131 +3600,133 @@ def get_relevant_vars(connections, desvars, responses, mode):
     relevant = defaultdict(dict)
     cache = {}
 
-    # Create a hybrid graph with components and all connected vars.  If a var is connected,
-    # also connect it to its corresponding component.
-    graph = nx.DiGraph()
-    for tgt, src in iteritems(connections):
-        if src not in graph:
-            graph.add_node(src, type_='out')
-        graph.add_node(tgt, type_='in')
+    if desvars and responses:
 
-        src_sys = src.rsplit('.', 1)[0]
-        graph.add_edge(src_sys, src)
+        # Create a hybrid graph with components and all connected vars.  If a var is connected,
+        # also connect it to its corresponding component.
+        graph = nx.DiGraph()
+        for tgt, src in iteritems(connections):
+            if src not in graph:
+                graph.add_node(src, type_='out')
+            graph.add_node(tgt, type_='in')
 
-        tgt_sys = tgt.rsplit('.', 1)[0]
-        graph.add_edge(tgt, tgt_sys)
+            src_sys = src.rsplit('.', 1)[0]
+            graph.add_edge(src_sys, src)
 
-        graph.add_edge(src, tgt)
+            tgt_sys = tgt.rsplit('.', 1)[0]
+            graph.add_edge(tgt, tgt_sys)
 
-    for dv in desvars:
-        if dv not in graph:
-            graph.add_node(dv, type_='out')
-            parts = dv.rsplit('.', 1)
-            if len(parts) == 1:
-                system = ''  # this happens when a component is the model
-                graph.add_edge(dv, system)
-            else:
-                system = parts[0]
-                graph.add_edge(system, dv)
+            graph.add_edge(src, tgt)
 
-    for res in responses:
-        if res not in graph:
-            graph.add_node(res, type_='out')
-            parts = res.rsplit('.', 1)
-            if len(parts) == 1:
-                system = ''  # this happens when a component is the model
-            else:
-                system = parts[0]
-            graph.add_edge(system, res)
-
-    nodes = graph.nodes
-    grev = graph.reverse(copy=False)
-
-    for desvar in desvars:
-        dv = (desvar, 'dv')
-        if dv not in cache:
-            cache[dv] = set(all_connected_nodes(graph, desvar))
-
-        for response in responses:
-            res = (response, 'r')
-            if res not in cache:
-                cache[res] = set(all_connected_nodes(grev, response))
-
-            common = cache[dv].intersection(cache[res])
-
-            if common:
-                input_deps = set()
-                output_deps = set()
-                sys_deps = set()
-                for node in common:
-                    if 'type_' in nodes[node]:
-                        typ = nodes[node]['type_']
-                        parts = node.rsplit('.', 1)
-                        if len(parts) == 1:
-                            system = ''
-                        else:
-                            system = parts[0]
-                        if typ == 'in':  # input var
-                            input_deps.add(node)
-                            if system not in sys_deps:
-                                sys_deps.update(all_ancestors(system))
-                        else:  # output var
-                            output_deps.add(node)
-                            if system not in sys_deps:
-                                sys_deps.update(all_ancestors(system))
-
-            elif desvar == response:
-                input_deps = set()
-                output_deps = set([response])
-                parts = desvar.rsplit('.', 1)
+        for dv in desvars:
+            if dv not in graph:
+                graph.add_node(dv, type_='out')
+                parts = dv.rsplit('.', 1)
                 if len(parts) == 1:
-                    s = ''
+                    system = ''  # this happens when a component is the model
+                    graph.add_edge(dv, system)
                 else:
-                    s = parts[0]
-                sys_deps = set(all_ancestors(s))
+                    system = parts[0]
+                    graph.add_edge(system, dv)
 
-            if common or desvar == response:
-                if mode == 'fwd' or mode == 'auto':
-                    relevant[desvar][response] = ({'input': input_deps,
-                                                   'output': output_deps}, sys_deps)
-                if mode == 'rev' or mode == 'auto':
-                    relevant[response][desvar] = ({'input': input_deps,
-                                                   'output': output_deps}, sys_deps)
-
-                sys_deps.add('')  # top level Group is always relevant
-
-    voi_lists = []
-    if mode == 'fwd' or mode == 'auto':
-        voi_lists.append((desvars, responses))
-    if mode == 'rev' or mode == 'auto':
-        voi_lists.append((responses, desvars))
-
-    # now calculate dependencies between each VOI and all other VOIs of the
-    # other type, e.g for each input VOI wrt all output VOIs.  This is only
-    # done for design vars in fwd mode or responses in rev mode. In auto mode,
-    # we combine the results for fwd and rev modes.
-    for inputs, outputs in voi_lists:
-        for inp in inputs:
-            relinp = relevant[inp]
-            if relinp:
-                if '@all' in relinp:
-                    dct, total_systems = relinp['@all']
-                    total_inps = dct['input']
-                    total_outs = dct['output']
+        for res in responses:
+            if res not in graph:
+                graph.add_node(res, type_='out')
+                parts = res.rsplit('.', 1)
+                if len(parts) == 1:
+                    system = ''  # this happens when a component is the model
                 else:
-                    total_inps = set()
-                    total_outs = set()
-                    total_systems = set()
-                for out in outputs:
-                    if out in relinp:
-                        dct, systems = relinp[out]
-                        total_inps.update(dct['input'])
-                        total_outs.update(dct['output'])
-                        total_systems.update(systems)
-                relinp['@all'] = ({'input': total_inps, 'output': total_outs},
-                                  total_systems)
-            else:
-                relinp['@all'] = ({'input': set(), 'output': set()}, set())
+                    system = parts[0]
+                graph.add_edge(system, res)
+
+        nodes = graph.nodes
+        grev = graph.reverse(copy=False)
+
+        for desvar in desvars:
+            dv = (desvar, 'dv')
+            if dv not in cache:
+                cache[dv] = set(all_connected_nodes(graph, desvar))
+
+            for response in responses:
+                res = (response, 'r')
+                if res not in cache:
+                    cache[res] = set(all_connected_nodes(grev, response))
+
+                common = cache[dv].intersection(cache[res])
+
+                if common:
+                    input_deps = set()
+                    output_deps = set()
+                    sys_deps = set()
+                    for node in common:
+                        if 'type_' in nodes[node]:
+                            typ = nodes[node]['type_']
+                            parts = node.rsplit('.', 1)
+                            if len(parts) == 1:
+                                system = ''
+                            else:
+                                system = parts[0]
+                            if typ == 'in':  # input var
+                                input_deps.add(node)
+                                if system not in sys_deps:
+                                    sys_deps.update(all_ancestors(system))
+                            else:  # output var
+                                output_deps.add(node)
+                                if system not in sys_deps:
+                                    sys_deps.update(all_ancestors(system))
+
+                elif desvar == response:
+                    input_deps = set()
+                    output_deps = set([response])
+                    parts = desvar.rsplit('.', 1)
+                    if len(parts) == 1:
+                        s = ''
+                    else:
+                        s = parts[0]
+                    sys_deps = set(all_ancestors(s))
+
+                if common or desvar == response:
+                    if mode == 'fwd' or mode == 'auto':
+                        relevant[desvar][response] = ({'input': input_deps,
+                                                      'output': output_deps}, sys_deps)
+                    if mode == 'rev' or mode == 'auto':
+                        relevant[response][desvar] = ({'input': input_deps,
+                                                       'output': output_deps}, sys_deps)
+
+                    sys_deps.add('')  # top level Group is always relevant
+
+        voi_lists = []
+        if mode == 'fwd' or mode == 'auto':
+            voi_lists.append((desvars, responses))
+        if mode == 'rev' or mode == 'auto':
+            voi_lists.append((responses, desvars))
+
+        # now calculate dependencies between each VOI and all other VOIs of the
+        # other type, e.g for each input VOI wrt all output VOIs.  This is only
+        # done for design vars in fwd mode or responses in rev mode. In auto mode,
+        # we combine the results for fwd and rev modes.
+        for inputs, outputs in voi_lists:
+            for inp in inputs:
+                relinp = relevant[inp]
+                if relinp:
+                    if '@all' in relinp:
+                        dct, total_systems = relinp['@all']
+                        total_inps = dct['input']
+                        total_outs = dct['output']
+                    else:
+                        total_inps = set()
+                        total_outs = set()
+                        total_systems = set()
+                    for out in outputs:
+                        if out in relinp:
+                            dct, systems = relinp[out]
+                            total_inps.update(dct['input'])
+                            total_outs.update(dct['output'])
+                            total_systems.update(systems)
+                    relinp['@all'] = ({'input': total_inps, 'output': total_outs},
+                                      total_systems)
+                else:
+                    relinp['@all'] = ({'input': set(), 'output': set()}, set())
 
     relevant['linear'] = {'@all': ({'input': ContainsAll(), 'output': ContainsAll()},
                                    ContainsAll())}
