@@ -1850,20 +1850,21 @@ class Group(System):
         return self._approx_subjac_keys
 
     def _approx_subjac_keys_iter(self):
-        pro2abs = self._var_allprocs_prom2abs_list
-
-        if self._owns_approx_wrt and not self.pathname:
-            candidate_wrt = self._owns_approx_wrt
-        else:
-            candidate_wrt = list(var[0] for var in pro2abs['input'].values())
-
         from openmdao.core.indepvarcomp import IndepVarComp
-        wrt = set()
-        ivc = set()
+        wrts = set()
+        ivcs = set()
+        pro2abs = self._var_allprocs_prom2abs_list
         if self.pathname:  # get rid of any old stuff in here
             self._owns_approx_of = self._owns_approx_wrt = None
 
-        for var in candidate_wrt:
+        if self._owns_approx_wrt:
+            candidate_wrts = self._owns_approx_wrt
+            ofs = self._owns_approx_of
+        else:
+            candidate_wrts = list(var[0] for var in pro2abs['input'].values())
+            ofs = set(var[0] for var in pro2abs['output'].values())
+
+        for var in candidate_wrts:
 
             # Weed out inputs connected to anything inside our system unless the source is an
             # indepvarcomp.
@@ -1872,29 +1873,28 @@ class Group(System):
                 compname = src.rsplit('.', 1)[0]
                 comp = self._get_subsystem(compname)
                 if isinstance(comp, IndepVarComp):
-                    wrt.add(src)
-                    ivc.add(src)
+                    ivcs.add(src)
             else:
-                wrt.add(var)
+                wrts.add(var)
 
-        if self._owns_approx_of:
-            of = set(self._owns_approx_of)
-        else:
-            of = set(var[0] for var in pro2abs['output'].values())
+        wrts.update(ivcs)
+
+        if self._owns_approx_of is None:
             # Skip indepvarcomp res wrt other srcs
-            of -= ivc
+            ofs -= ivcs
 
-        for key in product(of, wrt.union(of)):
-            # Create approximations for the ones we need.
+        all_wrts = wrts.union(ofs)
+        for of in ofs:
+            for wrt in all_wrts:
 
-            # Skip explicit res wrt outputs
-            if key[1] in of and key[1] not in ivc:
+                # Skip explicit res wrt outputs
+                if wrt in ofs and wrt not in ivcs:
 
-                # Support for specifying a desvar as an obj/con.
-                if key[1] not in wrt or key[0] == key[1]:
-                    continue
+                    # Support for specifying a desvar as an obj/con.
+                    if wrt not in wrts or of == wrt:
+                        continue
 
-            yield key
+                yield (of, wrt)
 
     def _jacobian_of_iter(self):
         """
