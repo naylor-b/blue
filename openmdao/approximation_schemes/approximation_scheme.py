@@ -7,6 +7,7 @@ from scipy.sparse import coo_matrix
 import numpy as np
 from openmdao.utils.array_utils import sub2full_indices, get_input_idx_split
 from openmdao.utils.coloring import Coloring
+from openmdao.utils.mpi import MPI
 from openmdao.jacobians.jacobian import Jacobian
 
 _full_slice = slice(None)
@@ -231,15 +232,19 @@ class ApproximationScheme(object):
 
         self._approx_groups = []
 
-        # must sort _exec_dict keys here or have ordering issues when using MPI
-        for key in sorted(self._exec_dict):
+        if MPI is None:
+            keys = iter(self._exec_dict)
+        else:
+            # must sort _exec_dict keys here or have ordering issues when using MPI
+            keys = sorted(self._exec_dict)
+
+        for key in keys:
             approx = self._exec_dict[key]
             meta = approx[0][1]
             if coloring is not None and 'coloring' in meta:
                 continue
-            wrt = key[0]
-            directional = key[-1]
             data = self._get_approx_data(system, key)
+            wrt = key[0]
             if wrt in inputs._views_flat:
                 arr = inputs
                 slices = in_slices
@@ -261,6 +266,7 @@ class ApproximationScheme(object):
 
             # Directional derivatives for quick partial checking.
             # We place the indices in a list so that they are all stepped at the same time.
+            directional = key[-1]
             if directional:
                 in_idx = [list(in_idx)]
 

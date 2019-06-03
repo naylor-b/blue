@@ -1763,6 +1763,8 @@ class Group(System):
                 self._assembled_jac._update(self)
 
             if sub_do_ln:
+                # this is basically a no-op for all linear solvers except for Direct, which
+                # performs an LU factorization here.
                 for subsys in self._subsystems_myproc:
                     if subsys._linear_solver is not None:
                         subsys._linear_solver._linearize()
