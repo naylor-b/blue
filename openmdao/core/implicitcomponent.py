@@ -260,10 +260,8 @@ class ImplicitComponent(Component):
 
     def _approx_subjac_keys_iter(self):
         for abs_key, meta in iteritems(self._subjacs_info):
-            if 'method' in meta:
-                method = meta['method']
-                if method is not None and method in self._approx_schemes:
-                    yield abs_key
+            if 'method' in meta and meta['method'] in self._approx_schemes:
+                yield abs_key
 
     def _linearize(self, jac=None, sub_do_ln=True):
         """
