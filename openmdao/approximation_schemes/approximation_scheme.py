@@ -390,6 +390,8 @@ class ApproximationScheme(object):
                 self._j_colored.data *= mult
 
             # convert COO matrix to dense for easier slicing
+            # TODO: this could (briefly) use a lot of memory.  Investigate keeping in
+            # sparse format if memory becomes an issue.
             Jcolored = self._j_colored.toarray()
 
         elif is_parallel:  # uncolored with parallel systems
