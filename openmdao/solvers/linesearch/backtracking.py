@@ -29,7 +29,8 @@ def _print_violations(unknowns, lower, upper):
     upper : Vector
         Vector containing the upper bounds.
     """
-    for name, val in iteritems(unknowns._views_flat):
+    for name in unknowns._all_names:
+        val = unknowns._views_flat[name]
         if any(val > upper._views_flat[name]):
             print("'%s' exceeds upper bounds" % name)
             print("  Val:", val)

@@ -175,6 +175,8 @@ class System(object):
         List of names of the linear vectors (i.e., the right-hand sides).
     _vectors : {'input': dict, 'output': dict, 'residual': dict}
         Dictionaries of vectors keyed by vec_name.
+    _root_slices : {'input': dict, 'output': dict, 'residual': dict}
+        Dictionaries of slices into the root vectors keyed by vec_name.
     _inputs : <Vector>
         The inputs vector; points to _vectors['input']['nonlinear'].
     _outputs : <Vector>
@@ -372,6 +374,7 @@ class System(object):
         self._ext_sizes = {'input': (0, 0), 'output': (0, 0)}
 
         self._vectors = {'input': {}, 'output': {}, 'residual': {}}
+        self._root_slices = {'input': {}, 'output': {}}
 
         self._inputs = None
         self._outputs = None
@@ -475,13 +478,14 @@ class System(object):
                 # Perform reconfiguration
                 self.resetup('reconf')
 
-                new = {'input': self._inputs, 'output': self._outputs}
+                newvecs = {'input': self._inputs, 'output': self._outputs}
 
                 # Reload input and output values where possible
                 for type_ in ['input', 'output']:
-                    for abs_name, old_view in iteritems(old[type_]._views_flat):
-                        if abs_name in new[type_]._views_flat:
-                            new_view = new[type_]._views_flat[abs_name]
+                    for abs_name in old[type_]._all_names:
+                        old_view = old[type_]._views_flat[abs_name]
+                        if abs_name in newvecs[type_]._all_names:
+                            new_view = newvecs[type_]._views_flat[abs_name]
 
                             if len(old_view) == len(new_view):
                                 new_view[:] = old_view
@@ -1637,17 +1641,28 @@ class System(object):
             raise RuntimeError(msg)
 
         vector_class = self._vector_class
+        iproc = self.comm.rank
 
         for vec_name in self._rel_vec_name_list:
 
             # Only allocate complex in the vectors we need.
             vec_alloc_complex = root_vectors['output'][vec_name]._alloc_complex
 
-            for kind in ['input', 'output', 'residual']:
-                rootvec = root_vectors[kind][vec_name]
-                vectors[kind][vec_name] = vector_class(
-                    vec_name, kind, self, rootvec, resize=resize,
+            for typ in ['input', 'output']:
+                sizes = self._var_sizes[vec_name][typ]
+                ind1 = self._ext_sizes[vec_name][typ][0]
+                ind2 = ind1 + np.sum(sizes[iproc, :])
+                self._root_slices[typ][vec_name] = slice(int(ind1), int(ind2))
+
+                rootvec = root_vectors[typ][vec_name]
+                vectors[typ][vec_name] = vector_class(
+                    vec_name, typ, self, rootvec, resize=resize,
                     alloc_complex=vec_alloc_complex, ncol=rootvec._ncol)
+
+            rootvec = root_vectors['residual'][vec_name]
+            vectors['residual'][vec_name] = vector_class(
+                vec_name, 'residual', self, rootvec, resize=resize,
+                alloc_complex=vec_alloc_complex, ncol=rootvec._ncol)
 
         self._inputs = vectors['input']['nonlinear']
         self._outputs = vectors['output']['nonlinear']
@@ -2103,9 +2118,9 @@ class System(object):
             old_outs = d_outputs._names
 
             if scope_out is not None:
-                d_outputs._names = scope_out.intersection(d_outputs._views)
+                d_outputs._names = scope_out.intersection(d_outputs._all_names)
             if scope_in is not None:
-                d_inputs._names = scope_in.intersection(d_inputs._views)
+                d_inputs._names = scope_in.intersection(d_inputs._all_names)
 
             yield d_inputs, d_outputs, d_residuals
 
@@ -2964,8 +2979,10 @@ class System(object):
 
         meta = self._var_abs2meta
         inputs = []
+        views = self._inputs._views
 
-        for name, val in iteritems(self._inputs._views):  # This is only over the locals
+        for name in self._inputs._all_names:  # This is only over the locals
+            val = views[name]
             outs = {}
             if values:
                 outs['value'] = val
@@ -3058,7 +3075,9 @@ class System(object):
         # If the System owns an output directly, show its output
         expl_outputs = []
         impl_outputs = []
-        for name, val in iteritems(self._outputs._views):
+        views = self._outputs._views
+        for name in self._outputs._all_names:
+            val = views[name]
             if residuals_tol and np.linalg.norm(self._residuals._views[name]) < residuals_tol:
                 continue
             outs = {}

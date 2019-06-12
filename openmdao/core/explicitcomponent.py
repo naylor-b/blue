@@ -220,7 +220,7 @@ class ExplicitComponent(Component):
             if 'method' in meta:
                 method = meta['method']
                 if (method is not None and method in self._approx_schemes and abs_key[1]
-                        not in self._outputs._views_flat):
+                        not in self._outputs._all_names):
                     yield abs_key
 
     def _apply_nonlinear(self):

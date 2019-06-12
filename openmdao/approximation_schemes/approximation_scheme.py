@@ -241,10 +241,10 @@ class ApproximationScheme(object):
             wrt = key[0]
             directional = key[-1]
             data = self._get_approx_data(system, key)
-            if wrt in inputs._views_flat:
+            if wrt in inputs._all_names:
                 arr = inputs
                 slices = in_slices
-            elif wrt in outputs._views_flat:
+            elif wrt in outputs._all_names:
                 arr = outputs
                 slices = out_slices
             else:  # wrt is remote
@@ -491,7 +491,6 @@ def _get_wrt_subjacs(system, approxs):
     ofdict = {}
     nondense = {}
     slicedict = system._outputs.get_slice_dict()
-    out_views = system._outputs._views
     abs_out_names = [n for n in system._var_allprocs_abs_names['output'] if n in slicedict]
 
     for key, options in approxs:

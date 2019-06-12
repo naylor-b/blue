@@ -70,8 +70,8 @@ def print_scaling_factors(scaling_factors, in_out, linear_type):
         vector = scaling_factors[in_out][linear_type]
         print(indent, in_out, linear_type)
         if vector:
-            for abs_name, view in iteritems(vector._views):
-                print(2 * indent, abs_name, view)
+            for abs_name in vector._all_names:
+                print(2 * indent, abs_name, vector._view[abs_name])
         else:
             print(2 * indent, 'None')
         print()

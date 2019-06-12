@@ -698,8 +698,8 @@ class Group(System):
             subsystems_var_range = self._subsystems_var_range[vec_name]
 
             for type_ in ['input', 'output']:
-                sizes[vec_name][type_] = np.zeros((nproc, len(relnames[vec_name][type_])),
-                                                  INT_DTYPE)
+                sizes[vec_name][type_] = sz = np.zeros((nproc, len(relnames[vec_name][type_])),
+                                                       INT_DTYPE)
 
                 for ind, subsys in enumerate(self._subsystems_myproc):
                     if vec_name not in subsys._rel_vec_names:
@@ -717,19 +717,18 @@ class Group(System):
                                 self.pathname, self.comm.size, subsys.pathname, subsys.comm.size)
                         proc_i = proc_slice.start
                         while proc_i < proc_slice.stop:
-                            sizes[vec_name][type_][proc_i:proc_i + subsys.comm.size, var_slice] = \
+                            sz[proc_i:proc_i + subsys.comm.size, var_slice] = \
                                 subsys._var_sizes[vec_name][type_]
                             proc_i += subsys.comm.size
                     else:
-                        sizes[vec_name][type_][proc_slice, var_slice] = \
-                            subsys._var_sizes[vec_name][type_]
+                        sz[proc_slice, var_slice] = subsys._var_sizes[vec_name][type_]
 
         # If parallel, all gather
         if self.comm.size > 1:
             for vec_name in self._lin_rel_vec_name_list:
                 sizes = self._var_sizes[vec_name]
                 for type_ in ['input', 'output']:
-                    sizes_in = copy.deepcopy(sizes[type_][iproc, :])
+                    sizes_in = sizes[type_][iproc, :].copy()
                     self.comm.Allgather(sizes_in, sizes[type_])
 
             # compute owning ranks
@@ -1272,16 +1271,14 @@ class Group(System):
 
                 for type_ in ['input', 'output']:
                     idx1, idx2 = subsystems_var_range[type_][subsys.name]
-                    size1 = np.sum(sizes[type_][iproc, :idx1])
-                    size2 = np.sum(sizes[type_][iproc, idx2:])
 
                     sub_ext_num_vars[vec_name][type_] = (
                         ext_num_vars[vec_name][type_][0] + idx1,
                         ext_num_vars[vec_name][type_][1] + len(relnames[vec_name][type_]) - idx2,
                     )
                     sub_ext_sizes[vec_name][type_] = (
-                        ext_sizes[vec_name][type_][0] + size1,
-                        ext_sizes[vec_name][type_][1] + size2,
+                        ext_sizes[vec_name][type_][0] + np.sum(sizes[type_][iproc, :idx1]),
+                        ext_sizes[vec_name][type_][1] + np.sum(sizes[type_][iproc, idx2:]),
                     )
 
             if subsys._use_derivatives:

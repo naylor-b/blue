@@ -153,9 +153,9 @@ class FiniteDifference(ApproximationScheme):
         fd_form = _generate_fd_coeff(form, order)
 
         if step_calc == 'rel':
-            if wrt in system._outputs._views_flat:
+            if wrt in system._outputs._all_names:
                 step *= np.linalg.norm(system._outputs._views_flat[wrt])
-            elif wrt in system._inputs._views_flat:
+            elif wrt in system._inputs._all_names:
                 step *= np.linalg.norm(system._inputs._views_flat[wrt])
 
         deltas = fd_form.deltas * step

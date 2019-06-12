@@ -1118,10 +1118,10 @@ class Problem(object):
                             inp_abs = rel_name2abs_name(comp, inp)
 
                             try:
-                                flat_view = dinputs._views_flat[inp_abs]
+                                flat_view = dinputs.get_flat(inp_abs)
                             except KeyError:
                                 # Implicit state
-                                flat_view = dstate._views_flat[inp_abs]
+                                flat_view = dstate.get_flat(inp_abs)
 
                             n_in = len(flat_view)
                             for idx in range(n_in):
@@ -1130,7 +1130,7 @@ class Problem(object):
                                 dstate.set_const(0.0)
 
                                 # Dictionary access returns a scaler for 1d input, and we
-                                # need a vector for clean code, so use _views_flat.
+                                # need a vector for clean code, so use flat_view.
                                 flat_view[idx] = 1.0
 
                                 # Matrix Vector Product
@@ -1140,10 +1140,10 @@ class Problem(object):
                                     out_abs = rel_name2abs_name(comp, out)
 
                                     try:
-                                        derivs = doutputs._views_flat[out_abs]
+                                        derivs = doutputs.get_flat(out_abs)
                                     except KeyError:
                                         # Implicit state
-                                        derivs = dstate._views_flat[out_abs]
+                                        derivs = dstate.get_flat(out_abs)
 
                                     if mode == 'fwd':
                                         key = out, inp

@@ -21,22 +21,6 @@ class DefaultVector(Vector):
 
     TRANSFER = DefaultTransfer
 
-    def _create_data(self):
-        """
-        Allocate data array.
-
-        This happens only in the top level system.  Child systems use views of the array
-        we allocate here.
-
-        Returns
-        -------
-        ndarray
-            zeros array of correct size to hold all of this vector's variables.
-        """
-        ncol = self._ncol
-        size = np.sum(self._system._var_sizes[self._name][self._typ][self._iproc, :])
-        return np.zeros(size) if ncol == 1 else np.zeros((size, ncol))
-
     def _update_root_data(self):
         """
         Resize the root data if necesary (i.e., due to reconfiguration).
@@ -46,8 +30,6 @@ class DefaultVector(Vector):
         vec_name = self._name
         iproc = self._iproc
         root_vec = self._root_vector
-
-        self._create_data()
 
         ext_sizes_t = system._ext_sizes[vec_name][type_]
         int_sizes_t = np.sum(system._var_sizes[vec_name][type_][iproc, :])
@@ -89,30 +71,35 @@ class DefaultVector(Vector):
         iproc = self._iproc
         root_vec = self._root_vector
 
-        cplx_data = None
-        scaling = {}
-        if self._do_scaling:
-            scaling['phys'] = {}
-            scaling['norm'] = {}
+        root_slice = system._root_slices[type_][self._name]
 
         sizes = system._var_sizes[self._name][type_]
         ind1 = system._ext_sizes[self._name][type_][0]
         ind2 = ind1 + np.sum(sizes[iproc, :])
 
-        data = root_vec._data[ind1:ind2]
+        if ind1 != root_slice.start or ind2 != root_slice.stop:
+            raise RuntimeError("FOO")
+
+        data = root_vec._data[root_slice]
 
         # Extract view for complex storage too.
         if self._alloc_complex:
-            cplx_data = root_vec._cplx_data[ind1:ind2]
+            cplx_data = root_vec._cplx_data[root_slice]
+        else:
+            cplx_data = None
 
         if self._do_scaling:
-            for typ in ('phys', 'norm'):
+            scaling = {'phys': {}, 'norm': {}}
+
+            for typ in scaling:
                 root_scale = root_vec._scaling[typ]
-                rs0 = root_scale[0]
+                rs0, rs1 = root_scale
                 if rs0 is None:
-                    scaling[typ] = (rs0, root_scale[1][ind1:ind2])
+                    scaling[typ] = (rs0, rs1[root_slice])
                 else:
-                    scaling[typ] = (rs0[ind1:ind2], root_scale[1][ind1:ind2])
+                    scaling[typ] = (rs0[root_slice], rs1[root_slice])
+        else:
+            scaling = {}
 
         return data, cplx_data, scaling
 
@@ -126,7 +113,8 @@ class DefaultVector(Vector):
             the root's vector instance or None, if we are at the root.
         """
         if root_vector is None:  # we're the root
-            self._data = self._create_data()
+            size = np.sum(self._system._var_sizes[self._name][self._typ][self._iproc, :])
+            self._data = np.zeros(size) if self._ncol == 1 else np.zeros((size, self._ncol))
 
             if self._do_scaling:
                 self._scaling = {}
@@ -153,10 +141,66 @@ class DefaultVector(Vector):
     def _initialize_views(self):
         """
         Internally assemble views onto the vectors.
+        """
+        if self._root_vector is self:
+            self._initialize_root_views()
+            return
 
-        Sets the following attributes:
-        _views
-        _views_flat
+        system = self._system
+        type_ = self._typ
+
+        root_vec = self._root_vector
+
+        alloc_complex = self._alloc_complex
+        self._views = views = root_vec._views
+        self._views_flat = views_flat = root_vec._views_flat
+
+        self._cplx_views = cplx_views = root_vec._cplx_views
+        self._cplx_views_flat = cplx_views_flat = root_vec._cplx_views_flat
+
+        if self._do_scaling:
+            kind = self._kind
+            iproc = self._iproc
+            ncol = self._ncol
+            factors = system._scale_factors
+            scaling = self._scaling
+
+            allprocs_abs2idx_t = system._var_allprocs_abs2idx[self._name]
+            sizes_t = system._var_sizes[self._name][type_]
+            offs = system._get_var_offsets()[self._name][type_]
+            if offs.size > 0:
+                offs = offs[iproc].copy()
+                # turn global offset into local offset
+                start = offs[0]
+                offs -= start
+            else:
+                offs = offs[0]
+            offsets_t = offs
+
+            abs2meta = system._var_abs2meta
+            for abs_name in system._var_relevant_names[self._name][type_]:
+                idx = allprocs_abs2idx_t[abs_name]
+
+                ind1 = offsets_t[idx]
+                ind2 = ind1 + sizes_t[iproc, idx]
+                shape = abs2meta[abs_name]['shape']
+                if ncol > 1:
+                    if not isinstance(shape, tuple):
+                        shape = (shape,)
+                    shape = tuple(list(shape) + [ncol])
+
+                for scaleto in ('phys', 'norm'):
+                    scale0, scale1 = factors[abs_name][kind, scaleto]
+                    vec = scaling[scaleto]
+                    if vec[0] is not None:
+                        vec[0][ind1:ind2] = scale0
+                    vec[1][ind1:ind2] = scale1
+
+        self._names = self._all_names = frozenset(system._var_relevant_names[self._name][type_])
+
+    def _initialize_root_views(self):
+        """
+        Internally assemble views onto the root vectors.
         """
         system = self._system
         type_ = self._typ
@@ -169,10 +213,10 @@ class DefaultVector(Vector):
             factors = system._scale_factors
             scaling = self._scaling
 
+        alloc_complex = self._alloc_complex
         self._views = views = {}
         self._views_flat = views_flat = {}
 
-        alloc_complex = self._alloc_complex
         self._cplx_views = cplx_views = {}
         self._cplx_views_flat = cplx_views_flat = {}
 
@@ -221,7 +265,7 @@ class DefaultVector(Vector):
                         vec[0][ind1:ind2] = scale0
                     vec[1][ind1:ind2] = scale1
 
-        self._names = frozenset(views)
+        self._names = self._all_names = frozenset(views)
 
     def _clone_data(self):
         """
@@ -357,8 +401,7 @@ class DefaultVector(Vector):
         slices = {}
         start = end = 0
         for name in self._system._var_abs_names[self._typ]:
-            arr = self._views_flat[name]
-            end += arr.size
+            end += self._views_flat[name].size
             slices[name] = slice(start, end)
             start = end
 

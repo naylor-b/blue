@@ -2467,12 +2467,14 @@ def _assert_model_matches_case(case, system):
     '''
     case_inputs = case.inputs
     model_inputs = system._inputs
-    for name, model_input in iteritems(model_inputs._views):
+    for name in model_inputs._all_names:
+        model_input = model_inputs._views[name]
         np.testing.assert_almost_equal(case_inputs[name], model_input)
 
     case_outputs = case.outputs
     model_outputs = system._outputs
-    for name, model_output in iteritems(model_outputs._views):
+    for name in model_outputs._all_names:
+        model_output = model_outputs._views[name]
         np.testing.assert_almost_equal(case_outputs[name], model_output)
 
 

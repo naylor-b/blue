@@ -54,6 +54,8 @@ class Vector(object):
         Dictionary mapping absolute variable names to the flattened ndarray views.
     _names : set([str, ...])
         Set of variables that are relevant in the current context.
+    _all_names : set([str, ...])
+        Set of all variables in this vector.
     _root_vector : Vector
         Pointer to the vector owned by the root system.
     _alloc_complex : Bool
@@ -125,12 +127,13 @@ class Vector(object):
         self._system = system
 
         self._iproc = system.comm.rank
-        self._views = {}
-        self._views_flat = {}
+        self._views = None
+        self._views_flat = None
 
-        # self._names will either be equivalent to self._views or to the
+        # self._names will either be equivalent to all variables in the vector or to the
         # set of variables relevant to the current matvec product.
-        self._names = self._views
+        self._names = None
+        self._all_names = None
 
         self._root_vector = None
         self._data = None
@@ -221,7 +224,10 @@ class Vector(object):
         dict
             Dictionary containing the _views.
         """
-        return deepcopy(self._views)
+        views = {}
+        for name in self._all_names:
+            views[name] = deepcopy(self._views[name])
+        return views
 
     def keys(self):
         """
@@ -276,9 +282,28 @@ class Vector(object):
         """
         return name2abs_name(self._system, name, self._names, self._typ) is not None
 
+    def get_flat(self, abs_name):
+        """
+        Get the flattened value given the absolute name.
+
+        Parameters
+        ----------
+        name : str
+            Absolute variable name.
+
+        Returns
+        -------
+        ndarray
+            variable value.
+        """
+        if abs_name in self._all_names:
+            return self._views_flat[abs_name]
+        else:
+            raise KeyError('Variable name "{}" not found.'.format(abs_name))
+
     def __getitem__(self, name):
         """
-        Get the unscaled variable value in true units.
+        Get the variable value.
 
         Parameters
         ----------
@@ -288,7 +313,7 @@ class Vector(object):
         Returns
         -------
         float or ndarray
-            variable value (not scaled, not dimensionless).
+            variable value.
         """
         abs_name = name2abs_name(self._system, name, self._names, self._typ)
         if abs_name is not None:
@@ -297,19 +322,18 @@ class Vector(object):
             else:
                 return self._views[abs_name][:, self._icol]
         else:
-            msg = 'Variable name "{}" not found.'
-            raise KeyError(msg.format(name))
+            raise KeyError('Variable name "{}" not found.'.format(name))
 
     def __setitem__(self, name, value):
         """
-        Set the unscaled variable value in true units.
+        Set the variable value.
 
         Parameters
         ----------
         name : str
             Promoted or relative variable name in the owning system's namespace.
         value : float or list or tuple or ndarray
-            variable value to set (not scaled, not dimensionless)
+            variable value to set
         """
         abs_name = name2abs_name(self._system, name, self._names, self._typ)
         if abs_name is not None:
@@ -437,15 +461,15 @@ class Vector(object):
         scale_to : str
             Values are "phys" or "norm" to scale to physical or normalized.
         """
-        scaling = self._scaling[scale_to]
+        adder, scaler = self._scaling[scale_to]
         if self._ncol == 1:
-            self._data *= scaling[1]
-            if scaling[0] is not None:  # nonlinear only
-                self._data += scaling[0]
+            self._data *= scaler
+            if adder is not None:  # nonlinear only
+                self._data += adder
         else:
-            self._data *= scaling[1][:, np.newaxis]
-            if scaling[0] is not None:  # nonlinear only
-                self._data += scaling[0]
+            self._data *= scaler[:, np.newaxis]
+            if adder is not None:  # nonlinear only
+                self._data += adder
 
     def set_vec(self, vec):
         """
