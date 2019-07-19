@@ -609,7 +609,7 @@ class Coloring(object):
             raise RuntimeError("Internal coloring bug: jacobian has entries where fwd and rev "
                                "colorings overlap!")
 
-    def display(self):
+    def display_mpl(self):
         """
         Display a plot of the sparsity pattern, showing grouping by color.
         """
@@ -774,6 +774,166 @@ class Coloring(object):
         fig.tight_layout()
 
         pyplot.show()
+
+    def display(self):
+        """
+        Display a plot of the sparsity pattern, showing grouping by color.
+        """
+        try:
+            from bokeh.plotting import figure, output_file, show, ColumnDataSource
+            from bokeh.palettes import Inferno256, Viridis256
+            from bokeh.transform import linear_cmap
+            from bokeh.models.tickers import FixedTicker
+        except ImportError:
+            print("bokeh is not installed so the coloring viewer is not available. The ascii "
+                  "based coloring viewer can be accessed by calling display_txt() on the Coloring "
+                  "object or by using 'openmdao view_coloring --jtext <your_coloring_file>' from "
+                  "the command line.")
+            return
+
+        nrows, ncols = self._shape
+        aspect_ratio = ncols / nrows
+        # colors = ['#C0C0C0'] * (nrows * ncols)  # grey
+        img = np.zeros((nrows, ncols), dtype = int)
+
+        tot_size, tot_colors, fwd_solves, rev_solves, pct = self._solves_info()
+
+        xticks = []
+        yticks = []
+
+        if self._row_vars is not None and self._col_vars is not None:
+            wrt_names = [''] * ncols
+            of_names = [''] * nrows
+
+            # we have var name/size info, so mark rows/cols with their respective variable names
+            rowstart = rowend = 0
+            for ridx, rvsize in enumerate(self._row_var_sizes):
+                rowend += rvsize
+                for r in range(rowstart, rowend):
+                    of_names[r] = self._row_vars[ridx]
+                yticks.append(rowend - 1)
+                rowstart = rowend
+
+            colstart = colend = 0
+            for cidx, cvsize in enumerate(self._col_var_sizes):
+                colend += cvsize
+                for c in range(colstart, colend):
+                    wrt_names[c] = self._col_vars[cidx]
+                xticks.append(colend - 1)
+                colstart = colend
+
+            has_rowcol_data = True
+        else:
+            has_rowcol_data = False
+
+        TOOLTIPS = [
+            ('position', ('(@rows, @cols)')),
+            ('color', '@color_id'),
+            ('of', '@of'),
+            ('wrt', '@wrt'),
+        ]
+
+        typ = self._meta['type'].upper()[0] + self._meta['type'][1:]
+
+        title = ("%s Jacobian Coloring (%d x %d)\n%d fwd colors, %d rev colors "
+                 "(%.1f%% improvement)" % (typ, self._shape[0], self._shape[1], fwd_solves,
+                                           rev_solves, pct))
+
+        p = figure(plot_width=800, plot_height=800, tooltips=TOOLTIPS, title=title)
+
+        p.xgrid.ticker = FixedTicker(ticks=xticks)
+        p.ygrid.ticker = FixedTicker(ticks=yticks)
+
+        p.xaxis.major_tick_line_color = None  # turn off x-axis major ticks
+        p.xaxis.minor_tick_line_color = None  # turn off x-axis minor ticks
+
+        p.yaxis.major_tick_line_color = None  # turn off y-axis major ticks
+        p.yaxis.minor_tick_line_color = None  # turn off y-axis minor ticks
+
+        p.xaxis.major_label_text_font_size = '0pt'  # turn off x-axis tick labels
+        p.yaxis.major_label_text_font_size = '0pt'  # turn off y-axis tick labels
+
+        if self._fwd:
+
+            icolor = 1
+            full_rows = np.arange(nrows, dtype=int)
+            col2row = self._fwd[1]
+            col = []
+            row = []
+            color_ids = []
+            of = []
+            wrt = []
+            for color, columns in enumerate(self._fwd[0]):
+                for c in columns:
+                    rows = col2row[c]
+                    if rows is None:
+                        rows = full_rows
+                    col.extend([c] * len(rows))
+                    row.extend(rows)
+                    color_ids.extend([icolor] * len(rows))
+                    of.extend([of_names[r] for r in rows])
+                    wrt.extend([wrt_names[c]] * len(rows))
+                    if color == 0:  # group 0 are uncolored (each col has different color)
+                        icolor += 1
+                icolor += 1
+
+            fwd_source = {
+                'cols': col,
+                'rows': row,
+                'of': of,
+                'wrt': wrt,
+                'color_id': color_ids,
+            }
+
+            fwd_mapper = linear_cmap(field_name='color_id', palette=Inferno256 ,
+                                     low=min(color_ids) ,high=max(color_ids))
+
+            p.rect('cols', 'rows', width=1, height=1, source=fwd_source, color=fwd_mapper, dilate=True)
+
+        if self._rev:
+            # red color map
+            cmap = lambda x, totx: (255, int(x*219), int(x*219))
+
+            icolor = -1
+            full_cols = np.arange(ncols, dtype=int)
+            row2col = self._rev[1]
+            col = []
+            row = []
+            color_ids = []
+            of = []
+            wrt = []
+
+            for color, rows in enumerate(self._rev[0]):
+                for r in rows:
+                    cols = row2col[r]
+                    if cols is None:
+                        cols = full_cols
+                    col.extend(cols)
+                    row.extend([r] * len(cols))
+                    color_ids.extend([icolor] * len(cols))
+                    wrt.extend([wrt_names[c] for c in cols])
+                    of.extend([of_names[r]] * len(cols))
+                    if color == 0:  # group 0 are uncolored (each col has different color)
+                        icolor -= 1
+                icolor -= 1
+
+            rev_source = {
+                'cols': col,
+                'rows': row,
+                'of': of,
+                'wrt': wrt,
+                'color_id': color_ids,
+            }
+
+            rev_mapper = linear_cmap(field_name='color_id', palette=Viridis256 ,
+                                     low=min(color_ids) ,high=max(color_ids))
+
+            p.rect('cols', 'rows', width=1, height=1,source=rev_source, color=rev_mapper, dilate=True)
+
+
+        # output_file("image.html", title="image.py example")
+
+        show(p)  # open a browser
 
     def get_dense_sparsity(self):
         """
