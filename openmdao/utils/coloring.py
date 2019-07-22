@@ -784,6 +784,7 @@ class Coloring(object):
             from bokeh.palettes import Inferno256, Viridis256
             from bokeh.transform import linear_cmap
             from bokeh.models.tickers import FixedTicker
+            from bokeh.models import CategoricalColorMapper
         except ImportError:
             print("bokeh is not installed so the coloring viewer is not available. The ascii "
                   "based coloring viewer can be accessed by calling display_txt() on the Coloring "
@@ -793,42 +794,116 @@ class Coloring(object):
 
         nrows, ncols = self._shape
         aspect_ratio = ncols / nrows
-        # colors = ['#C0C0C0'] * (nrows * ncols)  # grey
-        img = np.zeros((nrows, ncols), dtype = int)
+        color_arr = np.zeros((nrows, ncols), dtype=int)
 
         tot_size, tot_colors, fwd_solves, rev_solves, pct = self._solves_info()
 
+        size = 600
+        if nrows > ncols:
+            mult = nrows / size
+            ysize = nrows / mult
+            xsize = ysize * aspect_ratio
+        else:
+            mult = ncols / size
+            xsize = ncols / mult
+            ysize = xsize / aspect_ratio
+
+        xsize = max(1, int(xsize))
+        ysize = max(1, int(ysize))
+
         xticks = []
         yticks = []
+        of_names = []
+        wrt_names = []
+        factors = ['0', '1']
+        palette = ['#e6e6e6', '#d9d9d9']
 
         if self._row_vars is not None and self._col_vars is not None:
-            wrt_names = [''] * ncols
-            of_names = [''] * nrows
+
+            for name, size in zip(self._col_vars, self._col_var_sizes):
+                wrt_names.extend([name] * size)
+
+            wrt_idxs = [str(i) for i in range(len(wrt_names))]
+
+            wrt_names_full = wrt_names * nrows
+            wrt_idxs_full = wrt_idxs * nrows
+
+            for name, size in zip(self._row_vars, self._row_var_sizes):
+                of_names.extend([name] * size)
+
+            of_idxs = [str(i) for i in range(len(of_names))]
+
+            of_names_full = []
+            of_idxs_full = []
+            for i, name in enumerate(of_names):
+                of_names_full.extend([name] * ncols)
+                of_idxs_full.extend([str(i)] * ncols)
 
             # we have var name/size info, so mark rows/cols with their respective variable names
             rowstart = rowend = 0
             for ridx, rvsize in enumerate(self._row_var_sizes):
                 rowend += rvsize
-                for r in range(rowstart, rowend):
-                    of_names[r] = self._row_vars[ridx]
-                yticks.append(rowend - 1)
+
+                colstart = colend = 0
+                for cidx, cvsize in enumerate(self._col_var_sizes):
+                    colend += cvsize
+                    # display grid that breaks up the Jacobian into subjacs by variable pairs.
+                    # using (ridx+cidx)%2 will give us a nice checkerboard pattern
+                    if (ridx + cidx) % 2:
+                        color_arr[rowstart:rowend, colstart:colend] = 1
+                    colstart = colend
+
                 rowstart = rowend
 
-            colstart = colend = 0
-            for cidx, cvsize in enumerate(self._col_var_sizes):
-                colend += cvsize
-                for c in range(colstart, colend):
-                    wrt_names[c] = self._col_vars[cidx]
-                xticks.append(colend - 1)
-                colstart = colend
+        if self._fwd:
+            # linear green color map
+            cmap = lambda c, tot: "#{:02x}{:02x}{:02x}".format(int(214 * (1. - c/tot)), 255, int(214 * (1. - c/tot))).lower()
 
-            has_rowcol_data = True
-        else:
-            has_rowcol_data = False
+            offset = len(palette)
+
+            full_rows = np.arange(nrows, dtype=int)
+            col2row = self._fwd[1]
+
+            for color, columns in enumerate(self.color_iter('fwd')):
+                palette.append(cmap(color, fwd_solves))
+                factors.append(str(color + offset))
+                for c in columns:
+                    rows = col2row[c]
+                    if rows is None:
+                        rows = full_rows
+
+                    color_arr[rows, c] = color + offset
+
+        if self._rev:
+            # linear red color map
+            cmap = lambda c, tot: "#{:02x}{:02x}{:02x}".format(255, int(214 * (1. - c/tot)), int(214 * (1. - c/tot)))
+
+            full_cols = np.arange(ncols, dtype=int)
+            row2col = self._rev[1]
+
+            offset = len(palette)
+
+            for color, rows in enumerate(self.color_iter('rev')):
+                palette.append(cmap(color, rev_solves))
+                factors.append(str(color + offset))
+                for r in rows:
+                    cols = row2col[r]
+                    if cols is None:
+                        cols = full_cols
+
+                    color_arr[r, cols] = color + offset
+
+        source = {
+            'of': of_names_full,
+            'wrt': wrt_names_full,
+            'of_idxs': of_idxs_full,
+            'wrt_idxs': wrt_idxs_full,
+            'color': [str(i) for i in color_arr.flat],
+        }
 
         TOOLTIPS = [
-            ('position', ('(@rows, @cols)')),
-            ('color', '@color_id'),
+            ('position', ('(@of_idxs, @wrt_idxs)')),
+            ('color', '@color'),
             ('of', '@of'),
             ('wrt', '@wrt'),
         ]
@@ -839,99 +914,28 @@ class Coloring(object):
                  "(%.1f%% improvement)" % (typ, self._shape[0], self._shape[1], fwd_solves,
                                            rev_solves, pct))
 
-        p = figure(plot_width=800, plot_height=800, tooltips=TOOLTIPS, title=title)
+        TOOLS = "hover,save,box_zoom,reset"
 
-        p.xgrid.ticker = FixedTicker(ticks=xticks)
-        p.ygrid.ticker = FixedTicker(ticks=yticks)
+        p = figure(title=title, x_range=wrt_idxs, y_range=list(reversed(of_idxs)),
+                   x_axis_location="below", plot_width=xsize, plot_height=ysize,
+                   tools=TOOLS,  tooltips=TOOLTIPS)
 
-        p.xaxis.major_tick_line_color = None  # turn off x-axis major ticks
-        p.xaxis.minor_tick_line_color = None  # turn off x-axis minor ticks
-
-        p.yaxis.major_tick_line_color = None  # turn off y-axis major ticks
-        p.yaxis.minor_tick_line_color = None  # turn off y-axis minor ticks
-
+        p.grid.grid_line_color = None
+        p.axis.axis_line_color = None
+        p.axis.major_tick_line_color = None
+        p.axis.major_label_standoff = 0
         p.xaxis.major_label_text_font_size = '0pt'  # turn off x-axis tick labels
         p.yaxis.major_label_text_font_size = '0pt'  # turn off y-axis tick labels
+        p.title.text_font_size = '8pt'
 
-        if self._fwd:
-
-            icolor = 1
-            full_rows = np.arange(nrows, dtype=int)
-            col2row = self._fwd[1]
-            col = []
-            row = []
-            color_ids = []
-            of = []
-            wrt = []
-            for color, columns in enumerate(self._fwd[0]):
-                for c in columns:
-                    rows = col2row[c]
-                    if rows is None:
-                        rows = full_rows
-                    col.extend([c] * len(rows))
-                    row.extend(rows)
-                    color_ids.extend([icolor] * len(rows))
-                    of.extend([of_names[r] for r in rows])
-                    wrt.extend([wrt_names[c]] * len(rows))
-                    if color == 0:  # group 0 are uncolored (each col has different color)
-                        icolor += 1
-                icolor += 1
-
-            fwd_source = {
-                'cols': col,
-                'rows': row,
-                'of': of,
-                'wrt': wrt,
-                'color_id': color_ids,
-            }
-
-            fwd_mapper = linear_cmap(field_name='color_id', palette=Inferno256 ,
-                                     low=min(color_ids) ,high=max(color_ids))
-
-            p.rect('cols', 'rows', width=1, height=1, source=fwd_source, color=fwd_mapper, dilate=True)
-
-        if self._rev:
-            # red color map
-            cmap = lambda x, totx: (255, int(x*219), int(x*219))
-
-            icolor = -1
-            full_cols = np.arange(ncols, dtype=int)
-            row2col = self._rev[1]
-            col = []
-            row = []
-            color_ids = []
-            of = []
-            wrt = []
-
-            for color, rows in enumerate(self._rev[0]):
-                for r in rows:
-                    cols = row2col[r]
-                    if cols is None:
-                        cols = full_cols
-                    col.extend(cols)
-                    row.extend([r] * len(cols))
-                    color_ids.extend([icolor] * len(cols))
-                    wrt.extend([wrt_names[c] for c in cols])
-                    of.extend([of_names[r]] * len(cols))
-                    if color == 0:  # group 0 are uncolored (each col has different color)
-                        icolor -= 1
-                icolor -= 1
-
-            rev_source = {
-                'cols': col,
-                'rows': row,
-                'of': of,
-                'wrt': wrt,
-                'color_id': color_ids,
-            }
-
-            rev_mapper = linear_cmap(field_name='color_id', palette=Viridis256 ,
-                                     low=min(color_ids) ,high=max(color_ids))
-
-            p.rect('cols', 'rows', width=1, height=1,source=rev_source, color=rev_mapper, dilate=True)
+        # factor must be a list of strings!
+        mapper = CategoricalColorMapper(factors=factors, palette=palette)
 
 
-        # output_file("image.html", title="image.py example")
+        p.rect(x='wrt_idxs', y='of_idxs', width=1, height=1, source=source,
+               fill_color={'field': 'color', 'transform': mapper}, line_color=None)
+
+        # output_file("coloring.html", title="coloring data")
 
         show(p)  # open a browser
 
