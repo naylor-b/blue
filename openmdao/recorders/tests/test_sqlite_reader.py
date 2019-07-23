@@ -974,6 +974,45 @@ class TestSqliteCaseReader(unittest.TestCase):
                                               out_stream=None)
         self.assertEqual(len(impl_outputs_case), 0)
 
+    def test_list_outputs2(self):
+        prob = om.Problem()
+        prob.model.add_subsystem('indeps', om.IndepVarComp('y', 5.0))
+
+        ids = np.arange(10, dtype=int)
+        # randomly shuffle the component order and check later that the output order matches
+        np.random.shuffle(ids)
+        order = ['indeps']
+        mult = 2.0
+        for i in ids:
+            cname = 'C%d' % i
+            prob.model.add_subsystem(cname, om.ExecComp('y = %f * x' % mult))
+            prob.model.connect(order[-1] + '.y', cname + '.x')
+            order.append(cname)
+            mult += 1.0
+
+        prob.model.add_recorder(self.recorder)
+
+        prob.setup()
+
+        prob.run_driver()
+        prob.cleanup()
+
+        cr = om.CaseReader(self.filename)
+
+        system_cases = cr.list_cases('root')
+        case = cr.get_case(system_cases[0])
+
+        outputs = case.list_outputs(explicit=True, implicit=True, values=True,
+                                    residuals=True, residuals_tol=None,
+                                    units=True, shape=True, bounds=True,
+                                    scaling=True, hierarchical=True, print_arrays=True,
+                                    out_stream=None)
+
+        self.assertEqual(len(outputs), len(order))
+        for cname, tup in zip(order, outputs):
+            vname, _ = tup
+            self.assertEqual(cname + '.y', vname)
+
     def test_list_inputs(self):
         prob = SellarProblem()
 
