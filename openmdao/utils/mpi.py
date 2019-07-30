@@ -7,6 +7,7 @@ import sys
 import traceback
 import unittest
 
+import numpy as np
 from six import PY3
 
 from openmdao.core.analysis_error import AnalysisError
@@ -146,7 +147,7 @@ def multi_proc_fail_check(comm):
     comm : MPI communicator or None
         Communicator from the ParallelGroup that owns the calling solver.
     """
-    if MPI is None:
+    if MPI is None or comm.size == 1:
         yield
     else:
         try:
