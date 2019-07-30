@@ -11,7 +11,7 @@ from openmdao.core.component import Component
 from openmdao.core.implicitcomponent import ImplicitComponent
 from openmdao.solvers.linear.direct import DirectSolver
 from openmdao.utils.graph_utils import get_sccs_topo
-from openmdao.utils.logger_utils import get_logger
+from openmdao.utils.logger_utils import get_logger, _set_handler
 from openmdao.utils.class_util import overrides_method
 from openmdao.utils.mpi import MPI
 
@@ -507,10 +507,12 @@ def _check_config_cmd(options):
     """
     def _check_config(prob):
         if not MPI or MPI.COMM_WORLD.rank == 0:
+            handler = None
             if options.outfile is None:
-                logger = get_logger('check_config', out_stream='stdout',
-                                    out_file=None, use_format=True)
+                logger = get_logger('check_config', out_stream='stdout', use_format=True)
             else:
+                handler = _set_handler(logger, logging.FileHandler(options.outfile, mode='w'),
+                                       level, use_format)
                 logger = get_logger('check_config', out_file=options.outfile, use_format=True)
 
             if not options.checks:
@@ -518,7 +520,13 @@ def _check_config_cmd(options):
             elif 'all' in options.checks:
                 options.checks = sorted(_all_checks)
 
-            prob.check_config(logger, options.checks)
+            try:
+                prob.check_config(logger, options.checks)
+            finally:
+                if handler is not None:
+                    # close and remove the FileHandler
+                    handler.close()
+                    logger.removeHandler(handler)
 
         exit()
 

@@ -39,7 +39,7 @@ from openmdao.utils.units import get_conversion
 from openmdao.utils import coloring as coloring_mod
 from openmdao.utils.name_maps import abs_key2rel_key
 from openmdao.vectors.default_vector import DefaultVector
-from openmdao.utils.logger_utils import get_logger, TestLogger
+from openmdao.utils.logger_utils import get_logger, TestLogger, _set_handler
 import openmdao.utils.coloring as coloring_mod
 
 try:
@@ -1714,23 +1714,33 @@ class Problem(object):
         checks : list of str or None
             List of specific checks to be performed.
         out_file : str or None
-            If not None, output will be written to this file in addition to stdout.
+            If not None and logger is None, output will be written to this file in addition
+            to stdout.
         """
+        handler = None
         if logger is None:
-            logger = get_logger('check_config', out_file=out_file, use_format=True)
+            logger = get_logger('check_config', use_format=True)
+            if out_file is not None:
+                handler = _set_handler(logger, logging.FileHandler(out_file, mode='w'),
+                                       logger.level, use_format=True)
 
         if checks is None:
             checks = sorted(_default_checks)
         elif checks == 'all':
             checks = sorted(_all_checks)
 
-        for c in checks:
-            if c not in _all_checks:
-                print("WARNING: '%s' is not a recognized check.  Available checks are: %s" %
-                      (c, sorted(_all_checks)))
-                continue
-            logger.info('checking %s' % c)
-            _all_checks[c](self, logger)
+        try:
+            for c in checks:
+                if c not in _all_checks:
+                    print("WARNING: '%s' is not a recognized check.  Available checks are: %s" %
+                          (c, sorted(_all_checks)))
+                    continue
+                logger.info('checking %s' % c)
+                _all_checks[c](self, logger)
+        finally:
+            if handler is not None:
+                handler.close()
+                logger.removeHandler(handler)
 
 
 def _assemble_derivative_data(derivative_data, rel_error_tol, abs_error_tol, out_stream,

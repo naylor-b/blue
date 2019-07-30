@@ -23,6 +23,11 @@ def _set_handler(logger, handler, level, use_format):
         Logging level for this logger. Default is logging.INFO (level 20).
     use_format : bool
         Set to True to use the openmdao format "Level: message".
+
+    Returns
+    -------
+    Handler
+        The given logging handler.
     """
     # set a format which is simpler for console use
     if use_format:
@@ -32,9 +37,11 @@ def _set_handler(logger, handler, level, use_format):
     handler.setLevel(level)
     logger.addHandler(handler)
 
+    return handler
+
 
 def get_logger(name='default_logger', level=logging.INFO, use_format=False,
-               out_stream='stdout', out_file=None, lock=None):
+               out_stream='stdout', lock=None):
     """
     Return a logger that writes to an I/O stream.
 
@@ -50,8 +57,6 @@ def get_logger(name='default_logger', level=logging.INFO, use_format=False,
         (applied only when creating a new logger or setting a new stream).
     out_stream : 'stdout', 'stderr' or file-like
         output stream to which logger output will be directed.
-    out_file : str or None
-        If not None, add a FileHandler to write to this file.
     lock : bool
         if True, do not allow the handler to be changed until unlocked.
         if False, unlock the handler for the logger.
@@ -71,7 +76,6 @@ def get_logger(name='default_logger', level=logging.INFO, use_format=False,
         info = _loggers[name]
         logger = info['logger']
         stream = info['stream']
-        ofile = info['file']
         locked = info['locked']
 
         unlock = lock is False
@@ -82,10 +86,7 @@ def get_logger(name='default_logger', level=logging.INFO, use_format=False,
                 logger.removeHandler(handler)
             if out_stream:
                 _set_handler(logger, logging.StreamHandler(out_stream), level, use_format)
-            if out_file:
-                _set_handler(logger, logging.FileHandler(out_file, mode='w'), level, use_format)
             info['stream'] = out_stream
-            info['file'] = out_file
 
         # update locked status
         info['locked'] = lock
@@ -94,13 +95,10 @@ def get_logger(name='default_logger', level=logging.INFO, use_format=False,
         logger = logging.getLogger(name)
         if out_stream:
             _set_handler(logger, logging.StreamHandler(out_stream), level, use_format)
-        if out_file:
-            _set_handler(logger, logging.FileHandler(out_file, mode='w'), level, use_format)
 
         _loggers[name] = {
             'logger': logger,
             'stream': out_stream,
-            'file': out_file,
             'locked': lock
         }
 
