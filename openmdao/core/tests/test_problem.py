@@ -222,6 +222,10 @@ class TestProblem(unittest.TestCase):
         # prob.setup(mode='fwd')
         prob.run_model()
 
+        prob.model.save_vecs('foobar.pkl')
+        prob.model.load_vecs('foobar.pkl')
+
+
         assert_rel_error(self, prob['comp.f_xy'], -15.0)
 
         prob.compute_totals(of=['comp.f_xy'], wrt=['p1.x', 'p2.y'])
@@ -352,7 +356,7 @@ class TestProblem(unittest.TestCase):
 
         prob.setup(check=False, mode='rev')
         prob.run_model()
-
+        
         of = ['f_xy']
         wrt = ['x', 'y']
         derivs = prob.compute_totals(of=of, wrt=wrt)

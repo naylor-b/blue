@@ -14,6 +14,7 @@ import itertools
 from pprint import pprint
 
 from six import iteritems, itervalues, string_types
+from six.moves import cPickle as pickle
 
 import numpy as np
 import networkx as nx
@@ -3698,6 +3699,51 @@ class System(object):
             else:
                 new_list.append((abs2prom_in[abs_name], offset, end, idxs))
         return new_list
+
+    def save_vecs(self, fname):
+        if self._inputs is None:
+            raise RuntimeError("Can't save vec states because vectors haven't been allocated yet.")
+
+        idx = len(self.pathname) + 1 if self.pathname else 0
+
+        with open(fname, 'wb') as f:
+            state = {}
+            # TODO: this doesn't currently consider scaled/unscaled stete of the vecs
+            for kind in ['input', 'output', 'residual']:
+                state[kind] = {}
+                for vecname, vec in self._vectors[kind].items():
+                    state[kind][vecname] = s = {}
+                    for absname, val in vec._views.items():
+                        s[absname[idx:]] = val
+            pickle.dump(state, f)
+
+    def load_vecs(self, fname):
+        if self._inputs is None:
+            raise RuntimeError("Can't load vec states because vectors haven't been allocated yet.")
+
+        idx = len(self.pathname) + 1 if self.pathname else 0
+
+        with open(fname, 'rb') as f:
+            state = pickle.load(f)
+            # TODO: this doesn't currently consider scaled/unscaled stete of the vecs
+            for kind in ['input', 'output', 'residual']:
+                if kind not in state:
+                    print("'%s' not found in state" % kind)
+                    continue
+                state_vecs = state[kind]
+                for vecname, vec in self._vectors[kind].items():
+                    if vecname not in state_vecs:
+                        print("'%s' not found in state['%s']" % (vecname, kind))
+                        continue
+                    else:
+                        state_vals = state_vecs[vecname]
+                        for absname in vec._views:
+                            relname = absname[idx:]
+                            if relname in state_vals:
+                                vec._views[absname][:] = state_vals[relname]
+                            else:
+                                print("'%s' not found in vecs['%s']['%s']" %
+                                      (relname, kind, vecname))
 
 
 def get_relevant_vars(connections, desvars, responses, mode):

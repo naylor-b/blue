@@ -81,7 +81,7 @@ def get_logger(name='default_logger', level=logging.INFO, use_format=False,
         unlock = lock is False
 
         # redirect log to new stream (if not locked)
-        if (out_stream != stream or ofile != out_file) and (not locked or unlock):
+        if (out_stream != stream) and (not locked or unlock):
             for handler in logger.handlers:
                 logger.removeHandler(handler)
             if out_stream:
