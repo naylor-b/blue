@@ -829,3 +829,19 @@ def make_set(str_data, name=None):
         raise TypeError("The {} argument should be str, set, or list: {}".format(name, str_data))
     else:
         raise TypeError("The argument should be str, set, or list: {}".format(str_data))
+
+
+class ReprObj(object):
+    """
+    A simple class that does nothing but define a __repr__ method.
+
+    This is handy for defining unique variables to represent unspecified function args.
+    When the source docs are generated for a function having one of these objects as an arg,
+    the user will see the specified repr_string instead of something like
+    <object object at 0x105f8f120>.
+    """
+    def __init__(self, repr_string):
+        self._repr = repr_string
+
+    def __repr__(self):
+        return self._repr
