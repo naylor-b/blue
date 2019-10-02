@@ -1,4 +1,226 @@
 ################################################################################################
+Release Notes for OpenMDAO 2.9.0
+
+October 1, 2019
+
+New Features: 
+-------------
+
+- better detection of when you're running under MPI, and new environment variable to forcibly disable MPI
+- users can now issue connections from within the `configure` method on group 
+  (this is useful if you wanted to be able to interrogate your children before issuing connections)
+- significant overhead reduction due to switching from 'np.add.at' to 'np.bincount' for some matrix-vector
+  products and data transfers.
+
+- `openmdao` command line tool: 
+    - new `openmdao scaffold` command line tool to quickly bootstrap component and group files
+    - `openmdao summary` command gives more data including number of constraints
+    - `openmdao tree` command now uses different colors for implicit and explicit components and 
+      includes sizes of inputs and outputs
+    - the `openmdao --help` tool gives better formatted help now
+
+- CaseRecording: 
+    - Case objects now have a `name` attribute to make identifying them simpler
+    - Case objects now support __getitem__ (i.e. <case>[<some_var>]) and the
+      get_val/set_val methods to directly mimic the problem interface
+    - list_inputs and list_outputs methods on Case objects now support optional includes and excludes patterns     
+
+- Documentation:    
+    - added documentation for the list_inputs and list_outputs method on the Case object
+    - added example use of implicit component for add_discrete_input docs
+    - some minor cleanup to the cantilever beam optimization example to remove some unused code
+
+- Derivatives: 
+    - slightly different method of computing the total derivative sparsity pattern has been implemented
+      that should be a bit more robust (but YMMV)
+    - the partials object passed into `linearize` and `compute_partials` methods on implicit
+      and explicit component respectively can now be iterated on like a true dictionary
+
+- Solvers: 
+    - a true Goldstein condition was added to the ArmijoGoldstein line search 
+      (you can now choose if you want Armijo or Goldstein) *** Peter Onodi ***
+    - DirectSolver now works under MPI 
+      (but be warned that it might be very slow to use it this way, because it does a lot of MPI communication!!!)
+    - BroydenSolver now works in parallel
+    - improved error message when you have a nonconverged solver 
+    - improved error message when solver failure is due to Nan or Inf
+
+- Components: 
+    - list_inputs and list_outputs methods on System objects now support optional includes and excludes patterns
+    - variables can now have tags added as additional meta-data when they are declared,
+      which can then be used to filter the output from list_inputs and list_ouputs 
+    - significant speed improvements and increased surrogate options for StructuredMetaModel
+    - improved error message when required options are not provided to a component during instantiation
+    - user gets a clear error msg if they try to use `np.` or `numpy.` namespaces inside ExecComp strings
+    - in the declare_coloring method, a threshold can now be set such that the generated coloring must improve
+      things at least as much as the given percentage or the coloring will not be used. This can happen in cases
+      where multiple instances of the same component class appear in a given model and each instance can potentially
+      generate a different sparsity which results in a different coloring.
+
+- Problem
+    - user can set specific slices of variables using the set_val method on problem
+    - added problem.compute_jacvec_prod function for matrix-free total derivative products. 
+      Useful for wrapping for loops around an OpenMDAO problem and propagating derivatives through it.
+
+- Visualization
+    - minor reformatting of the N2 menu to make better use of vertical screen space
+    - new visualziation tool for examining the surrogates in StructuredMetaModelComp and UnstructuredMetaModelComp
+    - improved `openmdao view_connections` functionality for better filtering and toggling between 
+      promoted and absolute names
+    - component names can now optionally be shown on the diagonal for XDSM diagrams *** Peter Onodi ***
+
+Backwards Incompatible API Changes: 
+-----------------------------------
+- `openmdao view_model` has been deprecated, use `openmdao n2` instead
+- `vectorize` argument to ExecComp has been deprecated, use `has_diag_partials` instead
+- changed NewtonSolver option from `err_on_maxiter` to `err_on_non_converge` (old option deprecated)
+- in StructuredMetamodel, original methods 'slinear', 'cubic', 'quintic' renamed to 'scipy_linear', 'scipy_cubic', 'scipy_quintic';
+  new methods 'linear' and 'cubic' have been added that are faster python implementations. 'quintic' is no longer used.
+
+Bug Fixes: 
+----------
+- `prom_name=True` now works with list_outputs on CaseReader (it was broken before)
+- fixed a corner case where N2 diagram wasn't listing certain variables as connected, even though they were
+- fixed a bug in check_totals when the FD-norm is zero 
+- fixed corner case bug where assembled jacobians for implicit components were not working correctly
+- fixed a problem with Aitken acceleration in parallel for NonlinearBlockGaussSeidel solver
+- fixed DOE driver bug where vars were recorded in driver_scaled form.
+- discrete variables are now recorded
+- list_outputs/list_inputs on a Case now lists in Execution order, similarly to the System methods
+- fixed a bug where the derivatives calculated with complex step around a model with a BroydenSolver were wrong.
+- fixed a bug in the coloring config check
+
+################################################################################################
+Release Notes for OpenMDAO 2.8.0
+
+June 27, 2019
+
+Bug Fixes: 
+----------
+- Fixed a bug in PETScVector norm calculation, which was totally wrong for serial models combined
+  with distributed ones 
+- Fixed a bug with the solver debug_print option when output file already existed
+- Fixed the incorrect Shockley diode equation in the Circuit example 
+- Fixed a few small bugs in group level FD  
+
+New Features: 
+-------------
+- Stopped reporting a warning for a corner case regarding promoted inputs that are connected inside
+  their owning group, because everyone hated it! 
+- Optional normalization of input variables to multifi_cokriging 
+- New matplotlib based sparsity matrix viewer for coloring of partial and total derivatives 
+- Preferred import style now changed to `import openmdao.api as om`
+- Discrete variables now show up when calling the list_input/list_output functions 
+- Discrete variables now show up in view_model 
+- ScipyOptimizeDriver now raises an exception when the objective is missing
+- A legend can be optionally added to the XDSM diagram. Not shown by default.
+  *** contributed by Peter Onodi ***
+
+################################################################################################
+Release Notes for OpenMDAO 2.7.1
+
+May 30, 2019
+
+2.7.1 is a quick patch release to correct/update the 2.7.0 release notes.
+
+################################################################################################
+Release Notes for OpenMDAO 2.7.0
+
+May 28, 2019
+
+New Features: 
+-------------
+
+- You can now define guess_nonlinear method at the group level
+- New documentation added about the N2 diagram usage
+- Significant improvement to documentation search functionality
+  (by default, only searches the feature docs and user guide now)
+
+- Derivatives: 
+    - Improved support for full-model complex-step when models have guess_nonlinear methods defined
+    - **Experimental** FD and CS based coloring methods for partial derivative approximation 
+      Valuable for efficiently using FD/CS on vectorized (or very sparse) components
+
+- Solvers: 
+    - `Solver failed to converge` message now includes solver path name to make it more clear what failed
+    - Improved pathname information in the singular matrix error from DirectSolver
+    - Directsolver has an improved error message when it detects identical rows or columns in Jacobian
+    - NonlinearGaussSeidel solver now accounts for residual scaling in its convergence criterion
+    - New naming scheme for solver debug print files (the old scheme was making names so long it caused OSErrors)
+
+- Components: 
+    - ExecComp now allows unit=<something> and shape=<something> arguments that apply to all variables in the expression
+    - New AkimaSpline component with derivatives with respect to training data inputs
+
+- Visualization
+    - Several improvements for the N2 diagram for large models
+    - N2 diagram html files have been reduced in size significantly
+    - `openmdao view_model` command line utility now supports case record database files
+
+- (Experimental) Automatic XDSM generator (using either Latex with pyXDSM or html with XDSMjs)
+  *** contributed by Peter Onodi ***
+  *** uses XDSMjs v0.6.0 by Rémi Lafage (https://github.com/OneraHub/XDSMjs) ***
+
+Backwards Incompatible API Changes: 
+-----------------------------------
+- New APIs for total derivative coloring that are more consistent with partial derivative coloring
+  (previous APIs are deprecated and coloring files generated with the previous API will not work)
+- The API for providing a guess function to the BalanceComp has changed. 
+  guess_function is now passed into BalanceComp as an init argument
+- Changed the N2 diagram json data formatting to make the file size smaller 
+  You can't use older case record databases to generate an N2 diagram with latest version
+- All component methods related to execution now include `discrete_inputs` and `discrete_outputs` arguments 
+  when a component is defined with discrete i/o. (if no discrete i/o is defined, the API remains unchanged)
+  (includes `solve_nonlinear`, `apply_nonlinear`, `linearize`, `apply_linear`, `compute`, `compute_jac_vec_product`, `guess_nonlinear`) 
+- The internal Driver API has changed, a driver should execute the model with `run_solve_nonlinear` to ensure that proper scaling operations occur 
+
+Bug Fixes: 
+----------
+- CaseRecorder was reporting incorrect values of scaled variables (analysis was correct, only case record output was wrong)
+- the problem level `record_iteration` method was not properly respecting the `includes` specification
+- ExecComp problem when vectorize=True, but only shape was defined. 
+- Incorrect memory allocation in parallel components when local size of output went to 0
+- Multidimensional `src_indices` were not working correctly with assembled Jacobians
+- Fixed problem with genetic algorithm not working with vector design variables *** contributed by jennirinker ***
+- Fixed incompatibility with mpich mpi library causing "PMPI_Allgather(945).: Buffers must not be aliased" error *** fzhale and nbons ***
+
+################################################################################################
+Release Notes for OpenMDAO 2.6.0
+
+February 22, 2018
+
+New Features:
+-------------
+- MetaModelStructured will detect NaN in requested sample and print a readable message.
+- ScipyOptimizeDriver now supports Hessian calculation option for optimizers that use it.
+- User can specify src_indices that have duplicates or have two inputs on a single component connected to the same output, and still have CSC Jacobian work.
+- User can get/set problem values in a straightforward manner: prob['var'] = 2., etc. even when running in parallel.
+    - Problem 'get' access to distributed variables will raise an exception since it isn't clear what behavior is expected,
+      i.e. should prob['comp.x'] return the full distributed variable or just the local part.
+- Directsolver has an improved error message when it detects identical rows or columns in Jacobian.
+- The NonlinearBlockGS solver has been updated with a less expensive implementation that does not call the compute method of Explicit components as many times.
+- User can request a directional-derivative check (similar to SNOPTs built-in level 0 check) for check_partials.
+- check_partials with compact_print will now always show all check pairs.
+- The N^2 diagram (from `openmdao view_model`) now shows the solver hierarchy.
+- KSComp has an improved, vectorized implementation.
+- list_inputs now includes a 'shape' argument.
+- User can generate an XDSM from a model (`openmdao xdsm`).
+- User can set `units=<something>` for an execcomp, when all variables have the same units.
+
+Backwards Incompatible API Changes:
+-----------------------------------
+- The default bounds enforcement for BoundsEnforceLS is now 'scalar' (was 'vector')
+- Direct solver will now use 'assemble_jac=True' by default
+- Recording options 'includes' and 'excludes' now use promoted names for outputs (absolute path names are still used for inputs)
+- FloatKrigingSurrogate has been deprecated since it does not provide any unique functionality.
+- FloatMultifiKrigingSurrogate has been deleted because it was never used, was incorrectly implemented, and provides no new functionality.
+
+Bug Fixes:
+----------
+- Complex-step around Newton+DirectSolver now works with assembled Jacobians.
+- Armijolinesearch implementation was incorrect when used with solve_subsystems. The implementation is now correct.
+
+################################################################################################
 Release Notes for OpenMDAO 2.5.0
 
 October 31, 2018

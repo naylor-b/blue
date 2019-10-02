@@ -13,13 +13,17 @@ optional_dependencies = {
     'docs': [
         'matplotlib',
         'mock',
-        'numpydoc',
+        'numpydoc>=0.9.1',
         'redbaron',
-        'sphinx',
+        'sphinx>=1.8.5',
+    ],
+    'visualization': [
+        'bokeh>=1.3.4'
     ],
     'test': [
         'coverage',
         'parameterized',
+        'numpydoc>=0.9.1',
         'pycodestyle==2.3.1',
         'pydocstyle==2.0.0',
         'testflo>=1.3.4',
@@ -31,7 +35,7 @@ optional_dependencies['all'] = sorted([
     dependency
     for dependencies in optional_dependencies.values()
     for dependency in dependencies
-])
+] + ['colorama'])
 
 
 setup(
@@ -68,11 +72,10 @@ setup(
         'openmdao.approximation_schemes',
         'openmdao.code_review',
         'openmdao.components',
+        'openmdao.components.structured_metamodel_util',
         'openmdao.core',
         'openmdao.devtools',
-        'openmdao.devtools.problem_viewer',
         'openmdao.devtools.iprofile_app',
-        'openmdao.devtools.xdsm_viewer',
         'openmdao.docs',
         'openmdao.docs._exts',
         'openmdao.docs._utils',
@@ -92,21 +95,32 @@ setup(
         'openmdao.test_suite.test_examples',
         'openmdao.test_suite.test_examples.beam_optimization',
         'openmdao.test_suite.test_examples.beam_optimization.components',
+        'openmdao.test_suite.test_examples.meta_model_examples',
         'openmdao.utils',
         'openmdao.vectors',
+        'openmdao.visualization',
+        'openmdao.visualization.connection_viewer',
+        'openmdao.visualization.n2_viewer',
+        'openmdao.visualization.xdsm_viewer',
+        'openmdao.visualization.meta_model_viewer',
         'openmdao.surrogate_models',
         'openmdao.surrogate_models.nn_interpolators'
     ],
     package_data={
-        'openmdao.devtools': ['*.wpr', '*.html'],
-        'openmdao.devtools.problem_viewer': [
-            'visualization/libs/*.js',
-            'visualization/src/*.js',
-            'visualization/style/*.css',
-            'visualization/style/*.woff',
-            'visualization/*.html'
+        'openmdao.devtools': ['*.wpr',],
+        'openmdao.visualization.n2_viewer': [
+            'libs/*.js',
+            'src/*.js',
+            'style/*.css',
+            'style/*.woff',
+            '*.html'
         ],
-        'openmdao.devtools.xdsm_viewer': [
+        'openmdao.visualization.connection_viewer': [
+            '*.html',
+            'libs/*.js',
+            'style/*.css'
+        ],
+        'openmdao.visualization.xdsm_viewer': [
             'XDSMjs/*',
             'XDSMjs/src/*.js',
             'XDSMjs/build/*.js',
@@ -120,7 +134,7 @@ setup(
         ],
         'openmdao.docs': ['*.py', '_utils/*.py'],
         'openmdao.recorders': ['tests/legacy_sql/*.sql'],
-        'openmdao.utils': ['unit_library.ini'],
+        'openmdao.utils': ['unit_library.ini', 'scaffolding_templates/*'],
         'openmdao.test_suite': [
             '*.py',
             '*/*.py',
@@ -134,14 +148,13 @@ setup(
         'pyDOE2',
         'pyparsing',
         'scipy',
-        'six',
-        'astunparse',
+        'six'
     ],
     # scripts=['bin/om-pylint.sh']
     entry_points="""
     [console_scripts]
     wingproj=openmdao.devtools.wingproj:run_wing
-    webview=openmdao.devtools.webview:webview_argv
+    webview=openmdao.utils.webview:webview_argv
     run_test=openmdao.devtools.run_test:run_test
     openmdao=openmdao.utils.om:openmdao_cmd
     """,

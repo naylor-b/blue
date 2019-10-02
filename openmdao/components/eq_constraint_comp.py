@@ -90,10 +90,10 @@ class EQConstraintComp(ExplicitComponent):
             Value of response variable that scales to 0.0 in the driver. This option is only
             meaningful when add_constraint=True.
         adder : float or ndarray, optional
-            Value to add to the model value to get the scaled value. Adder
+            Value to add to the model value to get the scaled value for the driver. adder
             is first in precedence. This option is only meaningful when add_constraint=True.
         scaler : float or ndarray, optional
-            value to multiply the model value to get the scaled value. Scaler
+            value to multiply the model value to get the scaled value for the driver. scaler
             is second in precedence. This option is only meaningful when add_constraint=True.
         **kwargs : dict
             Additional arguments to be passed for the creation of the output variable.
@@ -112,18 +112,13 @@ class EQConstraintComp(ExplicitComponent):
         """
         for name, options in iteritems(self._output_vars):
 
+            meta = self.add_output(name, **options['kwargs'])
+
+            n = meta['size']
+
             for s in ('lhs', 'rhs', 'mult'):
                 if options['{0}_name'.format(s)] is None:
                     options['{0}_name'.format(s)] = '{0}:{1}'.format(s, name)
-
-            val = options['kwargs'].get('val', np.ones(1))
-            if isinstance(val, Number):
-                n = 1
-            else:
-                n = len(val)
-            self._output_vars[name]['size'] = n
-
-            self.add_output(name, **options['kwargs'])
 
             self.add_input(options['lhs_name'],
                            val=np.ones(n),
@@ -163,6 +158,11 @@ class EQConstraintComp(ExplicitComponent):
         outputs : Vector
             unscaled, dimensional output variables read via outputs[key]
         """
+        if inputs._under_complex_step:
+            self._scale_factor = self._scale_factor.astype(np.complex)
+        else:
+            self._scale_factor = self._scale_factor.real
+
         for name, options in iteritems(self._output_vars):
             lhs = inputs[options['lhs_name']]
             rhs = inputs[options['rhs_name']]
@@ -195,6 +195,11 @@ class EQConstraintComp(ExplicitComponent):
         partials : Jacobian
             sub-jac components written to partials[output_name, input_name]
         """
+        if inputs._under_complex_step:
+            self._dscale_drhs = self._dscale_drhs.astype(np.complex)
+        else:
+            self._dscale_drhs = self._dscale_drhs.real
+
         for name, options in iteritems(self._output_vars):
             lhs_name = options['lhs_name']
             rhs_name = options['rhs_name']
@@ -280,10 +285,10 @@ class EQConstraintComp(ExplicitComponent):
             Value of response variable that scales to 0.0 in the driver. This option is only
             meaningful when add_constraint=True.
         adder : float or ndarray, optional
-            Value to add to the model value to get the scaled value. Adder
+            Value to add to the model value to get the scaled value for the driver. adder
             is first in precedence. This option is only meaningful when add_constraint=True.
         scaler : float or ndarray, optional
-            Value to multiply the model value to get the scaled value. Scaler
+            Value to multiply the model value to get the scaled value for the driver. scaler
             is second in precedence. This option is only meaningful when add_constraint=True.
         **kwargs : dict
             Additional arguments to be passed for the creation of the output variable.

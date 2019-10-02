@@ -82,7 +82,7 @@ def _get_printer(stream, rank=-1):
     # rank < 0 means output on all ranks
     if not MPI or rank < 0 or MPI.COMM_WORLD.rank == rank:
         def prt(*args, **kwargs):
-            print(*args, file=stream, **kwargs)
+            print(*args, file=stream, flush=True, **kwargs)
     else:
         def prt(*args, **kwargs):
             pass
@@ -139,8 +139,6 @@ def _trace_call(frame, arg, stack, context):
         stats['list'] += 1
         leaks.append(stats)
 
-    stream.flush()
-
 
 def _trace_return(frame, arg, stack, context):
     """
@@ -194,8 +192,6 @@ def _trace_return(frame, arg, stack, context):
         last_objs = leaks.pop()
         for name, _, delta_objs in objgraph.growth(peak_stats=last_objs):
             _printer("%s   %s %+d" % (indent, name, delta_objs))
-
-    stream.flush()
 
 
 def _setup(options):
@@ -298,7 +294,7 @@ def stop():
 
 
 @contextmanager
-def tracing(methods=None, verbose=False, memory=False, leaks=False, filters=None, show_ptrs=False):
+def tracing(methods=None, verbose=False, memory=False, leaks=False, show_ptrs=False):
     """
     Turn on call tracing within a certain context.
 
@@ -313,14 +309,10 @@ def tracing(methods=None, verbose=False, memory=False, leaks=False, filters=None
         If True, show functions that increase memory usage.
     leaks : bool
         If True, show objects that are created within a function and not garbage collected.
-    filters : list of str or None
-        If not None, evaluate as an expression in the frame of matching trace functions. If
-        True, include the function in the trace.  Up to one expression per class.
     show_ptrs : bool
         If True, show addresses of printed objects.
     """
-    setup(methods=methods, verbose=verbose, memory=memory, leaks=leaks, filters=filters,
-          show_ptrs=show_ptrs)
+    setup(methods=methods, verbose=verbose, memory=memory, leaks=leaks, show_ptrs=show_ptrs)
     start()
     yield
     stop()

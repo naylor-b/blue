@@ -1,7 +1,7 @@
 """Key OpenMDAO classes can be imported from here."""
 
 # Core
-from openmdao.core.problem import Problem
+from openmdao.core.problem import Problem, slicer
 from openmdao.core.group import Group
 from openmdao.core.parallel_group import ParallelGroup
 from openmdao.core.explicitcomponent import ExplicitComponent
@@ -11,6 +11,7 @@ from openmdao.core.analysis_error import AnalysisError
 
 # Components
 from openmdao.components.add_subtract_comp import AddSubtractComp
+from openmdao.components.akima_spline_comp import AkimaSplineComp
 from openmdao.components.balance_comp import BalanceComp
 from openmdao.components.bsplines_comp import BsplinesComp
 from openmdao.components.cross_product_comp import CrossProductComp
@@ -55,8 +56,7 @@ from openmdao.solvers.nonlinear.nonlinear_runonce import NonlinearRunOnce, NonLi
 
 # Surrogate Models
 from openmdao.surrogate_models.kriging import KrigingSurrogate, FloatKrigingSurrogate
-from openmdao.surrogate_models.multifi_cokriging import MultiFiCoKrigingSurrogate, \
-    FloatMultiFiCoKrigingSurrogate
+from openmdao.surrogate_models.multifi_cokriging import MultiFiCoKrigingSurrogate
 from openmdao.surrogate_models.nearest_neighbor import NearestNeighbor
 from openmdao.surrogate_models.response_surface import ResponseSurface
 from openmdao.surrogate_models.surrogate_model import SurrogateModel, \
@@ -72,9 +72,9 @@ except ImportError:
     PETScVector = None
 
 # Developer Tools
-from openmdao.devtools.problem_viewer.problem_viewer import view_model
-from openmdao.devtools.viewconns import view_connections
-from openmdao.devtools.xdsm_viewer.xdsm_writer import write_xdsm
+from openmdao.visualization.n2_viewer.n2_viewer import view_model, n2
+from openmdao.visualization.connection_viewer.viewconns import view_connections
+from openmdao.visualization.xdsm_viewer.xdsm_writer import write_xdsm
 
 # Drivers
 try:
@@ -95,7 +95,7 @@ from openmdao.recorders.sqlite_recorder import SqliteRecorder
 from openmdao.recorders.case_reader import CaseReader
 
 # Visualizations
-from openmdao.utils.visualization import partial_deriv_plot
+from openmdao.visualization.partial_deriv_plot import partial_deriv_plot
 
 # set up tracing or memory profiling if env vars are set.
 import os

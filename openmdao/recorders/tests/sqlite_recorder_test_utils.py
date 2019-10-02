@@ -6,7 +6,7 @@ import json
 
 from contextlib import contextmanager
 
-from openmdao.utils.record_util import format_iteration_coordinate, json_to_np_array
+from openmdao.utils.record_util import format_iteration_coordinate, deserialize
 from openmdao.utils.assert_utils import assert_rel_error
 from openmdao.recorders.sqlite_recorder import blob_to_array, format_version
 
@@ -38,7 +38,7 @@ def get_format_version_abs2meta(db_cur):
 
     f_version = row[0]
 
-    # Need to also get abs2meta so that we can pass it to json_to_np_array
+    # Need to also get abs2meta so that we can pass it to deserialize
     if f_version >= 3:
         abs2meta = json.loads(row[1])
     elif f_version in (1, 2):
@@ -53,6 +53,54 @@ def get_format_version_abs2meta(db_cur):
                 abs2meta = pickle.loads(row[1].encode()) if row[1] is not None else None
 
     return f_version, abs2meta
+
+def assertProblemDataRecorded(test, expected, tolerance):
+    """
+    Expected can be from multiple cases.
+    """
+    with database_cursor(test.filename) as db_cur:
+        f_version, abs2meta = get_format_version_abs2meta(db_cur)
+
+        # iterate through the cases
+        for case, (t0, t1), outputs_expected in expected:
+            # from the database, get the actual data recorded
+            db_cur.execute("SELECT * FROM problem_cases WHERE case_name=:case_name",
+                           {"case_name": case})
+            row_actual = db_cur.fetchone()
+
+            test.assertTrue(row_actual, 'Problem table does not contain the requested '
+                            'case name: "{}"'.format(case))
+
+            counter, global_counter, case_name, timestamp, success, msg, outputs_text = row_actual
+
+            if f_version >= 3:
+                outputs_actual = deserialize(outputs_text, abs2meta)
+            elif f_version in (1, 2):
+                outputs_actual = blob_to_array(outputs_text)
+
+            test.assertEqual(success, 1)
+            test.assertEqual(msg, '')
+
+            for vartype, actual, expected in (
+                ('outputs', outputs_actual, outputs_expected),
+            ):
+
+                if expected is None:
+                    if f_version >= 3:
+                        test.assertIsNone(actual)
+                    if f_version in (1, 2):
+                        test.assertEqual(actual, np.array(None, dtype=object))
+                else:
+                    actual = actual[0]
+                    # Check to see if the number of values in actual and expected match
+                    test.assertEqual(len(actual), len(expected))
+                    for key, value in iteritems(expected):
+                        # Check to see if the keys in the actual and expected match
+                        test.assertTrue(key in actual.dtype.names,
+                                        '{} variable not found in actual data'
+                                        ' from recorder'.format(key))
+                        # Check to see if the values in actual and expected match
+                        assert_rel_error(test, actual[key], expected[key], tolerance)
 
 
 def assertDriverIterDataRecorded(test, expected, tolerance, prefix=None):
@@ -79,8 +127,8 @@ def assertDriverIterDataRecorded(test, expected, tolerance, prefix=None):
                 inputs_text, outputs_text = row_actual
 
             if f_version >= 3:
-                inputs_actual = json_to_np_array(inputs_text, abs2meta)
-                outputs_actual = json_to_np_array(outputs_text, abs2meta)
+                inputs_actual = deserialize(inputs_text, abs2meta)
+                outputs_actual = deserialize(outputs_text, abs2meta)
             elif f_version in (1, 2):
                 inputs_actual = blob_to_array(inputs_text)
                 outputs_actual = blob_to_array(outputs_text)
@@ -189,9 +237,9 @@ def assertSystemIterDataRecorded(test, expected, tolerance, prefix=None):
                 outputs_text, residuals_text = row_actual
 
             if f_version >= 3:
-                inputs_actual = json_to_np_array(inputs_text, abs2meta)
-                outputs_actual = json_to_np_array(outputs_text, abs2meta)
-                residuals_actual = json_to_np_array(residuals_text, abs2meta)
+                inputs_actual = deserialize(inputs_text, abs2meta)
+                outputs_actual = deserialize(outputs_text, abs2meta)
+                residuals_actual = deserialize(residuals_text, abs2meta)
             elif f_version in (1, 2):
                 inputs_actual = blob_to_array(inputs_text)
                 outputs_actual = blob_to_array(outputs_text)
@@ -251,8 +299,8 @@ def assertSolverIterDataRecorded(test, expected, tolerance, prefix=None):
                 abs_err, rel_err, input_blob, output_text, residuals_text = row_actual
 
             if f_version >= 3:
-                output_actual = json_to_np_array(output_text, abs2meta)
-                residuals_actual = json_to_np_array(residuals_text, abs2meta)
+                output_actual = deserialize(output_text, abs2meta)
+                residuals_actual = deserialize(residuals_text, abs2meta)
             elif f_version in (1, 2):
                 output_actual = blob_to_array(output_text)
                 residuals_actual = blob_to_array(residuals_text)
@@ -340,25 +388,36 @@ def assertViewerDataRecorded(test, expected):
 
         test.assertTrue(isinstance(model_viewer_data, dict))
 
-        test.assertEqual(3, len(model_viewer_data))
+        # primary keys
+        test.assertEqual(set(model_viewer_data.keys()), {
+            'tree', 'sys_pathnames_list', 'connections_list', 'abs2prom',
+            'driver', 'design_vars', 'responses', 'declare_partials_list'
+        })
 
+        # system pathnames
+        test.assertTrue(isinstance(model_viewer_data['sys_pathnames_list'], list))
+
+        # connections
         test.assertTrue(isinstance(model_viewer_data['connections_list'], list))
 
         test.assertEqual(expected['connections_list_length'],
                          len(model_viewer_data['connections_list']))
 
-        test.assertEqual(expected['tree_length'], len(model_viewer_data['tree']))
-
-        tr = model_viewer_data['tree']
-        test.assertEqual(set(['name', 'type', 'subsystem_type', 'children', 'linear_solver', 'nonlinear_solver']),
-                         set(tr.keys()))
-        test.assertEqual(expected['tree_children_length'],
-                         len(model_viewer_data['tree']['children']))
-
         cl = model_viewer_data['connections_list']
         for c in cl:
             test.assertTrue(set(c.keys()).issubset(set(['src', 'tgt', 'cycle_arrows'])))
 
+        # model tree
+        tr = model_viewer_data['tree']
+        test.assertEqual(expected['tree_length'], len(tr))
+
+        test.assertEqual({'name', 'type', 'subsystem_type', 'children', 'linear_solver',
+                          'nonlinear_solver', 'is_parallel', 'component_type', 'class'},
+                         set(tr.keys()))
+        test.assertEqual(expected['tree_children_length'],
+                         len(model_viewer_data['tree']['children']))
+
+        # abs2prom map
         abs2prom = model_viewer_data['abs2prom']
         for io in ['input', 'output']:
             for var in expected['abs2prom'][io]:

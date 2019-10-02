@@ -62,7 +62,7 @@ class ExperimentalDriver(object):
         (owning rank, size).
     _remote_responses : dict
         A combined dict containing entries from _remote_cons and _remote_objs.
-    _simul_coloring_info : tuple of dicts
+    _total_coloring : tuple of dicts
         A data structure describing coloring for simultaneous derivs.
     _res_jacs : dict
         Dict of sparse subjacobians for use with certain optimizers, e.g. pyOptSparseDriver.
@@ -133,7 +133,6 @@ class ExperimentalDriver(object):
         # TODO, support these in OpenMDAO
         self.supports.declare('integer_design_vars', types=bool, default=False)
 
-        self._simul_coloring_info = None
         self._res_jacs = {}
 
         self.fail = False
@@ -243,12 +242,16 @@ class ExperimentalDriver(object):
         rec_constraints = self.recording_options['record_constraints']
         rec_responses = self.recording_options['record_responses']
 
+        # includes and excludes for outputs are specified using promoted names
+        # NOTE: only local var names are in abs2prom, all will be gathered later
+        abs2prom = model._var_abs2prom['output']
+
         all_desvars = {n for n in self._designvars
-                       if check_path(n, incl, excl, True)}
+                       if n in abs2prom and check_path(abs2prom[n], incl, excl, True)}
         all_objectives = {n for n in self._objs
-                          if check_path(n, incl, excl, True)}
+                          if n in abs2prom and check_path(abs2prom[n], incl, excl, True)}
         all_constraints = {n for n in self._cons
-                           if check_path(n, incl, excl, True)}
+                           if n in abs2prom and check_path(abs2prom[n], incl, excl, True)}
         if rec_desvars:
             mydesvars = all_desvars
 
@@ -260,7 +263,7 @@ class ExperimentalDriver(object):
 
         if rec_responses:
             myresponses = {n for n in self._responses
-                           if check_path(n, incl, excl, True)}
+                           if n in abs2prom and check_path(abs2prom[n], incl, excl, True)}
 
         # get the includes that were requested for this Driver recording
         if incl:
@@ -271,7 +274,7 @@ class ExperimentalDriver(object):
             # First gather all of the desired outputs
             # The following might only be the local vars if MPI
             mysystem_outputs = {n for n in root._outputs
-                                if check_path(n, incl, excl)}
+                                if n in abs2prom and check_path(abs2prom[n], incl, excl)}
 
             # If MPI, and on rank 0, need to gather up all the variables
             #    even those not local to rank 0
@@ -310,13 +313,6 @@ class ExperimentalDriver(object):
         }
 
         self._rec_mgr.startup(self)
-
-        # set up simultaneous deriv coloring
-        if self._simul_coloring_info and self.supports['simultaneous_derivatives']:
-            if problem._mode == 'fwd':
-                self._setup_simul_coloring()
-            else:
-                raise RuntimeError("simultaneous derivs are currently not supported in rev mode.")
 
     def _get_voi_val(self, name, meta, remote_vois):
         """
@@ -531,7 +527,7 @@ class ExperimentalDriver(object):
             Failure flag; True if failed to converge, False is successful.
         """
         with Recording(self._get_name(), self.iter_count, self) as rec:
-            self._problem.model._solve_nonlinear()
+            self._problem.model.run_solve_nonlinear()
 
         self.iter_count += 1
         return False
@@ -733,17 +729,3 @@ class ExperimentalDriver(object):
         """
         return "Driver"
 
-    def set_simul_deriv_color(self, simul_info):
-        """
-        Set the coloring for simultaneous derivatives.
-
-        Parameters
-        ----------
-        simul_info : ({dv1: colors, ...}, {resp1: {dv1: {0: [res_idxs, dv_idxs]} ...} ...})
-            Information about simultaneous coloring for design vars and responses.
-        """
-        if self.supports['simultaneous_derivatives']:
-            self._simul_coloring_info = simul_info
-        else:
-            raise RuntimeError("Driver '%s' does not support simultaneous derivatives." %
-                               self._get_name())

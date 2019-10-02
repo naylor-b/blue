@@ -10,7 +10,7 @@ import numpy as np
 
 from openmdao.vectors.vector import INT_DTYPE
 from openmdao.vectors.transfer import Transfer
-from openmdao.utils.array_utils import convert_neg, _global2local_offsets
+from openmdao.utils.array_utils import convert_neg, _global2local_offsets, _flatten_src_indices
 
 _empty_idx_array = np.array([], dtype=INT_DTYPE)
 
@@ -32,7 +32,6 @@ class DefaultTransfer(Transfer):
         recurse : bool
             Whether to call this method in subsystems.
         """
-        group._transfers = {}
         iproc = group.comm.rank
         rev = group._mode == 'rev' or group._mode == 'auto'
 
@@ -56,7 +55,7 @@ class DefaultTransfer(Transfer):
         abs2meta = group._var_abs2meta
         allprocs_abs2meta = group._var_allprocs_abs2meta
 
-        transfers = group._transfers
+        group._transfers = transfers = {}
         vectors = group._vectors
         offsets = _global2local_offsets(group._get_var_offsets())
 
@@ -99,26 +98,15 @@ class DefaultTransfer(Transfer):
                     idx_out = allprocs_abs2idx[abs_out]
 
                     # Read in and process src_indices
-                    shape_in = meta_in['shape']
-                    shape_out = meta_out['shape']
-                    global_size_out = meta_out['global_size']
                     src_indices = meta_in['src_indices']
                     if src_indices is None:
                         pass
                     elif src_indices.ndim == 1:
-                        src_indices = convert_neg(src_indices, global_size_out)
+                        src_indices = convert_neg(src_indices, meta_out['global_size'])
                     else:
-                        if len(shape_out) == 1 or shape_in == src_indices.shape:
-                            src_indices = src_indices.flatten()
-                            src_indices = convert_neg(src_indices, global_size_out)
-                        else:
-                            # TODO: this duplicates code found
-                            # in System._setup_scaling.
-                            entries = [list(range(x)) for x in shape_in]
-                            cols = np.vstack(src_indices[i] for i in product(*entries))
-                            dimidxs = [convert_neg(cols[:, i], shape_out[i])
-                                       for i in range(cols.shape[1])]
-                            src_indices = np.ravel_multi_index(dimidxs, shape_out)
+                        src_indices = _flatten_src_indices(src_indices, meta_in['shape'],
+                                                           meta_out['global_shape'],
+                                                           meta_out['global_size'])
 
                     # 1. Compute the output indices
                     offset = offsets_out[iproc, idx_out]
@@ -162,13 +150,19 @@ class DefaultTransfer(Transfer):
             if rev:
                 transfers[vec_name]['rev', None] = xfer_all
             for isub in range(nsub_allprocs):
-                transfers[vec_name]['fwd', isub] = DefaultTransfer(
-                    vectors['input'][vec_name], vectors['output'][vec_name],
-                    fwd_xfer_in[isub], fwd_xfer_out[isub], group.comm)
-                if rev:
-                    transfers[vec_name]['rev', isub] = DefaultTransfer(
+                if fwd_xfer_in[isub].size > 0:
+                    transfers[vec_name]['fwd', isub] = DefaultTransfer(
                         vectors['input'][vec_name], vectors['output'][vec_name],
-                        rev_xfer_in[isub], rev_xfer_out[isub], group.comm)
+                        fwd_xfer_in[isub], fwd_xfer_out[isub], group.comm)
+                else:
+                    transfers[vec_name]['fwd', isub] = None
+                if rev:
+                    if rev_xfer_out[isub].size > 0:
+                        transfers[vec_name]['rev', isub] = DefaultTransfer(
+                            vectors['input'][vec_name], vectors['output'][vec_name],
+                            rev_xfer_in[isub], rev_xfer_out[isub], group.comm)
+                    else:
+                        transfers[vec_name]['rev', isub] = None
 
         if group._use_derivatives:
             transfers['nonlinear'] = transfers['linear']
@@ -195,22 +189,7 @@ class DefaultTransfer(Transfer):
             transfers[tgt_sys].append(xfer)
             transfers[None].append(xfer)
 
-    def _initialize_transfer(self, in_vec, out_vec):
-        """
-        Set up the transfer; do any necessary pre-computation.
-
-        Optionally implemented by the subclass.
-
-        Parameters
-        ----------
-        in_vec : <Vector>
-            reference to the input vector.
-        out_vec : <Vector>
-            reference to the output vector.
-        """
-        pass
-
-    def transfer(self, in_vec, out_vec, mode='fwd'):
+    def _transfer(self, in_vec, out_vec, mode='fwd'):
         """
         Perform transfer.
 
@@ -229,4 +208,8 @@ class DefaultTransfer(Transfer):
             in_vec._data[self._in_inds] = out_vec._data[self._out_inds]
 
         else:  # rev
-            np.add.at(out_vec._data, self._out_inds, in_vec._data[self._in_inds])
+            if out_vec._ncol == 1:
+                out_vec._data[:] += np.bincount(self._out_inds, in_vec._data[self._in_inds],
+                                                minlength=out_vec._data.size)
+            else:  # matrix-matrix   (bincount only works with 1d arrays)
+                np.add.at(out_vec._data, self._out_inds, in_vec._data[self._in_inds])

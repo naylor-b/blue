@@ -17,7 +17,7 @@ from six.moves import range
 import openmdao
 import openmdao.utils.coloring as coloring_mod
 from openmdao.core.driver import Driver, RecordingDebugging
-from openmdao.utils.general_utils import warn_deprecation
+from openmdao.utils.general_utils import warn_deprecation, simple_warning
 
 # Optimizers in scipy.minimize
 _optimizers = {'Nelder-Mead', 'Powell', 'CG', 'BFGS', 'Newton-CG', 'L-BFGS-B',
@@ -161,10 +161,11 @@ class ScipyOptimizeDriver(Driver):
                              'control, use solver-specific options.')
         self.options.declare('maxiter', 200, lower=0,
                              desc='Maximum number of iterations.')
-        self.options.declare('disp', True,
+        self.options.declare('disp', True, types=bool,
                              desc='Set to False to prevent printing of Scipy convergence messages')
         self.options.declare('dynamic_simul_derivs', default=False, types=bool,
-                             desc='Compute simultaneous derivative coloring dynamically if True')
+                             desc='Compute simultaneous derivative coloring dynamically if True '
+                             '(deprecated)')
         self.options.declare('dynamic_derivs_repeats', default=3, types=int,
                              desc='Number of compute_totals calls during dynamic computation of '
                                   'simultaneous derivative coloring')
@@ -178,7 +179,7 @@ class ScipyOptimizeDriver(Driver):
         str
             The name of the current optimizer.
         """
-        return self.options['optimizer']
+        return "ScipyOptimize_" + self.options['optimizer']
 
     def _setup_driver(self, problem):
         """
@@ -202,7 +203,7 @@ class ScipyOptimizeDriver(Driver):
         # Raises error if multiple objectives are not supported, but more objectives were defined.
         if not self.supports['multiple_objectives'] and len(self._objs) > 1:
             msg = '{} currently does not support multiple objectives.'
-            raise RuntimeError(msg.format(self.__class__.__name__))
+            raise RuntimeError(msg.format(self.msginfo))
 
         # Since COBYLA does not support bounds, we
         #   need to add to the _cons metadata for any bounds that
@@ -239,9 +240,11 @@ class ScipyOptimizeDriver(Driver):
         self.iter_count = 0
         self._total_jac = None
 
+        self._check_for_missing_objective()
+
         # Initial Run
-        with RecordingDebugging(self.options['optimizer'], self.iter_count, self) as rec:
-            model._solve_nonlinear()
+        with RecordingDebugging(self._get_name(), self.iter_count, self) as rec:
+            model.run_solve_nonlinear()
             self.iter_count += 1
 
         self._con_cache = self.get_constraint_values()
@@ -412,8 +415,24 @@ class ScipyOptimizeDriver(Driver):
             hess = None
 
         # compute dynamic simul deriv coloring if option is set
-        if coloring_mod._use_sparsity and self.options['dynamic_simul_derivs']:
-            coloring_mod.dynamic_simul_coloring(self, run_model=False, do_sparsity=False)
+        if coloring_mod._use_total_sparsity:
+            if ((self._coloring_info['coloring'] is None and self._coloring_info['dynamic']) or
+                    self.options['dynamic_simul_derivs']):
+                if self.options['dynamic_simul_derivs']:
+                    warn_deprecation("The 'dynamic_simul_derivs' option has been deprecated. Call "
+                                     "the 'declare_coloring' function instead.")
+                coloring_mod.dynamic_total_coloring(self, run_model=False,
+                                                    fname=self._get_total_coloring_fname())
+
+                # if the improvement wasn't large enough, turn coloring off
+                info = self._coloring_info
+                if info['coloring'] is not None:
+                    pct = info['coloring']._solves_info()[-1]
+                    if info['min_improve_pct'] > pct:
+                        info['coloring'] = info['static'] = info['dynamic'] = None
+                        simple_warning("%s: Coloring was deactivated.  Improvement of %.1f%% was "
+                                       "less than min allowed (%.1f%%)." %
+                                       (self.msginfo, pct, info['min_improve_pct']))
 
         # optimize
         try:
@@ -555,9 +574,9 @@ class ScipyOptimizeDriver(Driver):
                 self.set_design_var(name, x_new[i:i + size])
                 i += size
 
-            with RecordingDebugging(self.options['optimizer'], self.iter_count, self) as rec:
+            with RecordingDebugging(self._get_name(), self.iter_count, self) as rec:
                 self.iter_count += 1
-                model._solve_nonlinear()
+                model.run_solve_nonlinear()
 
             # Get the objective function evaluations
             for obj in itervalues(self.get_objective_values()):

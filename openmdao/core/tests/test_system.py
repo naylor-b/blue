@@ -2,10 +2,12 @@
 
 import unittest
 from six import assertRaisesRegex
+from six.moves import cStringIO
 
 import numpy as np
 
 from openmdao.api import Problem, Group, IndepVarComp, ExecComp
+from openmdao.test_suite.components.options_feature_vector import VectorDoublingComp
 from openmdao.utils.assert_utils import assert_rel_error, assert_warning
 
 
@@ -28,12 +30,12 @@ class TestSystem(unittest.TestCase):
         with self.assertRaises(Exception) as cm:
             inputs, outputs, residuals = model.get_nonlinear_vectors()
         self.assertEqual(str(cm.exception),
-                         "Cannot get vectors because setup has not yet been called.")
+                         "Group: Cannot get vectors because setup has not yet been called.")
 
         with self.assertRaises(Exception) as cm:
             d_inputs, d_outputs, d_residuals = model.get_linear_vectors('vec')
         self.assertEqual(str(cm.exception),
-                         "Cannot get vectors because setup has not yet been called.")
+                         "Group: Cannot get vectors because setup has not yet been called.")
 
         p.setup()
         p.run_model()
@@ -84,7 +86,7 @@ class TestSystem(unittest.TestCase):
         with self.assertRaises(Exception) as cm:
             d_inputs, d_outputs, d_residuals = model.get_linear_vectors('bad_name')
         self.assertEqual(str(cm.exception),
-                         "There is no linear vector named %s" % 'bad_name')
+                         "Group (<model>): There is no linear vector named %s" % 'bad_name')
 
     def test_set_checks_shape(self):
         indep = IndepVarComp()
@@ -236,9 +238,6 @@ class TestSystem(unittest.TestCase):
         self.assertTrue(isinstance(solver, DummySolver))
 
     def test_deprecated_metadata(self):
-        from openmdao.api import Problem, IndepVarComp
-        from openmdao.test_suite.components.options_feature_vector import VectorDoublingComp
-
         prob = Problem()
         prob.model.add_subsystem('inputs', IndepVarComp('x', shape=3))
         prob.model.add_subsystem('double', VectorDoublingComp())
@@ -257,6 +256,58 @@ class TestSystem(unittest.TestCase):
         prob.run_model()
         assert_rel_error(self, prob['double.y'], [2., 4., 6.])
 
+    def test_list_inputs_output_with_includes_excludes(self):
+        from openmdao.test_suite.scripts.circuit_analysis import Resistor, Diode, Node, Circuit
+
+        p = Problem()
+        model = p.model
+
+        model.add_subsystem('ground', IndepVarComp('V', 0., units='V'))
+        model.add_subsystem('source', IndepVarComp('I', 0.1, units='A'))
+        model.add_subsystem('circuit', Circuit())
+
+        model.connect('source.I', 'circuit.I_in')
+        model.connect('ground.V', 'circuit.Vg')
+
+        p.setup()
+        p.run_model()
+
+        # Inputs with no includes or excludes
+        inputs = model.list_inputs(out_stream=None)
+        self.assertEqual( len(inputs), 11)
+
+        # Inputs with includes
+        inputs = model.list_inputs(includes=['*V_out*'], out_stream=None)
+        self.assertEqual( len(inputs), 3)
+
+        # Inputs with includes matching a promoted name
+        inputs = model.list_inputs(includes=['*Vg*'], out_stream=None)
+        self.assertEqual( len(inputs), 2)
+
+        # Inputs with excludes
+        inputs = model.list_inputs(excludes=['*V_out*'], out_stream=None)
+        self.assertEqual( len(inputs), 8)
+
+        # Inputs with excludes matching a promoted name
+        inputs = model.list_inputs(excludes=['*Vg*'], out_stream=None)
+        self.assertEqual( len(inputs), 9)
+
+        # Inputs with includes and excludes
+        inputs = model.list_inputs(includes=['*V_out*'], excludes=['*Vg*'], out_stream=None)
+        self.assertEqual( len(inputs), 1)
+
+
+        # Outputs with no includes or excludes. Explicit only
+        outputs = model.list_outputs(implicit=False, out_stream=None)
+        self.assertEqual( len(outputs), 5)
+
+        # Outputs with includes. Explicit only
+        outputs = model.list_outputs(includes=['*I'], implicit=False, out_stream=None)
+        self.assertEqual( len(outputs), 4)
+
+        # Outputs with excludes. Explicit only
+        outputs = model.list_outputs(excludes=['circuit*'], implicit=False, out_stream=None)
+        self.assertEqual( len(outputs), 2)
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,9 +9,12 @@ import math
 import warnings
 import unittest
 from fnmatch import fnmatchcase
-from six import string_types, PY2
+from six import string_types, PY2, reraise
 from six.moves import range, cStringIO as StringIO
-from collections import Iterable
+try:
+    from collections.abc import Iterable
+except ImportError:
+    from collections import Iterable
 import numbers
 import json
 import importlib
@@ -212,7 +215,7 @@ def ensure_compatible(name, value, shape=None, indices=None):
         if np.isscalar(value) or value.shape == (1,):
             value = np.ones(shape) * value
         else:
-            value = np.atleast_1d(value)
+            value = np.atleast_1d(value).astype(np.float64)
             if value.shape != shape:
                 raise ValueError("Incompatible shape for '%s': "
                                  "Expected %s but got %s." %
@@ -712,6 +715,37 @@ def json_loads_byteified(json_str):
         return json.loads(json_str)
 
 
+def remove_whitespace(s, right=False, left=False):
+    """
+    Remove white-space characters from the given string.
+
+    If neither right nor left is specified (the default),
+    then all white-space is removed.
+
+    Parameters
+    ----------
+    s : str
+        The string to be modified.
+    right : bool
+        If True, remove white-space from the end of the string.
+    left : bool
+        If True, remove white-space from the beginning of the string.
+
+    Returns
+    -------
+    str
+        The string with white-space removed.
+    """
+    if not left and not right:
+        return re.sub(r"\s+", "", s, flags=re.UNICODE)
+    elif right and left:
+        return re.sub("^\s+|\s+$", "", s, flags=re.UNICODE)
+    elif right:
+        return re.sub(r"\s+$", "", s, flags=re.UNICODE)
+    else:  # left
+        return re.sub(r"^\s+", "", s, flags=re.UNICODE)
+
+
 _badtab = r'`~@#$%^&*()[]{}-+=|\/?<>,.:;'
 if PY2:
     import string
@@ -737,63 +771,101 @@ def str2valid_python_name(s):
     return s.translate(_transtab)
 
 
-def unique_name(name, dct):
+_container_classes = (list, tuple, set)
+
+
+def make_serializable(o):
     """
-    Make given name unique within the given dictionary.
+    Recursively convert numpy types to native types for JSON serialization.
 
     Parameters
     ----------
-    name : str
-        Name to be made unique.
-    dct : dict
-        Dictionary to search for matching names.
-
-    Returns
-    -------
-    str
-        The unique name.
-    """
-    unique = name
-    for i in range(len(dct) + 1):
-        if unique not in dct:
-            return name
-        unique = name + str(i)
-    return unique
-
-
-def print_line_numbers(s):
-    """
-    Print the given string, listig line numbers on the left.
-
-    Parameters
-    ----------
-    s : str
-        The string to be printed.
-    """
-    lines = s.splitlines()
-    wid = int(math.log10(len(lines))) + 2
-    for i, l in enumerate(lines):
-        print("{0:{width}}{1}".format(i + 1, l, width=wid))
-
-
-def get_module_attr(mod_obj_path):
-    """
-    Given a full module path, import and return the specified module attribute.
-
-    The module is imported if necessary.
-
-    Parameters
-    ----------
-    mod_obj_path : str
-        Full module path to the attribute, e.g., openmdao.core.system.System
+    o : object
+        the object to be converted
 
     Returns
     -------
     object
-        The specified module attribute.
-
+        The converted object.
     """
-    modpath, attr = mod_obj_path.rsplit('.', 1)
-    importlib.import_module(modpath)
-    mod = sys.modules[modpath]
-    return getattr(mod, attr)
+    if isinstance(o, _container_classes):
+        return [make_serializable(item) for item in o]
+    elif isinstance(o, np.number):
+        return o.item()
+    elif isinstance(o, np.ndarray):
+        return make_serializable(o.tolist())
+    elif hasattr(o, '__dict__'):
+        return make_serializable(o.__class__.__name__)
+    else:
+        return o
+
+
+def make_set(str_data, name=None):
+    """
+    Construct a set containing the specified character strings.
+
+    Parameters
+    ----------
+    str_data : None, str, or list of strs
+        Character string(s) to be included in the set.
+
+    name : str, optional
+        A name to be used in error messages.
+
+    Returns
+    -------
+    set
+        A set of character strings.
+    """
+    if not str_data:
+        return set()
+    elif isinstance(str_data, str):
+        return {str_data}
+    elif isinstance(str_data, set):
+        return str_data
+    elif isinstance(str_data, list):
+        return set(str_data)
+    elif name:
+        raise TypeError("The {} argument should be str, set, or list: {}".format(name, str_data))
+    else:
+        raise TypeError("The argument should be str, set, or list: {}".format(str_data))
+
+
+def var_name_match_includes_excludes(name, prom_name, includes, excludes):
+    """
+    Check to see if the name passes thru the includes and excludes filter.
+
+    Parameters
+    ----------
+    name : str
+        Unpromoted var name to be checked for match.
+    prom_name : str
+        Promoted var name to be checked for match.
+    includes : None or list_like
+        List of glob patterns for name to include in the filtering.
+    excludes : None or list_like
+        List of glob patterns for name to exclude in the filtering.
+
+    Returns
+    -------
+    bool
+        Return True if the name passes through the filtering of includes and excludes.
+    """
+    # Process includes
+    if includes is not None:
+        for pattern in includes:
+            if fnmatchcase(name, pattern) or fnmatchcase(prom_name, pattern):
+                break
+        else:  # didn't find any match
+            return False
+
+    # Process excludes
+    if excludes is not None:
+        match = False
+        for pattern in excludes:
+            if fnmatchcase(name, pattern) or fnmatchcase(prom_name, pattern):
+                match = True
+                break
+        return not match
+
+    return True
