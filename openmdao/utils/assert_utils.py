@@ -225,6 +225,50 @@ def assert_no_dict_jacobians(system, include_self=True, recurse=True):
         raise AssertionError('\n'.join(parts))
 
 
+def assert_contains(test_case, obj, container):
+    """
+    Call TestCase.fail if 'obj' is not in 'container'.
+
+    Parameters
+    ----------
+    test_case : :class:`unittest.TestCase`
+        TestCase instance used for assertions.
+    obj : object
+        The thing that is supposed to be found in container.
+    container : object
+        The containing object.
+    """
+    try:
+        found = obj in container
+    except Exception:
+        test_case.fail("Object of type '{}' is not a container.".format(type(container).__name__))
+
+    if not found:
+        test_case.fail("Did not find <{}> in <{}>.".format(obj, container))
+
+
+def assert_not_contained(test_case, obj, container):
+    """
+    Call TestCase.fail if 'obj' is in 'container'.
+
+    Parameters
+    ----------
+    test_case : :class:`unittest.TestCase`
+        TestCase instance used for assertions.
+    obj : object
+        The thing that is supposed not to be found in container.
+    container : object
+        The non-containing object.
+    """
+    try:
+        found = obj in container
+    except Exception:
+        test_case.fail("Object of type '{}' is not a container.".format(type(container).__name__))
+
+    if found:
+        test_case.fail("Found <{}> in <{}>.".format(obj, container))
+
+
 def assert_rel_error(test_case, actual, desired, tolerance=1e-15):
     """
     Check relative error.

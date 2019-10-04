@@ -12,7 +12,7 @@ import math
 from six import StringIO
 
 from distutils.version import LooseVersion
-from numpy.testing import assert_array_almost_equal, assert_almost_equal
+from numpy.testing import assert_almost_equal
 import scipy
 try:
     from scipy.sparse import load_npz
@@ -20,7 +20,7 @@ except ImportError:
     load_npz = None
 
 import openmdao.api as om
-from openmdao.utils.assert_utils import assert_rel_error, assert_warning
+from openmdao.utils.assert_utils import assert_contains, assert_not_contained
 from openmdao.utils.general_utils import set_pyoptsparse_opt
 from openmdao.utils.coloring import Coloring, _compute_coloring, array_viz
 from openmdao.utils.mpi import MPI
@@ -657,11 +657,11 @@ class SimulColoringRevScipyTestCase(unittest.TestCase):
         finally:
             sys.stdout = save_out
 
-        self.assertTrue('Jacobian shape: (22, 21)  (13.42% nonzero)' in summary)
-        self.assertTrue('FWD solves: 5   REV solves: 0' in summary)
-        self.assertTrue('Total colors vs. total size: 5 vs 21  (76.2% improvement)' in summary)
-        self.assertTrue('Time to compute sparsity:' in summary)
-        self.assertTrue('Time to compute coloring:' in summary)
+        assert_contains(self, 'Jacobian shape: (22, 21)  (13.42% nonzero)', summary)
+        assert_contains(self, 'FWD solves: 5   REV solves: 0', summary)
+        assert_contains(self, 'Total colors vs. total size: 5 vs 21  (76.2% improvement)', summary)
+        assert_contains(self, 'Time to compute sparsity:', summary)
+        assert_contains(self, 'Time to compute coloring:', summary)
 
         dense_J = np.ones((50, 50), dtype=bool)
         coloring = _compute_coloring(dense_J, 'auto')
@@ -672,11 +672,12 @@ class SimulColoringRevScipyTestCase(unittest.TestCase):
         finally:
             sys.stdout = save_out
 
-        self.assertTrue('Jacobian shape: (50, 50)  (100.00% nonzero)' in summary)
-        self.assertTrue('FWD solves: 50   REV solves: 0' in summary)
-        self.assertTrue('Total colors vs. total size: 50 vs 50  (0.0% improvement)' in summary)
-        self.assertFalse('Time to compute sparsity:' in summary)
-        self.assertTrue('Time to compute coloring:' in summary)
+        # assert_contains(self, 'Jacobian shape: (50, 50)  (100.00% nonzero)', summary)
+        assert_contains(self, 'Jacobian shape: (50, 50)  (100.00% nonzero)', summary)
+        assert_contains(self, 'FWD solves: 50   REV solves: 0', summary)
+        assert_contains(self, 'Total colors vs. total size: 50 vs 50  (0.0% improvement)', summary)
+        assert_not_contained(self, 'Time to compute sparsity:', summary)
+        assert_contains(self, 'Time to compute coloring:', summary)
 
     def test_repr(self):
         p_color = run_opt(om.ScipyOptimizeDriver, 'auto', optimizer='SLSQP', disp=False, dynamic_total_coloring=True)

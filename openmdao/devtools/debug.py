@@ -556,3 +556,112 @@ def trace_mpi(fname='mpi_trace', skip=(), flush=True):
             _print_c_func(frame, arg, _c_map[event])
 
     sys.setprofile(_mpi_trace_callback)
+
+
+def compute_approx_jac(comp, method='fd', step=None, form='forward', step_calc='abs'):
+    # Finite Difference to calculate partial Jacobian
+    alloc_complex = comp._outputs._alloc_complex
+    all_fd_options = {}
+    could_not_cs = False
+
+    c_name = comp.pathname
+    all_fd_options[c_name] = {}
+    implicit = isinstance(comp, ImplicitComponent)
+
+    approximations = {'fd': FiniteDifference(), 'cs': ComplexStep()}
+    abs2prom = comp._var_allprocs_abs2prom
+
+    of = [comp._var_allprocs_abs2prom['output'][n] for n in comp._outputs._views]
+    wrt = [comp._var_allprocs_abs2prom['input'][n] for n in comp._inputs._views]
+
+    # The only outputs in wrt should be implicit states.
+    if implicit:
+        wrt.extend(of)
+
+    # Load up approximation objects with the requested settings.
+    local_opts = comp._get_check_partial_options()
+    for rel_key in product(of, wrt):
+        abs_key = rel_key2abs_key(comp, rel_key)
+        local_wrt = rel_key[1]
+
+        # Determine if fd or cs.
+        if local_wrt in local_opts:
+            local_method = local_opts[local_wrt]['method']
+            if local_method:
+                method = local_method
+
+        # We can't use CS if we haven't allocated a complex vector, so we fall back on fd.
+        if method == 'cs' and not alloc_complex:
+            could_not_cs = True
+            method = 'fd'
+
+        fd_options = {'order': None, 'method': method}
+
+        approx = approximations[method]
+        if method == 'cs':
+            defaults = approx.DEFAULT_OPTIONS
+
+            fd_options['form'] = None
+            fd_options['step_calc'] = None
+
+        elif method == 'fd':
+            defaults = approx.DEFAULT_OPTIONS
+
+            fd_options['form'] = form
+            fd_options['step_calc'] = step_calc
+
+        if step:
+            fd_options['step'] = step
+        else:
+            fd_options['step'] = defaults['step']
+
+        # Precedence: component options > global options > defaults
+        if local_wrt in local_opts:
+            for name in ['form', 'step', 'step_calc', 'directional']:
+                value = local_opts[local_wrt][name]
+                if value is not None:
+                    fd_options[name] = value
+
+        all_fd_options[c_name][local_wrt] = fd_options
+
+        approx.add_approximation(abs_key, comp, fd_options)
+
+    approx_jac = {}
+    for approximation in itervalues(approximations):
+        # Perform the FD here.
+        approximation.compute_approximations(comp, jac=approx_jac)
+
+    return approx_jac, could_not_cs
+
+
+def compare_jacs(Jref, J, rel_trigger=1.0):
+    results = []
+
+    for key in set(J).union(Jref):
+        if key in J:
+            subJ = J[key]
+        else:
+            subJ = np.zeros(Jref[key].shape)
+
+        if key in Jref:
+            subJref = Jref[key]
+        else:
+            subJref = np.zeros(J[key].shape)
+
+        diff = np.abs(subJ - subJref)
+        absref = np.abs(subJref)
+        rel_idxs = np.nonzero(absref > rel_trigger)
+        diff[rel_idxs] /= absref[rel_idxs]
+
+        max_diff_idx = np.argmax(diff)
+        max_diff = diff.flatten()[max_diff_idx]
+
+        # now determine if max diff is abs or rel
+        diff[:] = 0.0
+        diff[rel_idxs] = 1.0
+        if diff.flatten()[max_diff_idx] > 0.0:
+            results.append((key, max_diff, 'rel'))
+        else:
+            results.append((key, max_diff, 'abs'))
+
+    return results

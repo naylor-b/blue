@@ -1385,6 +1385,10 @@ class _DictValues(object):
     def __contains__(self, key):
         return key in self._dict
 
+    def __iter__(self):
+        for key in self._dict:
+            yield key
+
     def __len__(self):
         return len(self._dict)
 
