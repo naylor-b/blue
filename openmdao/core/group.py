@@ -1200,6 +1200,9 @@ class Group(System):
                                         raise ValueError(msg % (self.msginfo, abs_out, abs_in, i,
                                                                 d_size))
 
+        if self._vector_class is not self._distributed_vector_class:
+            self._vector_class = self._local_vector_class
+
     def _transfer(self, vec_name, mode, isub=None):
         """
         Perform a vector transfer.
@@ -1226,6 +1229,7 @@ class Group(System):
                     vec_inputs.scale('phys')
                 else:
                     xfer._transfer(vec_inputs, self._vectors['output'][vec_name], mode)
+
             if self._conn_discrete_in2out and vec_name == 'nonlinear':
                 self._discrete_transfer(isub)
 
@@ -1358,6 +1362,16 @@ class Group(System):
         self._vector_class.TRANSFER._setup_transfers(self, recurse=recurse)
         if self._conn_discrete_in2out:
             self._vector_class.TRANSFER._setup_discrete_transfers(self, recurse=recurse)
+
+    def _post_vec_setup(self):
+        """
+        Perform any actions needed after vector setup.
+        """
+        vectors = self._vectors
+        for vec_name, dct in self._transfers.items():
+            for xfer in dct.values():
+                if xfer is not None:
+                    xfer.finalize(vectors['input'][vec_name], vectors['output'][vec_name])
 
     def add(self, name, subsys, promotes=None):
         """

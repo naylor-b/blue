@@ -56,7 +56,6 @@ class DefaultTransfer(Transfer):
         allprocs_abs2meta = group._var_allprocs_abs2meta
 
         group._transfers = transfers = {}
-        vectors = group._vectors
         offsets = _global2local_offsets(group._get_var_offsets())
 
         vec_names = group._lin_rel_vec_name_list if group._use_derivatives else group._vec_names
@@ -141,25 +140,20 @@ class DefaultTransfer(Transfer):
                     rev_xfer_in[isub] = merge(rev_xfer_in[isub])
                     rev_xfer_out[isub] = merge(rev_xfer_out[isub])
 
-            out_vec = vectors['output'][vec_name]
-
             transfers[vec_name] = {}
-            xfer_all = DefaultTransfer(vectors['input'][vec_name], out_vec,
-                                       xfer_in, xfer_out, group.comm)
+            xfer_all = DefaultTransfer(xfer_in, xfer_out, group.comm)
             transfers[vec_name]['fwd', None] = xfer_all
             if rev:
                 transfers[vec_name]['rev', None] = xfer_all
             for isub in range(nsub_allprocs):
                 if fwd_xfer_in[isub].size > 0:
                     transfers[vec_name]['fwd', isub] = DefaultTransfer(
-                        vectors['input'][vec_name], vectors['output'][vec_name],
                         fwd_xfer_in[isub], fwd_xfer_out[isub], group.comm)
                 else:
                     transfers[vec_name]['fwd', isub] = None
                 if rev:
                     if rev_xfer_out[isub].size > 0:
                         transfers[vec_name]['rev', isub] = DefaultTransfer(
-                            vectors['input'][vec_name], vectors['output'][vec_name],
                             rev_xfer_in[isub], rev_xfer_out[isub], group.comm)
                     else:
                         transfers[vec_name]['rev', isub] = None
@@ -196,9 +190,9 @@ class DefaultTransfer(Transfer):
         Parameters
         ----------
         in_vec : <Vector>
-            pointer to the input vector.
+            the input vector.
         out_vec : <Vector>
-            pointer to the output vector.
+            the output vector.
         mode : str
             'fwd' or 'rev'.
 

@@ -17,16 +17,12 @@ class Transfer(object):
         communicator of the system that owns this transfer.
     """
 
-    def __init__(self, in_vec, out_vec, in_inds, out_inds, comm):
+    def __init__(self, in_inds, out_inds, comm):
         """
         Initialize all attributes.
 
         Parameters
         ----------
-        in_vec : <Vector>
-            pointer to the input vector.
-        out_vec : <Vector>
-            pointer to the output vector.
         in_inds : int ndarray
             input indices for the transfer.
         out_inds : int ndarray
@@ -37,6 +33,19 @@ class Transfer(object):
         self._in_inds = in_inds
         self._out_inds = out_inds
         self._comm = comm
+
+    def finalize(self, in_vec, out_vec):
+        """
+        Perform any actions needed after vector setup.
+
+        Parameters
+        ----------
+        in_vec : <Vector>
+            the input vector.
+        out_vec : <Vector>
+            the output vector.
+        """
+        pass
 
     def __str__(self):
         """
@@ -67,4 +76,4 @@ class Transfer(object):
         mode : str
             'fwd' or 'rev'.
         """
-        pass
+        raise NotImplementedError("__call__ has not been implemented.")

@@ -28,16 +28,12 @@ class PETScTransfer(DefaultTransfer):
         Method that performs either a normal transfer or a multi-transfer.
     """
 
-    def __init__(self, in_vec, out_vec, in_inds, out_inds, comm):
+    def __init__(self, in_inds, out_inds, comm):
         """
         Initialize all attributes.
 
         Parameters
         ----------
-        in_vec : <Vector>
-            pointer to the input vector.
-        out_vec : <Vector>
-            pointer to the output vector.
         in_inds : int ndarray
             input indices for the transfer.
         out_inds : int ndarray
@@ -45,15 +41,29 @@ class PETScTransfer(DefaultTransfer):
         comm : MPI.Comm or <FakeComm>
             communicator of the system that owns this transfer.
         """
-        super(PETScTransfer, self).__init__(in_vec, out_vec, in_inds, out_inds, comm)
-        in_indexset = PETSc.IS().createGeneral(self._in_inds, comm=self._comm)
-        out_indexset = PETSc.IS().createGeneral(self._out_inds, comm=self._comm)
+        super(PETScTransfer, self).__init__(in_inds, out_inds, comm)
+        self._scatter = None
 
-        self._scatter = PETSc.Scatter().create(out_vec._petsc, out_indexset, in_vec._petsc,
-                                               in_indexset).scatter
+    def finalize(self, in_vec, out_vec):
+        """
+        Initialize the PETSc scatters.
 
-        if in_vec._ncol > 1:
-            self._transfer = self._multi_transfer
+        Parameters
+        ----------
+        in_vec : <Vector>
+            pointer to the input vector.
+        out_vec : <Vector>
+            pointer to the output vector.
+        """
+        if self._scatter is None:
+            in_indexset = PETSc.IS().createGeneral(self._in_inds, comm=self._comm)
+            out_indexset = PETSc.IS().createGeneral(self._out_inds, comm=self._comm)
+
+            self._scatter = PETSc.Scatter().create(out_vec._petsc, out_indexset, in_vec._petsc,
+                                                   in_indexset).scatter
+
+            if in_vec._ncol > 1:
+                self._transfer = self._multi_transfer
 
     @staticmethod
     def _setup_transfers(group, recurse=True):
@@ -91,7 +101,6 @@ class PETScTransfer(DefaultTransfer):
         myproc = group.comm.rank
 
         transfers = group._transfers = {}
-        vectors = group._vectors
         offsets = group._get_var_offsets()
 
         vec_names = group._lin_rel_vec_name_list if group._use_derivatives else group._vec_names
@@ -200,21 +209,16 @@ class PETScTransfer(DefaultTransfer):
                     rev_xfer_in[isub] = merge(rev_xfer_in[isub])
                     rev_xfer_out[isub] = merge(rev_xfer_out[isub])
 
-            out_vec = vectors['output'][vec_name]
-
             transfers[vec_name] = {}
-            xfer_all = PETScTransfer(vectors['input'][vec_name], out_vec,
-                                     xfer_in, xfer_out, group.comm)
+            xfer_all = PETScTransfer(xfer_in, xfer_out, group.comm)
             transfers[vec_name]['fwd', None] = xfer_all
             if rev:
                 transfers[vec_name]['rev', None] = xfer_all
             for isub in range(nsub_allprocs):
                 transfers[vec_name]['fwd', isub] = PETScTransfer(
-                    vectors['input'][vec_name], vectors['output'][vec_name],
                     fwd_xfer_in[isub], fwd_xfer_out[isub], group.comm)
                 if rev:
                     transfers[vec_name]['rev', isub] = PETScTransfer(
-                        vectors['input'][vec_name], vectors['output'][vec_name],
                         rev_xfer_in[isub], rev_xfer_out[isub], group.comm)
 
         if group._use_derivatives:

@@ -40,7 +40,12 @@ class RemoteVOITestCase(unittest.TestCase):
     N_PROCS = 2
 
     def test_remote_voi(self):
+        #from openmdao.devtools.debug import trace_mpi
+        #trace_mpi()
+
         prob = Problem()
+
+        import wingdbstub
 
         prob.model.add_subsystem('par', ParallelGroup())
 

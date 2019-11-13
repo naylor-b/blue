@@ -882,15 +882,14 @@ class System(object):
             recurse = False
             resize = False
 
+        self._setup_transfers(recurse=recurse)
+
         # For vector-related, setup, recursion is always necessary, even for updating.
         # For reconfiguration setup, we resize the vectors once, only in the current system.
         ext_num_vars, ext_sizes = self._get_initial_global(initial)
         self._setup_global(ext_num_vars, ext_sizes)
         root_vectors = self._get_root_vectors(initial, force_alloc_complex=force_alloc_complex)
         self._setup_vectors(root_vectors, resize=resize)
-
-        # Transfers do not require recursion, but they have to be set up after the vector setup.
-        self._setup_transfers(recurse=recurse)
 
         # Same situation with solvers, partials, and Jacobians.
         # If we're updating, we just need to re-run setup on these, but no recursion necessary.
@@ -916,6 +915,12 @@ class System(object):
             #   the system metadata for all the subsystems
             if rec_model_meta:
                 self._rec_mgr.record_metadata(sub)
+
+    def _post_vec_setup(self):
+        """
+        Perform any actions needed after vector setup.
+        """
+        pass
 
     def use_fixed_coloring(self, coloring=_STD_COLORING_FNAME, recurse=True):
         """
@@ -1778,6 +1783,8 @@ class System(object):
         for subsys in self._subsystems_myproc:
             subsys._scale_factors = self._scale_factors
             subsys._setup_vectors(root_vectors, alloc_complex=alloc_complex)
+
+        self._post_vec_setup()
 
     def _setup_bounds(self, root_lower, root_upper, resize=False):
         """
