@@ -72,6 +72,38 @@ class Application(tornado.web.Application):
         self.engine = engine
 
 
+def _rel_name(basename, name, delim='/'):
+    """
+    Return the name relative to basename with each parent level denoted by ..{delim}
+
+    Parameters
+    ----------
+    basename : str
+        Name return string will be relative to.
+    name : str
+        Name to convert to relative form
+    delim : str
+        Delimiter for each level of relative pathname.
+    """
+    baseparts = basename.split('.')
+    parts = name.split('.')
+    partslen = len(parts)
+    common = []
+    for i, part in enumerate(baseparts):
+        if partslen > i and parts[i] == part:
+            common.append(part)
+        else:
+            break
+
+    if common:
+        lst = ['..' + delim] * (len(baseparts) - len(common))
+        lst.append('.'.join(parts[len(common):]))
+        return ''.join(lst)
+
+    return name
+
+
+
 def get_graph_info(prob, group, engine='dot', show_outside=False):
     """
     Get the system graph from the give group and return the graphviz generated SVG string.
@@ -128,36 +160,36 @@ def get_graph_info(prob, group, engine='dot', show_outside=False):
     if group is not model and show_outside == 'Y':
         out_nodes = set()
         g.attr('node', color='lightgrey', style='filled')
-        g.attr('edge', style='dotted')
+        g.attr('edge', style='dashed')
         gname = group.pathname + '.'
         pname = '.'.join(group.pathname.split('.')[:-1]) + '.'
         plen = len(group.pathname.split('.')) + 1 if group.pathname else 1
         conn_set = set()
         out_depth = len(group.pathname.split('.'))
         for tgt, src in model._conn_global_abs_in2out.items():
+            # show connections coming into the group
             if tgt.startswith(gname) and not src.startswith(gname):
-                if src.startswith(pname):
-                    depth = out_depth
-                else:
-                    depth = out_depth - 1 if out_depth > 1 else out_depth
-                ssys = '.'.join(src.split('.')[:-1][:depth])
+                srcabs = '.'.join(src.split('.')[:-1])
+                ssys = _rel_name(group.pathname, srcabs)
+                if len(ssys) >= len(srcabs):
+                    ssys = srcabs
                 if ssys not in out_nodes:
                     out_nodes.add(ssys)
-                    g.node(ssys)
-                edge = (ssys, '.'.join(tgt.split('.')[:plen]))
+                    g.node(srcabs, label=ssys)
+                edge = (srcabs, '.'.join(tgt.split('.')[:plen]))
                 if edge not in conn_set:
                     conn_set.add(edge)
                     g.edge(*edge)
+            # show connections leaving the group
             elif src.startswith(gname) and not tgt.startswith(gname):
-                if tgt.startswith(pname):
-                    depth = out_depth
-                else:
-                    depth = out_depth - 1 if out_depth > 1 else out_depth
-                tsys = '.'.join(tgt.split('.')[:-1][:depth])
+                tgtabs = '.'.join(tgt.split('.')[:-1])
+                tsys = _rel_name(group.pathname, tgtabs)
+                if len(tsys) >= len(tgtabs):
+                    tsys = tgtabs
                 if tsys not in out_nodes:
                     out_nodes.add(tsys)
-                    g.node(tsys)
-                edge = ('.'.join(src.split('.')[:plen]), tsys)
+                    g.node(tgtabs, label=tsys)
+                edge = ('.'.join(src.split('.')[:plen]), tgtabs)
                 if edge not in conn_set:
                     conn_set.add(edge)
                     g.edge(*edge)
