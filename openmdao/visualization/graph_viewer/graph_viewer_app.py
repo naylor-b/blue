@@ -130,74 +130,77 @@ def get_graph_info(prob, group, engine='dot', show_outside=False):
     parent = None if not group.pathname else group.pathname.rsplit('.', 1)[0]
     if parent == group.pathname:
         parent = None
+    prefix = '' if not group.pathname else group.pathname + '.'
 
-    g = Digraph(filename=title + '.gv', format='svg', engine=engine)
-    g.attr(rankdir='LR', size='600, 600', overlap='false')
+    nodes = [{'name': n, 'pathname': prefix + n} for n in graph.nodes()]
+    idmap = {d['name']:i for i, d in enumerate(nodes)}
 
-    # groups
-    with g.subgraph(name='cluster_0') as c:
-        c.node_attr.update(style='filled', color='lightblue', shape='rectangle')
-        c.attr(label=group.pathname)
+    links = [{'source': idmap[u], 'target': idmap[v]} for u, v in graph.edges()]
 
-        groupset = set(group._subgroups_myproc)
-        for grp in groupset:
-            c.node(grp.pathname, label=grp.name)
+    # g = Digraph(filename=title + '.gv', format='svg', engine=engine)
+    # g.attr(rankdir='LR', size='600, 600', overlap='false')
 
-    # components
-    with g.subgraph(name='cluster_0') as c:
-        c.node_attr.update(color='orange', shape='ellipse')
-        for s in group._subsystems_myproc:
-            if s not in groupset:
-                c.node(s.pathname, label=s.name)
+    # # groups
+    # with g.subgraph(name='cluster_0') as c:
+    #     c.node_attr.update(style='filled', color='lightblue', shape='rectangle')
+    #     c.attr(label=group.pathname)
+
+    #     groupset = set(group._subgroups_myproc)
+    #     for grp in groupset:
+    #         c.node(grp.pathname, label=grp.name)
+
+    # # components
+    # with g.subgraph(name='cluster_0') as c:
+    #     c.node_attr.update(color='orange', shape='ellipse')
+    #     for s in group._subsystems_myproc:
+    #         if s not in groupset:
+    #             c.node(s.pathname, label=s.name)
         
-        for u, v in graph.edges():
-            src = group.pathname + '.' + u if group.pathname else u
-            tgt = group.pathname + '.' + v if group.pathname else v
-            c.edge(src, tgt)
+    #     for u, v in graph.edges():
+    #         src = group.pathname + '.' + u if group.pathname else u
+    #         tgt = group.pathname + '.' + v if group.pathname else v
+    #         c.edge(src, tgt)
 
-    # connections from outside the group
-    model = prob.model
-    if group is not model and show_outside == 'Y':
-        out_nodes = set()
-        g.attr('node', color='lightgrey', style='filled')
-        g.attr('edge', style='dashed')
-        gname = group.pathname + '.'
-        pname = '.'.join(group.pathname.split('.')[:-1]) + '.'
-        plen = len(group.pathname.split('.')) + 1 if group.pathname else 1
-        conn_set = set()
-        out_depth = len(group.pathname.split('.'))
-        for tgt, src in model._conn_global_abs_in2out.items():
-            # show connections coming into the group
-            if tgt.startswith(gname) and not src.startswith(gname):
-                srcabs = '.'.join(src.split('.')[:-1])
-                ssys = _rel_name(group.pathname, srcabs)
-                if len(ssys) >= len(srcabs):
-                    ssys = srcabs
-                if ssys not in out_nodes:
-                    out_nodes.add(ssys)
-                    g.node(srcabs, label=ssys)
-                edge = (srcabs, '.'.join(tgt.split('.')[:plen]))
-                if edge not in conn_set:
-                    conn_set.add(edge)
-                    g.edge(*edge)
-            # show connections leaving the group
-            elif src.startswith(gname) and not tgt.startswith(gname):
-                tgtabs = '.'.join(tgt.split('.')[:-1])
-                tsys = _rel_name(group.pathname, tgtabs)
-                if len(tsys) >= len(tgtabs):
-                    tsys = tgtabs
-                if tsys not in out_nodes:
-                    out_nodes.add(tsys)
-                    g.node(tgtabs, label=tsys)
-                edge = ('.'.join(src.split('.')[:plen]), tgtabs)
-                if edge not in conn_set:
-                    conn_set.add(edge)
-                    g.edge(*edge)
+    # # connections from outside the group
+    # model = prob.model
+    # if group is not model and show_outside == 'Y':
+    #     out_nodes = set()
+    #     g.attr('node', color='lightgrey', style='filled')
+    #     g.attr('edge', style='dashed')
+    #     gname = group.pathname + '.'
+    #     pname = '.'.join(group.pathname.split('.')[:-1]) + '.'
+    #     plen = len(group.pathname.split('.')) + 1 if group.pathname else 1
+    #     conn_set = set()
+    #     out_depth = len(group.pathname.split('.'))
+    #     for tgt, src in model._conn_global_abs_in2out.items():
+    #         # show connections coming into the group
+    #         if tgt.startswith(gname) and not src.startswith(gname):
+    #             srcabs = '.'.join(src.split('.')[:-1])
+    #             ssys = _rel_name(group.pathname, srcabs)
+    #             if len(ssys) >= len(srcabs):
+    #                 ssys = srcabs
+    #             if ssys not in out_nodes:
+    #                 out_nodes.add(ssys)
+    #                 g.node(srcabs, label=ssys)
+    #             edge = (srcabs, '.'.join(tgt.split('.')[:plen]))
+    #             if edge not in conn_set:
+    #                 conn_set.add(edge)
+    #                 g.edge(*edge)
+    #         # show connections leaving the group
+    #         elif src.startswith(gname) and not tgt.startswith(gname):
+    #             tgtabs = '.'.join(tgt.split('.')[:-1])
+    #             tsys = _rel_name(group.pathname, tgtabs)
+    #             if len(tsys) >= len(tgtabs):
+    #                 tsys = tgtabs
+    #             if tsys not in out_nodes:
+    #                 out_nodes.add(tsys)
+    #                 g.node(tgtabs, label=tsys)
+    #             edge = ('.'.join(src.split('.')[:plen]), tgtabs)
+    #             if edge not in conn_set:
+    #                 conn_set.add(edge)
+    #                 g.edge(*edge)
 
-    svg = g.pipe()
-
-    svg = str(svg.replace(b'\n', b''))
-    return svg[1:].strip("'"), group._subgroups_myproc
+    return nodes, links, group._subgroups_myproc
 
 
 class SysGraph(tornado.web.RequestHandler):
@@ -217,9 +220,8 @@ class SysGraph(tornado.web.RequestHandler):
             self.write("Components don't have graphs.")
             return
         
-        svg, subgroups = get_graph_info(app.prob, system, app.engine, show_outside)
-        # print("\n\n\n\n")
-        # print(svg)
+        nodes, links, subgroups = get_graph_info(app.prob, system, app.engine, show_outside)
+
         pathname = system.pathname
         parent_link = ['/sysgraph']
         if show_outside:
@@ -233,10 +235,38 @@ class SysGraph(tornado.web.RequestHandler):
 
         subgroups = [g.name for g in subgroups]
 
+        font_size = 16
+
         self.write("""\
     <html>
     <head>
     <style>
+        line {
+            stroke: #ccc;
+        }
+        text {
+            text-anchor: middle;
+            font-family: "Helvetica Neue", Helvetica, sans-serif;
+            fill: #666;
+            font-size: %(font_size)dpx;
+        }
+        circle {
+            fill: lightsteelblue;
+            stroke: steelblue;
+            stroke-width: 1.5px;
+        }
+
+        .tooltip {
+            position: absolute;
+            background-color: white;
+            border: solid;
+            border-width: 2px;
+            border-radius: 5px;
+            padding: 5px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
     </style>
     <script src="https://d3js.org/d3.v4.min.js"></script>
     <script>
@@ -244,38 +274,141 @@ class SysGraph(tornado.web.RequestHandler):
     var width = 960,
         height = 800;
 
-    var pathnames = %s;
-    var subgroups = %s;
-    var show_outside = '%s';
+    var font_size = %(font_size)d;
+    var pathnames = %(pathnames)s;
+    var subgroups = %(subgroups)s;
+    var show_outside = '%(show_outside)s';
+
+    var nodes = %(nodes)s;
+
+    var links = %(links)s;
 
     function d3_setup() {
+
         var svg = d3.select("svg");
-        // register click event handler on all the graphviz SVG node elements
-        svg.selectAll(".node")
-            .on("click", function(d, i) {
-                var txt = d3.select(this).select("text").text();
-                if (subgroups.includes(txt)) {
-                    var ptext = pathnames[0] + "." + txt;
+
+        // create a tooltip
+        var tooltip = d3.select("body")
+            .append("div")
+            .attr("class", "tooltip");
+
+        var link = svg.append("g")
+            .attr("class", "link")
+            .selectAll("line");
+
+        link = link
+            .data(links)
+            .enter()
+            .append("line")
+            .attr("x1", function(d) { return d.source.x; })
+            .attr("y1", function(d) { return d.source.y; })
+            .attr("x2", function(d) { return d.target.x; })
+            .attr("y2", function(d) { return d.target.y; });
+
+        var node = svg.append("g")
+            .attr("class", "node")
+            .selectAll("circle")
+            .data(nodes)
+            .enter()
+            .append("circle")
+            .attr("r", 10)
+            .attr("cx", function(d) { return d.x; })
+            .attr("cy", function(d) { return d.y; })
+            .on("mouseover", function(d) {
+                tooltip.style("opacity", 1);
+            })
+            .on("mousemove", function(d) {
+                tooltip.html(d.pathname)
+                .style("left", d3.event.pageX + "px")
+                .style("top", d3.event.pageY + "px");
+            })
+            .on("mouseleave", function(d) {
+                tooltip.style("opacity", 0);
+            })
+            .call(d3.drag()
+                .subject(function (d) { return d; })
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended))
+            .on("click", function(d) {
+                if (subgroups.includes(d.name)) {
+                    var ptext = pathnames[0] + "." + d.name;
                     if (ptext.startsWith(".")) {
-                        ptext = txt;
+                        ptext = d.name;
                     }
                     window.location = "/sysgraph/" + show_outside + "/" + ptext;
                 }
             });
 
-        window.onresize = function() {
-            width = window.innerWidth * .98;
-            d3.select("svg").attr("width", width);
-        }
+        var simulation = d3.forceSimulation(nodes)
+            .force('collision', d3.forceCollide(50))
+            .force('charge', d3.forceManyBody().strength(-200))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('link', d3.forceLink().links(links))
+            .on('tick', ticked);
+    }
+
+
+    function dragstarted(d) {
+        d3.event.sourceEvent.stopPropagation();
+        d3.select(this).classed("dragging", true);
+    }
+
+    function dragged(d) {
+        d3.select(this).attr("cx", d.x = d3.event.x).attr("cy", d.y = d3.event.y);
+    }
+
+    function dragended(d) {
+        d3.select(this).classed("dragging", false);
+    }
+
+    function updateLinks() {
+        var u = d3.select('.link')
+            .selectAll('line')
+            .data(links)
+
+        u.enter()
+            .append('line')
+            .merge(u)
+            .attr('x1', function(d) {return d.source.x})
+            .attr('y1', function(d) {return d.source.y})
+            .attr('x2', function(d) {return d.target.x})
+            .attr('y2', function(d) {return d.target.y})
+
+        u.exit().remove()
+    }
+
+    function updateNodes() {
+        d3.select('.node')
+        .selectAll('circle')
+        .attr("cx", function(d) { return d.x; })
+        .attr("cy", function(d) { return d.y; })
+        .on("mouseover", function(d) { tooltip.style("opacity", 1); })
+        .on("mousemove", function(d) {
+            tooltip.html(d.pathname)
+            .style("left", d3.event.pageX + "px")
+            .style("top", d3.event.pageY + "px");
+        })
+        .on("mouseleave", function(d) { tooltip.style("opacity", 0); })
+        .call(d3.drag()
+            .subject(function (d) { return d; })
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended));
+    }
+
+    function ticked() {
+        updateLinks();
+        updateNodes();
     }
 
     function toggle_outside()
     {
         if (show_outside == "Y") {
-            location.href = "/sysgraph/N/" + pathnames[0]
+            location.href = "/sysgraph/N/" + pathnames[0];
         }
         else {
-            location.href = "/sysgraph/Y/" + pathnames[0]
+            location.href = "/sysgraph/Y/" + pathnames[0];
         }
     }
 
@@ -287,16 +420,26 @@ class SysGraph(tornado.web.RequestHandler):
         d3_setup();
     };
 
+    window.onresize = function() {
+        width = window.innerWidth * .98;
+        d3.select("svg").attr("width", width);
+    }
+
+
     </script>
     </head>
     <body>
         <input type="button" onclick="location.href='/';" value="Home" />
-        <input type="button" onclick="location.href='%s';" value="Up" />
         <input type="checkbox" onclick="toggle_outside();"  value="N"> Show Outside Connections <br>
-    %s
+
+        <div id="content">
+            <svg>
+            </svg>
+        </div>
     </body>
     </html>
-    """ % ([pathname], subgroups, show_outside, parent_link, svg))
+    """ % dict(font_size=font_size, pathnames=[pathname], subgroups=subgroups, show_outside=show_outside, 
+               nodes=nodes, links=links))
 
 
 class Index(SysGraph):
