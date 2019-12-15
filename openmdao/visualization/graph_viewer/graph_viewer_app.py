@@ -235,8 +235,6 @@ class SysGraph(tornado.web.RequestHandler):
 
         subgroups = [g.name for g in subgroups]
 
-        font_size = 16
-
         self.write("""\
     <html>
     <head>
@@ -248,7 +246,7 @@ class SysGraph(tornado.web.RequestHandler):
             text-anchor: middle;
             font-family: "Helvetica Neue", Helvetica, sans-serif;
             fill: #666;
-            font-size: %(font_size)dpx;
+            font-size: 16px;
         }
         circle {
             fill: lightsteelblue;
@@ -274,7 +272,6 @@ class SysGraph(tornado.web.RequestHandler):
     var width = 960,
         height = 800;
 
-    var font_size = %(font_size)d;
     var pathnames = %(pathnames)s;
     var subgroups = %(subgroups)s;
     var show_outside = '%(show_outside)s';
@@ -286,6 +283,20 @@ class SysGraph(tornado.web.RequestHandler):
     function d3_setup() {
 
         var svg = d3.select("svg");
+
+        svg.append('defs').append('marker')
+            .attr('id', 'arrowhead')
+            .attr('viewBox', '-0 -5 10 10')
+            .attr('refX', 13)
+            .attr('refY', 0)
+            .attr('orient', 'auto')
+            .attr('markerWidth', 13)
+            .attr('markerHeight', 13)
+            .attr('xoverflow', 'visible')
+            .append('svg:path')
+            .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
+            .attr('fill', '#999')
+            .style('stroke','none');
 
         // create a tooltip
         var tooltip = d3.select("body")
@@ -300,6 +311,7 @@ class SysGraph(tornado.web.RequestHandler):
             .data(links)
             .enter()
             .append("line")
+            .attr('marker-end','url(#arrowhead)')
             .attr("x1", function(d) { return d.source.x; })
             .attr("y1", function(d) { return d.source.y; })
             .attr("x2", function(d) { return d.target.x; })
@@ -314,17 +326,6 @@ class SysGraph(tornado.web.RequestHandler):
             .attr("r", 10)
             .attr("cx", function(d) { return d.x; })
             .attr("cy", function(d) { return d.y; })
-            .on("mouseover", function(d) {
-                tooltip.style("opacity", 1);
-            })
-            .on("mousemove", function(d) {
-                tooltip.html(d.pathname)
-                .style("left", d3.event.pageX + "px")
-                .style("top", d3.event.pageY + "px");
-            })
-            .on("mouseleave", function(d) {
-                tooltip.style("opacity", 0);
-            })
             .call(d3.drag()
                 .subject(function (d) { return d; })
                 .on("start", dragstarted)
@@ -370,6 +371,7 @@ class SysGraph(tornado.web.RequestHandler):
         u.enter()
             .append('line')
             .merge(u)
+            .attr('marker-end','url(#arrowhead)')
             .attr('x1', function(d) {return d.source.x})
             .attr('y1', function(d) {return d.source.y})
             .attr('x2', function(d) {return d.target.x})
@@ -438,7 +440,7 @@ class SysGraph(tornado.web.RequestHandler):
         </div>
     </body>
     </html>
-    """ % dict(font_size=font_size, pathnames=[pathname], subgroups=subgroups, show_outside=show_outside, 
+    """ % dict(pathnames=[pathname], subgroups=subgroups, show_outside=show_outside, 
                nodes=nodes, links=links))
 
 
