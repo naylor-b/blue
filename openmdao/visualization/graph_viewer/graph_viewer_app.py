@@ -239,13 +239,13 @@ class SysGraph(tornado.web.RequestHandler):
     <html>
     <head>
     <style>
-        line {
-            stroke: #ccc;
+        polyline {
+            stroke: black;
         }
         text {
             text-anchor: middle;
             font-family: "Helvetica Neue", Helvetica, sans-serif;
-            fill: #666;
+            fill: black;
             font-size: 16px;
         }
         circle {
@@ -262,6 +262,10 @@ class SysGraph(tornado.web.RequestHandler):
             border-radius: 5px;
             padding: 5px;
             opacity: 0;
+            pointer-events: none;
+        }
+
+        .node_text {
             pointer-events: none;
         }
 
@@ -286,6 +290,7 @@ class SysGraph(tornado.web.RequestHandler):
 
     function d3_setup() {
 
+        // arrows
         svg.append('defs').append('marker')
             .attr('id', 'arrowhead')
             .attr('viewBox', '-0 -5 10 10')
@@ -297,7 +302,7 @@ class SysGraph(tornado.web.RequestHandler):
             .attr('xoverflow', 'visible')
             .append('svg:path')
             .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
-            .attr('fill', '#999')
+            .attr('fill', 'black')
             .style('stroke','none');
 
         var simulation = d3.forceSimulation(nodes)
@@ -314,30 +319,39 @@ class SysGraph(tornado.web.RequestHandler):
 
         link = svg.append("g")
             .attr("class", "link")
-            .selectAll("line")
+            .selectAll("polyline")
             .data(links)
             .enter()
-            .append("line")
-            .attr('marker-end','url(#arrowhead)')
-            .attr("x1", function(d) { return d.source.x; })
-            .attr("y1", function(d) { return d.source.y; })
-            .attr("x2", function(d) { return d.target.x; })
-            .attr("y2", function(d) { return d.target.y; });
+            .append("polyline")
+            .attr('marker-mid','url(#arrowhead)')
+            .attr("points", function(d) { return `${d.source.x},${d.source.y} ${(d.source.x+d.target.x)/2},${(d.source.y+d.target.y)/2} ${d.target.x},${d.target.y}`; })
+            //.attr("x1", function(d) { return d.source.x; })
+            //.attr("y1", function(d) { return d.source.y; })
+            //.attr("x2", function(d) { return d.target.x; })
+            //.attr("y2", function(d) { return d.target.y; });
 
-        var node = svg.append("g")
-            .attr("class", "node")
-            .selectAll("circle")
+        var enter_group = svg
+            .append("g")
+            .attr("class", "enter_group");
+
+        var node_group = enter_group
+            .selectAll("g")
             .data(nodes)
             .enter()
+            .append("g")
+            //.call(d3.drag()
+            //    .subject(function (d) { return d; })
+            //    .on("start", dragstarted)
+            //    .on("drag", dragged)
+            //    .on("end", dragended))
+            .attr("class", "node_group");
+
+        var node = d3.selectAll(".node_group")
             .append("circle")
-            .attr("r", 10)
+            .attr("class", "node")
+            .attr("r", 20)
             .attr("cx", function(d) { return d.x; })
             .attr("cy", function(d) { return d.y; })
-            .call(d3.drag()
-                .subject(function (d) { return d; })
-                .on("start", dragstarted)
-                .on("drag", dragged)
-                .on("end", dragended))
             .on("click", function(d) {
                 if (subgroups.includes(d.name)) {
                     var ptext = pathnames[0] + "." + d.name;
@@ -350,8 +364,16 @@ class SysGraph(tornado.web.RequestHandler):
 
         node.append("title").text(function(d) { return d.pathname; })
 
+        var node_txt = d3.selectAll(".node_group")
+            .append("text")
+            .attr("class", "node_text")
+            .attr("x", function(d) { return d.x; })
+            .attr("y", function(d) { return d.y; })
+            .attr("text-anchor", "middle")  
+            .style("font-size", "10px")
+            .attr('fill','black')
+            .text(function(d) { return d.name; });
     }
-
 
     function dragstarted(d) {
         //if (!d3.event.active) simulation.alphaTarget(0.3).restart()
@@ -359,15 +381,15 @@ class SysGraph(tornado.web.RequestHandler):
         d3.select(this).classed("dragging", true);
     }
 
-    //function dragged(d) {
-    //    d3.select(this).attr("cx", d.x = d3.event.x).attr("cy", d.y = d3.event.y);
-    //}
-
     function dragged(d) {
         d.x = d3.event.x, d.y = d3.event.y;
-        d3.select(this).attr("cx", d.x).attr("cy", d.y);
-        link.filter(function(l) { return l.source === d; }).attr("x1", d.x).attr("y1", d.y);
-        link.filter(function(l) { return l.target === d; }).attr("x2", d.x).attr("y2", d.y);
+        let nodegrp = d3.select(this);
+        nodegrp.select("circle").attr("cx", d.x).attr("cy", d.y);
+        nodegrp.select("text").attr("x", d.x).attr("y", d.y);
+        //link.filter(function(l) { return l.source === d; }).attr("x1", d.x).attr("y1", d.y);
+        //link.filter(function(l) { return l.target === d; }).attr("x2", d.x).attr("y2", d.y);
+        link.filter(function(l) { return l.source === d; }).attr("points", function(d) { return `${d.source.x},${d.source.y} ${(d.source.x+d.target.x)/2},${(d.source.y+d.target.y)/2} ${d.target.x},${d.target.y}`; })
+        link.filter(function(l) { return l.target === d; }).attr("points", function(d) { return `${d.source.x},${d.source.y} ${(d.source.x+d.target.x)/2},${(d.source.y+d.target.y)/2} ${d.target.x},${d.target.y}`; })
     }
 
     function dragended(d) {
@@ -376,24 +398,33 @@ class SysGraph(tornado.web.RequestHandler):
 
     function updateLinks() {
         var u = d3.select('.link')
-            .selectAll('line')
+            .selectAll('polyline')
             .data(links)
 
         u.enter()
-            .append('line')
+            .append('polyline')
             .merge(u)
-            .attr('marker-end','url(#arrowhead)')
-            .attr('x1', function(d) {return d.source.x})
-            .attr('y1', function(d) {return d.source.y})
-            .attr('x2', function(d) {return d.target.x})
-            .attr('y2', function(d) {return d.target.y})
+            .attr('marker-mid','url(#arrowhead)')
+            .attr("points", function(d) { return `${d.source.x},${d.source.y} ${(d.source.x+d.target.x)/2},${(d.source.y+d.target.y)/2} ${d.target.x},${d.target.y}`; })
+            //.attr('x1', function(d) {return d.source.x})
+            //.attr('y1', function(d) {return d.source.y})
+            //.attr('x2', function(d) {return d.target.x})
+            //.attr('y2', function(d) {return d.target.y})
 
         u.exit().remove()
     }
 
     function updateNodes() {
-        d3.select('.node')
-        .selectAll('circle')
+        let eg = d3.select('.enter_group');
+
+        eg.selectAll("g")
+        .call(d3.drag()
+            .subject(function (d) { return d; })
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended));
+
+        eg.selectAll('circle')
         .attr("cx", function(d) { return d.x; })
         .attr("cy", function(d) { return d.y; })
         //.on("mouseover", function(d) { tooltip.style("opacity", 1); })
@@ -403,11 +434,11 @@ class SysGraph(tornado.web.RequestHandler):
         //    .style("top", d3.event.pageY + "px");
         //})
         //.on("mouseleave", function(d) { tooltip.style("opacity", 0); })
-        .call(d3.drag()
-            .subject(function (d) { return d; })
-            .on("start", dragstarted)
-            .on("drag", dragged)
-            .on("end", dragended));
+
+        eg.selectAll("text")
+        .attr("x", function(d) { return d.x; })
+        .attr("y", function(d) { return d.y; })
+
     }
 
     function ticked() {
