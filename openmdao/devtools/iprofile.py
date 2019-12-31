@@ -2,12 +2,21 @@ from __future__ import print_function
 
 import os
 import sys
+from sys import _current_frames, getswitchinterval, setswitchinterval
+from time import sleep
 from timeit import default_timer as etime
 import argparse
 import json
 import atexit
 from collections import defaultdict
 from itertools import chain
+import threading
+
+try:
+    import faulthandler
+    faulthandler.enable()
+except ImportError:
+    pass
 
 from six import iteritems, string_types
 
@@ -430,3 +439,63 @@ def _iprof_py_file(options, user_args):
     start()
     exec (code, globals_dict)
     _finalize_profile()
+
+
+class StatisticalProfiler(object):
+    def __init__(self, sleep_interval=0.01):
+        self._sleep_interval = sleep_interval
+        self._stopped = True
+        self._prof_thread = None
+        self._stats = defaultdict(int)
+
+    def start(self):
+        print("starting")
+        self._stopped = False
+        self._prof_thread = self.start_thread(self.collecting)
+
+    def stop(self):
+        self._stopped = True
+        self._prof_thread.join()
+        self._prof_thread = None
+        import pprint
+        pprint.pprint(self._stats)
+        print("stop complete")
+
+    def save(self):
+        pass
+
+    def shutdown(self):
+        pass
+
+    def collecting(self):
+        while True:
+            if self._stopped:
+                break
+            sleep(self._sleep_interval)
+            self.collect_frame_data()
+
+    def record(self, frame):
+        if 'self' in frame.f_locals and frame.f_locals['self'] is not self:
+            name = type(frame.f_locals['self']).__name__ + '.' + frame.f_code.co_name
+            self._stats[name] += 1
+            print(name, self._stats[name])
+
+    def collect_frame_data(self):
+        switch_interval = getswitchinterval()
+        try:
+            setswitchinterval(10000)
+            for frame in _current_frames().values():
+                self.record(frame)
+        finally:
+            setswitchinterval(switch_interval)
+
+    def start_thread(self, fn):
+        """
+        Start a daemon thread running the given function.
+        """
+        thread = threading.Thread(target=fn)
+        thread.setDaemon(True)
+        thread.start()
+        return thread
+
+
