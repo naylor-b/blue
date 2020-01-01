@@ -2,8 +2,10 @@ from __future__ import print_function
 
 import os
 import sys
+import signal
 from sys import _current_frames, getswitchinterval, setswitchinterval
 from time import sleep
+import time
 from timeit import default_timer as etime
 import argparse
 import json
@@ -19,6 +21,7 @@ except ImportError:
     pass
 
 from six import iteritems, string_types
+from six.moves import _thread
 
 from openmdao.utils.mpi import MPI
 
@@ -441,7 +444,7 @@ def _iprof_py_file(options, user_args):
     _finalize_profile()
 
 
-class StatisticalProfiler(object):
+class StatisticalProfiler_old(object):
     def __init__(self, sleep_interval=0.01):
         self._sleep_interval = sleep_interval
         self._stopped = True
@@ -497,5 +500,85 @@ class StatisticalProfiler(object):
         thread.setDaemon(True)
         thread.start()
         return thread
+
+
+
+# from plop (https://github.com/bdarnell/plop.git)
+class StatisticalProfiler(object):
+    MODES = {
+        'prof': (signal.ITIMER_PROF, signal.SIGPROF),
+        'virtual': (signal.ITIMER_VIRTUAL, signal.SIGVTALRM),
+        'real': (signal.ITIMER_REAL, signal.SIGALRM),
+    }
+
+    def __init__(self, interval=0.005, mode='virtual'):
+        self._stats = defaultdict(int)
+        self.interval = interval
+        self.mode = mode
+        assert mode in StatisticalProfiler.MODES, 'valid modes are: ["prof", "virtual", "real"] but you chose {}'.format(mode)
+        timer, sig = StatisticalProfiler.MODES[mode]
+        signal.signal(sig, self.handler)
+        signal.siginterrupt(sig, False)
+
+        self.stacks = []
+        self.samples_remaining = 0
+        self.stopping = False
+        self.stopped = False
+
+        self.samples_taken = 0
+        self.sample_time = 0
+        self.hits = 0
+
+    def start(self, duration=30.0):
+        print("starting")
+        self.stopping = False
+        self.stopped = False
+        self.samples_remaining = int(duration / self.interval)
+        timer, sig = StatisticalProfiler.MODES[self.mode]
+        signal.setitimer(timer, self.interval, self.interval)
+
+    def stop(self):
+        self.stopping = True
+        while not self.stopped:
+            pass  # need busy wait; ITIMER_PROF doesn't proceed while sleeping
+        print("stop complete")
+        self.save()
+
+    def save(self):
+        for key, samples in sorted(self._stats.items(), key=lambda x: x[1]):
+            print(key, "{}/{}".format(samples, self.hits), "{:<.2f}%".format(samples/self.hits*100))
+
+    def record(self, frame):
+        if 'self' in frame.f_locals and frame.f_locals['self'] is not self:
+            self.hits += 1
+            name = type(frame.f_locals['self']).__name__ + '.' + frame.f_code.co_name
+            # try:
+            #     name += ":{}".format(frame.f_locals['self'].pathname)
+            # except AttributeError:
+            #     pass
+            self._stats[name] += 1
+            print(name, self._stats[name])
+
+    def handler(self, sig, current_frame):
+        start = time.time()
+        self.samples_remaining -= 1
+        if self.samples_remaining <= 0 or self.stopping:
+            signal.setitimer(StatisticalProfiler.MODES[self.mode][0], 0, 0)
+            self.stopped = True
+            return
+        #current_tid = _thread.get_ident()
+        for tid, frame in iteritems(sys._current_frames()):
+            #if tid == current_tid:
+            #    frame = current_frame
+            # frames = []
+            while frame is not None:
+                self.record(frame)
+                # code = frame.f_code
+                # frames.append((code.co_filename, frame.f_lineno, code.co_name))
+                frame = frame.f_back
+            # self.stacks.append(frames)
+        end = time.time()
+        self.samples_taken += 1
+        self.sample_time += (end - start)
 
 
