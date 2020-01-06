@@ -28,6 +28,10 @@ from openmdao.utils.mpi import MPI
 from openmdao.utils.webview import webview
 from openmdao.devtools.iprof_utils import func_group, find_qualified_name, _collect_methods, \
      _setup_func_group, _get_methods, _Options
+from openmdao.core.system import System
+from openmdao.core.problem import Problem
+from openmdao.core.driver import Driver
+from openmdao.solvers.solver import Solver
 
 
 def _prof_node(fpath, parts):
@@ -502,8 +506,10 @@ class StatisticalProfiler_old(object):
         return thread
 
 
+omtypes = (System, Solver, Problem, Driver)
 
-# from plop (https://github.com/bdarnell/plop.git)
+
+# based on code from plop (https://github.com/bdarnell/plop.git)
 class StatisticalProfiler(object):
     MODES = {
         'prof': (signal.ITIMER_PROF, signal.SIGPROF),
@@ -511,7 +517,9 @@ class StatisticalProfiler(object):
         'real': (signal.ITIMER_REAL, signal.SIGALRM),
     }
 
-    def __init__(self, interval=0.005, mode='virtual'):
+    def __init__(self, outfile='raw_statprof.0', interval=0.005, mode='virtual'):
+        self.outfile = outfile
+        self.stream = None
         self._stats = defaultdict(int)
         self.interval = interval
         self.mode = mode
@@ -526,11 +534,12 @@ class StatisticalProfiler(object):
         self.stopped = False
 
         self.samples_taken = 0
-        self.sample_time = 0
         self.hits = 0
 
-    def start(self, duration=30.0):
+    def start(self, duration=600.0):
         print("starting")
+        if self.stream is None:
+            self.stream = open(self.outfile, 'w')
         self.stopping = False
         self.stopped = False
         self.samples_remaining = int(duration / self.interval)
@@ -541,44 +550,104 @@ class StatisticalProfiler(object):
         self.stopping = True
         while not self.stopped:
             pass  # need busy wait; ITIMER_PROF doesn't proceed while sleeping
-        print("stop complete")
-        self.save()
-
-    def save(self):
-        for key, samples in sorted(self._stats.items(), key=lambda x: x[1]):
-            print(key, "{}/{}".format(samples, self.hits), "{:<.2f}%".format(samples/self.hits*100))
+        if self.stream is not None:
+            self.stream.close()
+            self.stream = None
+        print("stopped")
 
     def record(self, frame):
+        global omtypes
         if 'self' in frame.f_locals and frame.f_locals['self'] is not self:
             self.hits += 1
-            name = type(frame.f_locals['self']).__name__ + '.' + frame.f_code.co_name
-            # try:
-            #     name += ":{}".format(frame.f_locals['self'].pathname)
-            # except AttributeError:
-            #     pass
-            self._stats[name] += 1
-            print(name, self._stats[name])
+            slf = frame.f_locals['self']
+            if isinstance(slf, omtypes):
+                try:
+                    pname = slf.msginfo
+                except Exception:
+                    pname = type(slf).__name__
+            else:
+                pname = type(slf).__name__
+            print(frame.f_code.co_filename, frame.f_lineno, frame.f_code.co_name, pname, file=self.stream)
+        else:
+            print(frame.f_code.co_filename, frame.f_lineno, frame.f_code.co_name, 'N/A', file=self.stream)
 
     def handler(self, sig, current_frame):
-        start = time.time()
         self.samples_remaining -= 1
         if self.samples_remaining <= 0 or self.stopping:
             signal.setitimer(StatisticalProfiler.MODES[self.mode][0], 0, 0)
             self.stopped = True
             return
-        #current_tid = _thread.get_ident()
         for tid, frame in iteritems(sys._current_frames()):
-            #if tid == current_tid:
-            #    frame = current_frame
-            # frames = []
             while frame is not None:
                 self.record(frame)
-                # code = frame.f_code
-                # frames.append((code.co_filename, frame.f_lineno, code.co_name))
                 frame = frame.f_back
-            # self.stacks.append(frames)
-        end = time.time()
         self.samples_taken += 1
-        self.sample_time += (end - start)
 
 
+def _statprof_setup_parser(parser):
+    parser.add_argument('-o', '--outfile', action='store', dest='outfile',
+                        metavar='OUTFILE', default='raw_statprof',
+                        help='Name of file containing raw statistical profiling output.')
+    parser.add_argument('-i', '--interval', action='store', dest='interval', type=float,
+                        default=.005, help='Sampling interval.')
+    parser.add_argument('-d', '--duration', action='store', dest='duration', type=float,
+                        default=30., help='Sampling duration in seconds. File will be executed multiple '
+                        'times if duration has not been reached.')
+    parser.add_argument('--sampling_mode', action='store', dest='sampling_mode',
+                        default='virtual', help='Sampling mode. Must be one of ["prof", "virtual", "real"].')
+    parser.add_argument('file', metavar='file', nargs='*',
+                        help='Raw profile data files or a python file.')
+
+
+def _statprof_exec(options, user_args):
+    """
+    Called from the command line (openmdao statprof command) to create a statistical profile.
+    """
+
+    if not options.file:
+        print("No files to process.")
+        sys.exit(0)
+
+    if len(options.file) > 1:
+        print("statprof can only process a single python file.", file=sys.stderr)
+        sys.exit(-1)
+
+    if MPI:
+        options.outfile = options.outfile + '.' + str(MPI.COMM_WORLD.rank)
+
+    _statprof_py_file(options, user_args)
+
+
+def _statprof_py_file(options, user_args):
+    """
+    Run statistical profiling on the given python script.
+
+    Parameters
+    ----------
+    options : argparse Namespace
+        Command line options.
+    user_args : list of str
+        Command line options after '--' (if any).  Passed to user script.
+    """
+    progname = options.file[0]
+    sys.path.insert(0, os.path.dirname(progname))
+
+    # update sys.argv in case python script takes cmd line args
+    sys.argv[:] = [progname] + user_args
+
+    with open(progname, 'rb') as fp:
+        code = compile(fp.read(), progname, 'exec')
+
+    prof = StatisticalProfiler(options.outfile, interval=options.interval, 
+                               mode=options.sampling_mode)
+    prof.start(duration=options.duration)
+
+    while not (prof.stopped or prof.stopping):
+        globals_dict = {
+            '__file__': progname,
+            '__name__': '__main__',
+            '__package__': None,
+            '__cached__': None,
+        }
+
+        exec (code, globals_dict)

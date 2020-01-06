@@ -22,7 +22,8 @@ except ImportError:
 from openmdao.devtools.debug import config_summary, tree, dump_dist_idxs
 from openmdao.devtools.itrace import _itrace_exec, _itrace_setup_parser
 from openmdao.devtools.iprofile_app.iprofile_app import _iprof_exec, _iprof_setup_parser
-from openmdao.devtools.iprofile import _iprof_totals_exec, _iprof_totals_setup_parser
+from openmdao.devtools.iprofile import _iprof_totals_exec, _iprof_totals_setup_parser, \
+    _statprof_exec, _statprof_setup_parser
 from openmdao.devtools.iprof_mem import _mem_prof_exec, _mem_prof_setup_parser, \
     _mempost_exec, _mempost_setup_parser
 from openmdao.devtools.iprof_utils import _Options
@@ -648,6 +649,8 @@ _command_map = {
               'Profile calls to particular object instances.'),
     'iprof_totals': (_iprof_totals_setup_parser, _iprof_totals_exec, None,
                      'Generate total timings of calls to particular object instances.'),
+    'statprof': (_statprof_setup_parser, _statprof_exec, None,
+              'Statistical profiler.'),
     'mem': (_mem_prof_setup_parser, _mem_prof_exec, None,
             'Profile memory used by OpenMDAO related functions.'),
     'mempost': (_mempost_setup_parser, _mempost_exec, None,
