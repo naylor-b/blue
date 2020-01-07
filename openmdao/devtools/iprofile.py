@@ -525,7 +525,7 @@ class StatisticalProfiler(object):
         self.mode = mode
         assert mode in StatisticalProfiler.MODES, 'valid modes are: ["prof", "virtual", "real"] but you chose {}'.format(mode)
         timer, sig = StatisticalProfiler.MODES[mode]
-        signal.signal(sig, self.handler)
+        signal.signal(sig, self._statprof_handler)
         signal.siginterrupt(sig, False)
 
         self.stacks = []
@@ -571,16 +571,21 @@ class StatisticalProfiler(object):
         else:
             print(frame.f_code.co_filename, frame.f_lineno, frame.f_code.co_name, 'N/A', file=self.stream)
 
-    def handler(self, sig, current_frame):
+    def _statprof_handler(self, sig, current_frame):
         self.samples_remaining -= 1
         if self.samples_remaining <= 0 or self.stopping:
             signal.setitimer(StatisticalProfiler.MODES[self.mode][0], 0, 0)
             self.stopped = True
             return
+
         for tid, frame in iteritems(sys._current_frames()):
             while frame is not None:
-                self.record(frame)
+                if frame.f_code.co_name == '_statprof_py_file':
+                    break
+                if frame.f_code.co_name != '_statprof_handler':
+                    self.record(frame)
                 frame = frame.f_back
+
         self.samples_taken += 1
 
 
@@ -595,6 +600,8 @@ def _statprof_setup_parser(parser):
                         'times if duration has not been reached.')
     parser.add_argument('--sampling_mode', action='store', dest='sampling_mode',
                         default='virtual', help='Sampling mode. Must be one of ["prof", "virtual", "real"].')
+    parser.add_argument('--groupby', action='store', dest='groupby',
+                        default='instance', help='How to group stats. Must be one of ["instance", "line", "function"]')
     parser.add_argument('file', metavar='file', nargs='*',
                         help='Raw profile data files or a python file.')
 
@@ -609,13 +616,50 @@ def _statprof_exec(options, user_args):
         sys.exit(0)
 
     if len(options.file) > 1:
-        print("statprof can only process a single python file.", file=sys.stderr)
+        print("statprof can only process a single file.", file=sys.stderr)
         sys.exit(-1)
 
-    if MPI:
-        options.outfile = options.outfile + '.' + str(MPI.COMM_WORLD.rank)
+    if options.file[0].endswith('.py'):
+        if MPI:
+            options.outfile = options.outfile + '.' + str(MPI.COMM_WORLD.rank)
 
-    _statprof_py_file(options, user_args)
+        _statprof_py_file(options, user_args)
+        print("\nProcess raw statistical profile data...")
+        _process_raw_statfile(options.outfile, options)
+    else:  # assume it's a raw statprof data file
+        _process_raw_statfile(options.file[0], options)
+
+
+def _process_raw_statfile(fname, options):
+    if options.groupby not in ('instance', 'line', 'function'):
+        raise RuntimeError("Illegal option for --groupby.  Must be 'instance', 'line', or 'function'.")
+
+    total_hits = 0
+    with open(fname, 'r') as f:
+        if options.groupby == 'line':
+            dct = defaultdict(int)
+            for line in f:
+                fname, lnum, _ = line.split(maxsplit=2)
+                dct[fname, lnum] += 1
+                total_hits += 1
+            display_line_data(dct, total_hits)
+        elif options.groupby == 'instance':
+            dct = defaultdict(int)
+            for line in f:
+                dct[line.strip()] += 1
+                total_hits += 1
+            display_instance_data(dct, total_hits)
+        elif options.groupby == 'function':
+            pass
+
+
+def display_line_data(dct, total_hits):
+    for key, hits in sorted(dct.items(), key=lambda x: x[1]):
+        print("{}  {} hits  {:<.2}%".format(key, hits, hits/total_hits))
+
+def display_instance_data(dct, total_hits):
+    for key, hits in sorted(dct.items(), key=lambda x: x[1]):
+        print("{}  {} hits  {:<.2}%".format(key, hits, hits/total_hits))
 
 
 def _statprof_py_file(options, user_args):
