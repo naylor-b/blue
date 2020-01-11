@@ -55,18 +55,26 @@ def view_statprof(raw_stat_file, outfile='src_heat_map.html', show_browser=True,
 
     dct = defaultdict(int)
     for parts in _rawfile_iter(raw_stat_file):
-        pass
+        if len(parts) == 1:
+            samples_taken = int(parts[0])
+        else:
+            fname, line_number, func = parts[:3]
+            if func == '<module>':
+                dct[fname, line_number, None, None] += 1
+            else:
+                obj = ' '.join(parts[3:])
+                dct[fname, None, func, obj] += 1
 
     table = []
     idx = 1  # unique ID for use by Tabulator
-    with open(raw_stat_file, 'r') as f:
-        for line in f:
-            parts = line.split()
-            fname, line_number = parts[:2]
-            hits = parts[-3]
-            row = {'id': idx, 'fname': fname, 'line_number': line_number, 'hits': hits}
-            table.append(row)
-            idx += 1
+    for key, hits in sorted(dct.items(), key=lambda x: x[1]):
+        fname, line_number, func, obj = key
+        if func == None:
+            row = {'id': idx, 'fname': fname, 'line_number': line_number, 'hits': hits, 'func': '<module>', 'obj': 'N/A'}
+        else:
+            row = {'id': idx, 'fname': fname, 'line_number': '', 'hits': hits, 'func': func, 'obj': obj}
+        table.append(row)
+        idx += 1
 
     if title is None:
         title = ''
@@ -238,7 +246,6 @@ class StatisticalProfiler(object):
         if self.samples_remaining <= 0 or self.stopping:
             signal.setitimer(StatisticalProfiler.MODES[self.mode][0], 0, 0)
             self.stopped = True
-            print('', file=self.stream)  # blank line
             print(self.samples_taken, file=self.stream)
             return
 
@@ -294,7 +301,7 @@ def _statprof_exec(options, user_args):
     if options.noshow:
         _process_raw_statfile(outfile, options)
     else:
-        view_statprof(_get_statfile_name(options))
+        view_statprof(outfile)
 
 
 def _get_statfile_name(options):
@@ -303,20 +310,10 @@ def _get_statfile_name(options):
 
 def _rawfile_iter(fname):
     with open(fname, 'r') as f:
-        read_samples = False
         for line in f:
             if line.startswith('<'):
                 continue
-            line = line.strip()
-            if not line:
-                read_samples = True
-                continue
-            if read_samples:
-                # read samples_taken
-                yield [line.strip()]
-                break
-            else:
-                yield line.split()
+            yield line.split()
 
 
 def _process_raw_statfile(fname, options):
