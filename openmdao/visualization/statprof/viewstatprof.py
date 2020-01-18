@@ -4,9 +4,11 @@ import os
 import sys
 import signal
 import json
+import time
 import contextlib
-from itertools import chain
 from collections import defaultdict
+import threading
+import webbrowser
 
 from six import iteritems
 
@@ -21,6 +23,7 @@ from openmdao.core.system import System
 from openmdao.core.problem import Problem
 from openmdao.core.driver import Driver
 from openmdao.solvers.solver import Solver
+from flask import Flask, render_template
 
 try:
     import faulthandler
@@ -29,7 +32,25 @@ except ImportError:
     pass
 
 
-def view_statprof(raw_stat_file, outfile='src_heat_map.html', show_browser=True, title=None):
+def launch_browser(port):
+    time.sleep(1)
+    for browser in ['chrome', 'firefox', 'chromium', 'safari']:
+        try:
+            webbrowser.get(browser).open('http://localhost:%s' % port)
+        except:
+            pass
+        else:
+            break
+
+
+def startThread(fn):
+    thread = threading.Thread(target=fn)
+    thread.setDaemon(True)
+    thread.start()
+    return thread
+
+
+def view_statprof(options, raw_stat_file):
     """
     Generate a self-contained html file containing a detailed statistical profile viewer.
 
@@ -37,18 +58,10 @@ def view_statprof(raw_stat_file, outfile='src_heat_map.html', show_browser=True,
 
     Parameters
     ----------
+    options : Options
+        The command line options.
     raw_stat_file : str
         The name of the raw statistical profiling data file.
-
-    outfile : str, optional
-        The name of the output html file.  Defaults to 'statprof.html'.
-
-    show_browser : bool, optional
-        If True, pop up a browser to view the generated html file.
-        Defaults to True.
-
-    title : str, optional
-        Sets the title of the web page.
     """
     if MPI and MPI.COMM_WORLD.rank != 0:
         return
@@ -76,37 +89,29 @@ def view_statprof(raw_stat_file, outfile='src_heat_map.html', show_browser=True,
         table.append(row)
         idx += 1
 
-    if title is None:
-        title = ''
-
     data = {
-        'title': title,
         'table': table,
     }
 
-    code_dir = os.path.dirname(os.path.abspath(__file__))
-    libs_dir = os.path.join(code_dir, 'libs')
-    style_dir = os.path.join(code_dir, 'style')
+    port = options.port
 
-    with open(os.path.join(code_dir, outfile), "r") as f:
-        template = f.read()
+    print("starting server on port %d" % port)
 
-    with open(os.path.join(libs_dir, 'tabulator.min.js'), "r") as f:
-        tabulator_src = f.read()
+    serve_thread  = startThread(lambda: serve_app(data, port))
+    launch_thread = startThread(lambda: launch_browser(port))
 
-    with open(os.path.join(style_dir, 'tabulator.min.css'), "r") as f:
-        tabulator_style = f.read()
+    while serve_thread.isAlive():
+        serve_thread.join(timeout=1)
 
-    jsontxt = json.dumps(data)
 
-    with open(outfile, 'w') as f:
-        s = template.replace("<statprof_data>", jsontxt)
-        s = s.replace("<tabulator_src>", tabulator_src)
-        s = s.replace("<tabulator_style>", tabulator_style)
-        f.write(s)
+def serve_app(data, port):
+    app = Flask(__name__)
 
-    if show_browser:
-        webview(outfile)
+    @app.route("/")
+    def hello():
+        return render_template('index.html', statprof_data=data)
+
+    app.run(port=port)
 
 
 # # generic stat profiler.  will work on Windows as well, but has lower resolution
@@ -272,6 +277,7 @@ def _statprof_setup_parser(parser):
                         help='How to group stats. Must be one of ["instance", "line", "function", "instfunction"]')
     parser.add_argument('--no_browser', action='store_true', dest='noshow',
                         help="Don't pop up a browser to view the data.")
+    parser.add_argument('-p', '--port', action='store', dest='port', type=int, default=8009, help='Web server port.')
     parser.add_argument('file', metavar='file', nargs='*',
                         help='Raw profile data file or a python file.')
 
@@ -301,7 +307,7 @@ def _statprof_exec(options, user_args):
     if options.noshow:
         _process_raw_statfile(outfile, options)
     else:
-        view_statprof(outfile)
+        view_statprof(options, outfile)
 
 
 def _get_statfile_name(options):

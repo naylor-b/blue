@@ -3,29 +3,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script type="text/javascript">
-    <tabulator_src>
-</script>
-<style>
-    .middle {
-        text-align: center;
-        width: 100%;
-        display:table;
-    }
-
-    .toggle {
-        width: 5%;
-        display:table-cell;
-        text-align: center;
-    }
-
-    input {
-        margin: 3px 5px 3px 5px;
-    }
-
-
-    <tabulator_style>
-</style>
+<script src="/static/tabulator.min.js" charset="utf-8"></script>
+<link rel="stylesheet" href="/static/tabulator.min.css">
 <title>Statistical Profile Viewer</title>
 </head>
 <body>
@@ -33,7 +12,7 @@
     <div id="statprof-table"></div>
 <script type="text/javascript">
 
-var data = <statprof_data>;
+var data = {{ statprof_data|tojson }};
 var tabledata = data.table;
 
 document.title = data.title;
