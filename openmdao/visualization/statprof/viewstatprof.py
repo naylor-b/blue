@@ -67,11 +67,13 @@ def view_statprof(options, raw_stat_file):
         return
 
     dct = defaultdict(int)
+    heatmap_dict = defaultdict(lambda: defaultdict(int))
     for parts in _rawfile_iter(raw_stat_file):
         if len(parts) == 1:
             samples_taken = int(parts[0])
         else:
             fname, line_number, func = parts[:3]
+            heatmap_dict[fname][line_number] += 1
             if func == '<module>':
                 dct[fname, line_number, None, None] += 1
             else:
@@ -91,6 +93,7 @@ def view_statprof(options, raw_stat_file):
 
     data = {
         'table': table,
+        'heatmap': heatmap_dict,
     }
 
     port = options.port
@@ -103,74 +106,36 @@ def view_statprof(options, raw_stat_file):
     while serve_thread.isAlive():
         serve_thread.join(timeout=1)
 
+def get_src_heatmap(data, srcfile):
+    with open(srcfile, 'r') as f:
+        contents = f.read()
+        
 
 def serve_app(data, port):
     app = Flask(__name__)
 
     @app.route("/")
-    def hello():
-        return render_template('index.html', statprof_data=data)
+    def main_stats():
+        return render_template('index.html', statprof_data={'table': data['table']})
 
-    app.run(port=port)
+    @app.route("/heatmap/<srcfile>")
+    def src_heatmap(srcfile):
+        srcdata = data['heatmap'][srcfile]
+        table = []
+        with open(srcfile, 'r') as f:
+            for i, line in enumerate(f):
+                if i + 1 in srcdata:
+                    row = {'lnum': i + 1, 'hits': str(srcdata[i + 1]), 'line': line}
+                else:
+                    row = {'lnum': i + 1, 'hits': '', 'line': line}
 
+        return render_template('src_heatmap.html', statprof_data=srcdata)
 
-# # generic stat profiler.  will work on Windows as well, but has lower resolution
-# class StatisticalProfiler_old(object):
-#     def __init__(self, sleep_interval=0.01):
-#         self._sleep_interval = sleep_interval
-#         self._stopped = True
-#         self._prof_thread = None
-#         self._stats = defaultdict(int)
-
-#     def start(self):
-#         print("starting")
-#         self._stopped = False
-#         self._prof_thread = self.start_thread(self.collecting)
-
-#     def stop(self):
-#         self._stopped = True
-#         self._prof_thread.join()
-#         self._prof_thread = None
-#         import pprint
-#         pprint.pprint(self._stats)
-#         print("stop complete")
-
-#     def save(self):
-#         pass
-
-#     def shutdown(self):
-#         pass
-
-#     def collecting(self):
-#         while True:
-#             if self._stopped:
-#                 break
-#             sleep(self._sleep_interval)
-#             self.collect_frame_data()
-
-#     def record(self, frame):
-#         if 'self' in frame.f_locals and frame.f_locals['self'] is not self:
-#             name = type(frame.f_locals['self']).__name__ + '.' + frame.f_code.co_name
-#             self._stats[name] += 1
-#             print(name, self._stats[name])
-
-#     def collect_frame_data(self):
-#         switch_interval = getswitchinterval()
-#         try:
-#             setswitchinterval(10000)
-#             for frame in _current_frames().values():
-#                 self.record(frame)
-#         finally:
-#             setswitchinterval(switch_interval)
-
-#     def start_thread(self, fn):
-#         """
-#         Start a daemon thread running the given function.
-#         """
-#         thread = threading.Thread(target=fn)
-#         thread.setDaemon(True)
-#         thread.start()
-#         return thread
+    # NOTE: setting FLASK_ENV to 'development' will only work if we set debug=False,
+    # because otherwise, it tries to set a signal (for automatic reloading), but signals
+    # can only be set in the main thread.
+    os.environ["FLASK_ENV"] = 'development'  # get rid of annoying startup warning
+    app.run(debug=False, port=port)
 
 
 omtypes = (System, Solver, Problem, Driver)
@@ -178,7 +143,7 @@ omtypes = (System, Solver, Problem, Driver)
 
 # based on code from plop (https://github.com/bdarnell/plop.git)
 # only works on linux, MacOS because it uses signal timers
-# TODO: check to see if newest Windows version might support this...
+# TODO: check to see if newest Windows vehttps://www.google.com/search?client=ubuntu&channel=fs&q=timer+singnals+windows&ie=utf-8&oe=utf-8rsion might support this...
 class StatisticalProfiler(object):
     MODES = {
         'prof': (signal.ITIMER_PROF, signal.SIGPROF),
@@ -420,3 +385,63 @@ def _statprof_py_file(options, outfile, user_args):
     prof.stop()
 
     return prof.samples_taken
+
+
+
+# # generic stat profiler.  will work on Windows as well, but has lower resolution
+# class StatisticalProfiler_old(object):
+#     def __init__(self, sleep_interval=0.01):
+#         self._sleep_interval = sleep_interval
+#         self._stopped = True
+#         self._prof_thread = None
+#         self._stats = defaultdict(int)
+
+#     def start(self):
+#         print("starting")
+#         self._stopped = False
+#         self._prof_thread = self.start_thread(self.collecting)
+
+#     def stop(self):
+#         self._stopped = True
+#         self._prof_thread.join()
+#         self._prof_thread = None
+#         import pprint
+#         pprint.pprint(self._stats)
+#         print("stop complete")
+
+#     def save(self):
+#         pass
+
+#     def shutdown(self):
+#         pass
+
+#     def collecting(self):
+#         while True:
+#             if self._stopped:
+#                 break
+#             sleep(self._sleep_interval)
+#             self.collect_frame_data()
+
+#     def record(self, frame):
+#         if 'self' in frame.f_locals and frame.f_locals['self'] is not self:
+#             name = type(frame.f_locals['self']).__name__ + '.' + frame.f_code.co_name
+#             self._stats[name] += 1
+#             print(name, self._stats[name])
+
+#     def collect_frame_data(self):
+#         switch_interval = getswitchinterval()
+#         try:
+#             setswitchinterval(10000)
+#             for frame in _current_frames().values():
+#                 self.record(frame)
+#         finally:
+#             setswitchinterval(switch_interval)
+
+#     def start_thread(self, fn):
+#         """
+#         Start a daemon thread running the given function.
+#         """
+#         thread = threading.Thread(target=fn)
+#         thread.setDaemon(True)
+#         thread.start()
+#         return thread
