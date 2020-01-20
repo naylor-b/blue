@@ -3,8 +3,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script src="/static/tabulator.min.js" charset="utf-8"></script>
-<link rel="stylesheet" href="/static/tabulator.min.css">
+<script type="application/javascript" src={{ static_url("lib/tabulator.min.js") }} charset="utf-8"></script>
+<link rel="stylesheet" href={{ static_url("lib/tabulator.min.css") }}>
 <title>Statistical Profile Viewer</title>
 </head>
 <body>
@@ -12,11 +12,12 @@
     <div id="statprof-table"></div>
 <script type="text/javascript">
 
-var data = {{ statprof_data|tojson }};
+var data = {% raw json_encode(statprof_data) %};
 var tabledata = data.table;
 
-document.title = data.title;
-document.getElementById("tab_title").innerHTML = data.title
+var title =  "Source File Heatmap";
+document.title = title;
+document.getElementById("tab_title").innerHTML = title
 
 var table =
     new Tabulator("#statprof-table", {
@@ -26,14 +27,12 @@ var table =
         data:tabledata, //assign data to table
         layout:"fitDataFill", //"fitDataFill", fitColumns
         initialSort:[             //set the initial sort order of the data
-		    {column: "hits", dir: "desc"},
+		    {column: "line_number", dir: "asc"},
 	    ],
         columns:[ //Define Table Columns
-                {title: "Line", field:"line_number", align:"right", sorter:"number"},
+                {title: "Line", field:"lnum", align:"right", sorter:"number"},
                 {title: "Hits", field:"hits", align:"right", sorter:"number"},
-                {title: "File", field:"fname", align:"left"},
-                {title: "Function", field:"func", align:"left"},
-                {title: "Object", field:"obj", align:"left"},
+                {title: "Source", field:"src", align:"left"},
         ],
 });
 

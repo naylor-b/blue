@@ -23,7 +23,7 @@ from openmdao.core.system import System
 from openmdao.core.problem import Problem
 from openmdao.core.driver import Driver
 from openmdao.solvers.solver import Solver
-from flask import Flask, render_template
+import tornado
 
 try:
     import faulthandler
@@ -48,6 +48,59 @@ def startThread(fn):
     thread.setDaemon(True)
     thread.start()
     return thread
+
+
+class Application(tornado.web.Application):
+    def __init__(self, statprof_data):
+        self.data = statprof_data
+
+        handlers = [
+            (r"/", Index),
+            ("^\/heatmap\/(.+)$", HeatMap),
+        ]
+
+        settings = dict(
+             template_path=os.path.join(os.path.dirname(__file__), "templates"),
+             static_path=os.path.join(os.path.dirname(__file__), "static"),
+        )
+
+        super(Application, self).__init__(handlers, **settings)
+
+
+class Index(tornado.web.RequestHandler):
+    def get(self):
+        app = self.application
+        self.render('index.html', 
+                    statprof_data={'table': app.data['table']})
+
+
+class HeatMap(tornado.web.RequestHandler):
+    def get(self, srcfile):
+        app = self.application
+        # print('Host: %s' % self.request.host)
+        # print('Entire uri: %s' % self.request.uri)
+        # print('Uri path: %s' % self.request.path)
+        # print('Query path w/o ?: %s' % self.request.query)
+
+        # if matched_part is None:
+        #     print('Nothing matched')
+        # else:
+        #     print('Matched part %s' % matched_part)
+        srcdata = app.data['heatmap'][srcfile]
+        table = []
+        print("Source file = ", srcfile)
+        print("hit lines:", list(srcdata))
+        with open(srcfile, 'r') as f:
+            for i, line in enumerate(f):
+                snum = str(i + 1)
+                if snum in srcdata:
+                    print("MATCH:", snum)
+                    row = {'id': i, 'lnum': snum, 'hits': str(srcdata[snum]), 'src': line.rstrip()}
+                else:
+                    row = {'id': i, 'lnum': snum, 'hits': '', 'src': line}
+                table.append(row)
+
+        self.render('src_heatmap.html', statprof_data={'table': table})
 
 
 def view_statprof(options, raw_stat_file):
@@ -98,52 +151,50 @@ def view_statprof(options, raw_stat_file):
 
     port = options.port
 
+    app = Application(data)
+    app.listen(port)
+
     print("starting server on port %d" % port)
 
-    serve_thread  = startThread(lambda: serve_app(data, port))
+    serve_thread  = startThread(tornado.ioloop.IOLoop.current().start)
     launch_thread = startThread(lambda: launch_browser(port))
 
     while serve_thread.isAlive():
         serve_thread.join(timeout=1)
 
-def get_src_heatmap(data, srcfile):
-    with open(srcfile, 'r') as f:
-        contents = f.read()
-        
 
-def serve_app(data, port):
-    app = Flask(__name__)
+# def serve_app(data, port):
+#     app = Flask(__name__)
 
-    @app.route("/")
-    def main_stats():
-        return render_template('index.html', statprof_data={'table': data['table']})
+#     @app.route("/")
+#     def main_stats():
+#         return render_template('index.html', statprof_data={'table': data['table']})
 
-    @app.route("/heatmap/<srcfile>")
-    def src_heatmap(srcfile):
-        srcdata = data['heatmap'][srcfile]
-        table = []
-        with open(srcfile, 'r') as f:
-            for i, line in enumerate(f):
-                if i + 1 in srcdata:
-                    row = {'lnum': i + 1, 'hits': str(srcdata[i + 1]), 'line': line}
-                else:
-                    row = {'lnum': i + 1, 'hits': '', 'line': line}
+#     @app.route("/heatmap/<srcfile>")
+#     def src_heatmap(srcfile):
+#         srcdata = data['heatmap'][srcfile]
+#         table = []
+#         with open(srcfile, 'r') as f:
+#             for i, line in enumerate(f):
+#                 if i + 1 in srcdata:
+#                     row = {'id': i, 'lnum': i + 1, 'hits': str(srcdata[i + 1]), 'src': line}
+#                 else:
+#                     row = {'id': i, 'lnum': i + 1, 'hits': '', 'src': line}
 
-        return render_template('src_heatmap.html', statprof_data=srcdata)
+#         return render_template('src_heatmap.html', statprof_data={'table': table})
 
-    # NOTE: setting FLASK_ENV to 'development' will only work if we set debug=False,
-    # because otherwise, it tries to set a signal (for automatic reloading), but signals
-    # can only be set in the main thread.
-    os.environ["FLASK_ENV"] = 'development'  # get rid of annoying startup warning
-    app.run(debug=False, port=port)
+#     # NOTE: setting FLASK_ENV to 'development' will only work if we set debug=False,
+#     # because otherwise, it tries to set a signal (for automatic reloading), but signals
+#     # can only be set in the main thread.
+#     os.environ["FLASK_ENV"] = 'development'  # get rid of annoying startup warning
+#     app.run(debug=False, port=port)
 
 
 omtypes = (System, Solver, Problem, Driver)
 
 
 # based on code from plop (https://github.com/bdarnell/plop.git)
-# only works on linux, MacOS because it uses signal timers
-# TODO: check to see if newest Windows vehttps://www.google.com/search?client=ubuntu&channel=fs&q=timer+singnals+windows&ie=utf-8&oe=utf-8rsion might support this...
+# only works on linux, MacOS
 class StatisticalProfiler(object):
     MODES = {
         'prof': (signal.ITIMER_PROF, signal.SIGPROF),
