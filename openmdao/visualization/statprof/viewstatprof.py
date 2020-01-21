@@ -19,6 +19,7 @@ from openmdao.utils.units import convert_units
 from openmdao.utils.mpi import MPI
 from openmdao.utils.webview import webview
 from openmdao.utils.general_utils import printoptions
+from openmdao.utils.functionlocator import FunctionLocator
 from openmdao.core.system import System
 from openmdao.core.problem import Problem
 from openmdao.core.driver import Driver
@@ -53,6 +54,7 @@ def startThread(fn):
 class Application(tornado.web.Application):
     def __init__(self, statprof_data):
         self.data = statprof_data
+        self.funct_locator = FunctionLocator()
 
         handlers = [
             (r"/", Index),
@@ -75,32 +77,28 @@ class Index(tornado.web.RequestHandler):
 
 
 class HeatMap(tornado.web.RequestHandler):
-    def get(self, srcfile):
+    def get(self, ident):
         app = self.application
-        # print('Host: %s' % self.request.host)
-        # print('Entire uri: %s' % self.request.uri)
-        # print('Uri path: %s' % self.request.path)
-        # print('Query path w/o ?: %s' % self.request.query)
-
-        # if matched_part is None:
-        #     print('Nothing matched')
-        # else:
-        #     print('Matched part %s' % matched_part)
+        srcfile, fstart, msginfo = ident.split('&')
+        fstart = int(fstart)
+        app.funct_locator.process_file(srcfile)
+        fpath, fstop = app.funct_locator.get_funct_last_line(fstart)
         srcdata = app.data['heatmap'][srcfile]
         table = []
-        print("Source file = ", srcfile)
-        print("hit lines:", list(srcdata))
         with open(srcfile, 'r') as f:
             for i, line in enumerate(f):
+                if i + 1 < fstart:
+                    continue
+                if i + 1 > fstop:
+                    break
                 snum = str(i + 1)
                 if snum in srcdata:
-                    print("MATCH:", snum)
-                    row = {'id': i, 'lnum': snum, 'hits': str(srcdata[snum]), 'src': line.rstrip()}
+                    row = {'lnum': snum, 'hits': str(srcdata[snum]), 'src': line.rstrip('\n')}
                 else:
-                    row = {'id': i, 'lnum': snum, 'hits': '', 'src': line}
+                    row = {'lnum': snum, 'hits': '', 'src': line}
                 table.append(row)
 
-        self.render('src_heatmap.html', statprof_data={'table': table})
+        self.render('src_heatmap.html', statprof_data={'table': table, 'srcfile': srcfile})
 
 
 def view_statprof(options, raw_stat_file):
@@ -125,13 +123,13 @@ def view_statprof(options, raw_stat_file):
         if len(parts) == 1:
             samples_taken = int(parts[0])
         else:
-            fname, line_number, func = parts[:3]
+            fname, line_number, func, fstart = parts[:4]
             heatmap_dict[fname][line_number] += 1
             if func == '<module>':
                 dct[fname, line_number, None, None] += 1
             else:
-                obj = ' '.join(parts[3:])
-                dct[fname, None, func, obj] += 1
+                obj = ' '.join(parts[4:])
+                dct[fname, fstart, func, obj] += 1
 
     table = []
     idx = 1  # unique ID for use by Tabulator
@@ -140,7 +138,7 @@ def view_statprof(options, raw_stat_file):
         if func == None:
             row = {'id': idx, 'fname': fname, 'line_number': line_number, 'hits': hits, 'func': '<module>', 'obj': 'N/A'}
         else:
-            row = {'id': idx, 'fname': fname, 'line_number': '', 'hits': hits, 'func': func, 'obj': obj}
+            row = {'id': idx, 'fname': fname, 'line_number': line_number, 'hits': hits, 'func': func, 'obj': obj}
         table.append(row)
         idx += 1
 
@@ -161,33 +159,6 @@ def view_statprof(options, raw_stat_file):
 
     while serve_thread.isAlive():
         serve_thread.join(timeout=1)
-
-
-# def serve_app(data, port):
-#     app = Flask(__name__)
-
-#     @app.route("/")
-#     def main_stats():
-#         return render_template('index.html', statprof_data={'table': data['table']})
-
-#     @app.route("/heatmap/<srcfile>")
-#     def src_heatmap(srcfile):
-#         srcdata = data['heatmap'][srcfile]
-#         table = []
-#         with open(srcfile, 'r') as f:
-#             for i, line in enumerate(f):
-#                 if i + 1 in srcdata:
-#                     row = {'id': i, 'lnum': i + 1, 'hits': str(srcdata[i + 1]), 'src': line}
-#                 else:
-#                     row = {'id': i, 'lnum': i + 1, 'hits': '', 'src': line}
-
-#         return render_template('src_heatmap.html', statprof_data={'table': table})
-
-#     # NOTE: setting FLASK_ENV to 'development' will only work if we set debug=False,
-#     # because otherwise, it tries to set a signal (for automatic reloading), but signals
-#     # can only be set in the main thread.
-#     os.environ["FLASK_ENV"] = 'development'  # get rid of annoying startup warning
-#     app.run(debug=False, port=port)
 
 
 omtypes = (System, Solver, Problem, Driver)
@@ -253,9 +224,9 @@ class StatisticalProfiler(object):
                         pname = type(slf).__name__
                 else:
                     pname = type(slf).__name__
-                print(frame.f_code.co_filename, frame.f_lineno, frame.f_code.co_name, pname, file=self.stream)
+                print(frame.f_code.co_filename, frame.f_lineno, frame.f_code.co_name, frame.f_code.co_firstlineno, pname, file=self.stream)
             else:
-                print(frame.f_code.co_filename, frame.f_lineno, frame.f_code.co_name, 'N/A', file=self.stream)
+                print(frame.f_code.co_filename, frame.f_lineno, frame.f_code.co_name, frame.f_code.co_firstlineno, 'N/A', file=self.stream)
         finally:
             self._recording = False
 

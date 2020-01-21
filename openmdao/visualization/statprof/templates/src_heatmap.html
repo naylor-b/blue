@@ -3,8 +3,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script type="application/javascript" src={{ static_url("lib/tabulator.min.js") }} charset="utf-8"></script>
-<link rel="stylesheet" href={{ static_url("lib/tabulator.min.css") }}>
+<!-- <script type="application/javascript" src={{ static_url("lib/tabulator.min.js") }} charset="utf-8"></script>
+<link rel="stylesheet" href={{ static_url("lib/tabulator.min.css") }}> -->
 <title>Statistical Profile Viewer</title>
 </head>
 <body>
@@ -19,24 +19,40 @@ var title =  "Source File Heatmap";
 document.title = title;
 document.getElementById("tab_title").innerHTML = title
 
-var table =
-    new Tabulator("#statprof-table", {
-        // set height of table (in CSS or here), this enables the Virtual DOM and
-        // improves render speed dramatically (can be any valid css height value)
-        height: 650,
-        data:tabledata, //assign data to table
-        layout:"fitDataFill", //"fitDataFill", fitColumns
-        initialSort:[             //set the initial sort order of the data
-		    {column: "line_number", dir: "asc"},
-	    ],
-        columns:[ //Define Table Columns
-                {title: "Line", field:"lnum", align:"right", sorter:"number"},
-                {title: "Hits", field:"hits", align:"right", sorter:"number"},
-                {title: "Source", field:"src", align:"left"},
-        ],
-});
+// var table =
+//     new Tabulator("#statprof-table", {
+//         // set height of table (in CSS or here), this enables the Virtual DOM and
+//         // improves render speed dramatically (can be any valid css height value)
+//         height: 650,
+//         data:tabledata, //assign data to table
+//         layout:"fitDataFill", //"fitDataFill", fitColumns
+//         initialSort:[             //set the initial sort order of the data
+// 		    {column: "line_number", dir: "asc"},
+// 	    ],
+//         columns:[ //Define Table Columns
+//                 {title: "Line", field:"lnum", align:"right", sorter:"number"},
+//                 {title: "Hits", field:"hits", align:"right", sorter:"number"},
+//                 {title: "Source", field:"src", align:"left"},
+//         ],
+// });
 
 
 </script>
+<table>
+    <thead>
+        <tr>
+            <th colspan="3">Source File Heatmap for {{escape(statprof_data['srcfile'])}}</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for line in statprof_data['table'] %}
+            <tr>
+                <td>{{ line['hits'] }}</td>
+                <td><pre><code>{{ line['src'] }}</code></pre></td>
+            </tr>
+        {% end %}
+    </tbody>
+</table>
+
 </body>
 </html>
