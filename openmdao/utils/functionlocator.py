@@ -63,7 +63,10 @@ class FunctionLocator(ast.NodeVisitor):
         """
         Given a starting line number, return the function name and ending line number.
         """
-        return self.funct_ranges[lineno]
+        try:
+            return self.funct_ranges[lineno]
+        except KeyError:
+            return (None, None)
 
 
 if __name__ == '__main__':

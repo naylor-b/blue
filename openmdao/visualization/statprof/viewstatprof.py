@@ -52,7 +52,12 @@ def startThread(fn):
 
 
 class Application(tornado.web.Application):
-    def __init__(self, statprof_data):
+    def __init__(self, pyfile, raw_stat_file, statprof_data):
+        if pyfile is None:
+            self.infile = raw_stat_file
+        else:
+            self.infile = pyfile
+        self.raw_stat_file = raw_stat_file
         self.data = statprof_data
         self.funct_locator = FunctionLocator()
 
@@ -73,7 +78,7 @@ class Index(tornado.web.RequestHandler):
     def get(self):
         app = self.application
         self.render('index.html', 
-                    statprof_data={'table': app.data['table']})
+                    statprof_data={'table': app.data['table'], 'srcfile': app.infile})
 
 
 class HeatMap(tornado.web.RequestHandler):
@@ -83,6 +88,11 @@ class HeatMap(tornado.web.RequestHandler):
         fstart = int(fstart)
         app.funct_locator.process_file(srcfile)
         fpath, fstop = app.funct_locator.get_funct_last_line(fstart)
+        if fstop is None:  # it's not a function, so just show a region around the line
+            fstop = fstart + 25
+            fstart -= 25
+            if fstart < 0:
+                fstart = 0
         srcdata = app.data['heatmap'][srcfile]
         table = []
         with open(srcfile, 'r') as f:
@@ -101,7 +111,7 @@ class HeatMap(tornado.web.RequestHandler):
         self.render('src_heatmap.html', statprof_data={'table': table, 'srcfile': srcfile})
 
 
-def view_statprof(options, raw_stat_file):
+def view_statprof(options, pyfile, raw_stat_file):
     """
     Generate a self-contained html file containing a detailed statistical profile viewer.
 
@@ -111,6 +121,8 @@ def view_statprof(options, raw_stat_file):
     ----------
     options : Options
         The command line options.
+    pyfile : str or None
+        Python script being profiled.
     raw_stat_file : str
         The name of the raw statistical profiling data file.
     """
@@ -149,7 +161,7 @@ def view_statprof(options, raw_stat_file):
 
     port = options.port
 
-    app = Application(data)
+    app = Application(pyfile, raw_stat_file, data)
     app.listen(port)
 
     print("starting server on port %d" % port)
@@ -283,6 +295,7 @@ def _statprof_exec(options, user_args):
         sys.exit(-1)
 
     if options.file[0].endswith('.py'):
+        pyfile = options.file[0]
         outfile = 'statprof.raw'
         if MPI:
             outfile = outfile + '.' + str(MPI.COMM_WORLD.rank)
@@ -290,11 +303,12 @@ def _statprof_exec(options, user_args):
         samples_taken = _statprof_py_file(options, outfile, user_args)
     else:  # assume it's a raw statprof data file
         outfile = options.file[0]
+        pyfile = None
 
     if options.noshow:
         _process_raw_statfile(outfile, options)
     else:
-        view_statprof(options, outfile)
+        view_statprof(options, pyfile, outfile)
 
 
 def _get_statfile_name(options):
