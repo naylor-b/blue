@@ -4,44 +4,44 @@
 <head>
 <meta charset="utf-8">
 <title>Source Heatmap</title>
+<script type="text/javascript">
+
+    var data = {% raw json_encode(statprof_data) %};
+    var tabledata = data.table;
+    
+    var title =  "Source File Heatmap for {{escape(statprof_data['srcfile'])}}";
+    document.title = title;
+    document.getElementById("tab_title").innerHTML = title
+    
+    
+</script>
+<style>
+    table {
+      font-family: arial, sans-serif;
+      border-collapse: collapse;
+      width: 100%;
+      border-spacing: 1px;
+    }
+    
+    td, th {
+      border: 1px solid #dddddd;
+      text-align: left;
+      margin: 1px 1px 1px 1px;
+    }
+    
+    pre {
+        margin: 1px 1px 1px 1px;
+    }
+    
+    tr:nth-child(even) {
+      background-color: #dddddd;
+    }
+    
+</style>
 </head>
 <body>
     <h2 id="tab_title"></h2>
     <div id="statprof-table"></div>
-<script type="text/javascript">
-
-var data = {% raw json_encode(statprof_data) %};
-var tabledata = data.table;
-
-var title =  "Source File Heatmap for {{escape(statprof_data['srcfile'])}}";
-document.title = title;
-document.getElementById("tab_title").innerHTML = title
-
-
-</script>
-<style>
-table {
-  font-family: arial, sans-serif;
-  border-collapse: collapse;
-  width: 100%;
-  border-spacing: 1px;
-}
-
-td, th {
-  border: 1px solid #dddddd;
-  text-align: left;
-  margin: 1px 1px 1px 1px;
-}
-
-pre {
-    margin: 1px 1px 1px 1px;
-}
-
-tr:nth-child(even) {
-  background-color: #dddddd;
-}
-
-</style>
 <table>
     <thead>
         <tr><th>Hits</th><th>Source</th></tr>

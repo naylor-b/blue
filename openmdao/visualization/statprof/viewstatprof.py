@@ -95,17 +95,23 @@ class HeatMap(tornado.web.RequestHandler):
                 fstart = 0
         srcdata = app.data['heatmap'][srcfile]
         table = []
+        indent = None
         with open(srcfile, 'r') as f:
             for i, line in enumerate(f):
                 if i + 1 < fstart:
                     continue
                 if i + 1 > fstop:
                     break
+                if indent is None:
+                    indent = len(line) - len(line.lstrip())
                 snum = str(i + 1)
+                short = line[indent:]
+                if not short:
+                    short = ' '  # prevent table from smushing empty lines
                 if snum in srcdata:
-                    row = {'lnum': snum, 'hits': str(srcdata[snum]), 'src': line.rstrip('\n')}
+                    row = {'lnum': snum, 'hits': str(srcdata[snum]), 'src': short}
                 else:
-                    row = {'lnum': snum, 'hits': '', 'src': line}
+                    row = {'lnum': snum, 'hits': '', 'src': short}
                 table.append(row)
 
         self.render('src_heatmap.html', statprof_data={'table': table, 'srcfile': srcfile})
