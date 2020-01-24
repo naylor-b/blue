@@ -135,7 +135,8 @@ def view_statprof(options, pyfile, raw_stat_file):
     if MPI and MPI.COMM_WORLD.rank != 0:
         return
 
-    dct = defaultdict(int)
+    # dict values are [hits, obj]
+    dct = defaultdict(lambda: [0, '?'])
     heatmap_dict = defaultdict(lambda: defaultdict(int))
     for parts in _rawfile_iter(raw_stat_file):
         if len(parts) == 1:
@@ -144,20 +145,20 @@ def view_statprof(options, pyfile, raw_stat_file):
             fname, line_number, func, fstart = parts[:4]
             heatmap_dict[fname][line_number] += 1
             if func == '<module>':
-                dct[fname, line_number, None, None] += 1
+                lst = dct[fname, line_number, func]
+                lst[0] += 1
+                lst[1] = 'N/A'
             else:
                 obj = ' '.join(parts[4:])
-                dct[fname, fstart, func, obj] += 1
+                lst = dct[fname, fstart, func]
+                lst[0] += 1
+                lst[1] = obj
 
     table = []
     idx = 1  # unique ID for use by Tabulator
-    for key, hits in sorted(dct.items(), key=lambda x: x[1]):
-        fname, line_number, func, obj = key
-        if func == None:
-            row = {'id': idx, 'fname': fname, 'line_number': line_number, 'hits': hits, 'func': '<module>', 'obj': 'N/A'}
-        else:
-            row = {'id': idx, 'fname': fname, 'line_number': line_number, 'hits': hits, 'func': func, 'obj': obj}
-        table.append(row)
+    for key, (hits, obj) in sorted(dct.items(), key=lambda x: x[1]):
+        fname, line_number, func = key
+        table.append({'id': idx, 'fname': fname, 'line_number': line_number, 'hits': hits, 'func': func, 'obj': obj})
         idx += 1
 
     data = {
