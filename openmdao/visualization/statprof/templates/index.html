@@ -34,14 +34,12 @@ var table =
                 {title: "File", field:"fname", align:"left"},
                 {title: "Hits", field:"hits", align:"right", sorter:"number"},
                 {title: "Function", field:"func", align:"left"},
-                {title: "Object", field:"obj", align:"left"},
         ],
         rowClick: function(e, row) {
             let cells = row.getCells();
             let fname = cells[1].getValue();
             let linenum = cells[0].getValue();
-            let obj = cells[4].getValue();
-            let val = fname + "&" + linenum + "&" + obj;
+            let val = fname + "&" + linenum;
             window.location = "/heatmap/" + encodeURIComponent(val);
         },
 });

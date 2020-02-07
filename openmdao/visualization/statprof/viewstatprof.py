@@ -26,7 +26,8 @@ from openmdao.core.system import System
 from openmdao.core.problem import Problem
 from openmdao.core.driver import Driver
 from openmdao.solvers.solver import Solver
-import tornado
+import tornado.web
+import tornado.ioloop
 
 try:
     import faulthandler
@@ -106,6 +107,7 @@ class Application(tornado.web.Application):
         handlers = [
             (r"/", Index),
             ("^\/heatmap\/(.+)$", HeatMap),
+            # ("^\/icicle\/(.+)$", Icicle),
         ]
 
         settings = dict(
@@ -126,7 +128,7 @@ class Index(tornado.web.RequestHandler):
 class HeatMap(tornado.web.RequestHandler):
     def get(self, ident):
         app = self.application
-        srcfile, fstart, msginfo = ident.split('&')
+        srcfile, fstart = ident.split('&')
         fstart = int(fstart)
         app.funct_locator.process_file(srcfile)
         fpath, fstop = app.funct_locator.get_funct_last_line(fstart)
@@ -160,6 +162,13 @@ class HeatMap(tornado.web.RequestHandler):
         self.render('src_heatmap.html', statprof_data={'table': table, 'srcfile': os.path.basename(srcfile)})
 
 
+# class Index(tornado.web.RequestHandler):
+#     def get(self):
+#         app = self.application
+
+#         self.render('icicle.html', call_tree=app.data['call_tree'])
+
+
 def view_statprof(options, pyfile, raw_stat_file):
     """
     Generate a self-contained html file containing a detailed statistical profile viewer.
@@ -181,30 +190,77 @@ def view_statprof(options, pyfile, raw_stat_file):
     # dct values are [hits, obj]
     dct = defaultdict(lambda: [0, '?'])
     heatmap_dict = defaultdict(lambda: defaultdict(int))
+    calltree = {}
     with open(raw_stat_file + '.maps', 'rb') as f:
         maps = pickle.load(f)
     samples_taken = maps['samples_taken']
-    for fname, line_number, func, fstart, obj in _rawfile_iter(raw_stat_file, maps):
-        heatmap_dict[fname][line_number] += 1
-        if func == '<module>':
-            lst = dct[fname, line_number, func]
-            lst[0] += 1
-            lst[1] = 'N/A'
+    call_tree = {}
+    stack = [call_tree]
+    data_stack = []
+    for data_tup in _rawfile_iter(raw_stat_file, maps):
+        if data_tup[0].startswith('<'):  # fname
+            continue
+        if data_tup[-1] == 1:  # is_root
+            stack = [call_tree]
+            for fname, line_number, func, fstart, obj, _ in data_stack[::-1]:  # reverse the order
+                key = "{} {}".format(fname, line_number)
+                if key not in stack[-1]:
+                    stack[-1][key] = {}
+                stack.append(stack[-1][key])
+
+                heatmap_dict[fname][line_number] += 1
+                if func == '<module>':
+                    lst = dct[fname, line_number, func]
+                else:
+                    lst = dct[fname, fstart, func]
+                lst[0] += 1
+                lst[1] = obj
+            data_stack = []
         else:
-            lst = dct[fname, fstart, func]
-            lst[0] += 1
-            lst[1] = obj
+            data_stack.append(data_tup)
+
+    # # populate call tree leaf nodes
+    # stack = [(None, call_tree, iter(call_tree))]
+    # while stack:
+    #     key, d, it = stack[-1]
+    #     if len(d) == 0:
+    #         if key is None:
+    #             break
+    #         # replace leaf empty dict with number of hits
+    #         fname, lnum = key.split()
+    #         lnum = int(lnum)
+    #         print('fname', fname, 'lnum', lnum, "HITS:",heatmap_dict[fname, lnum], flush=True)
+    #         stack[-2][1][key] = heatmap_dict[fname][lnum]
+
+    #     while True:
+    #         try:
+    #             # fname, lnum = next(it)
+    #             keystr = next(it)
+    #             if keystr.startswith('<'):  # skip builtin stuff
+    #                 continue
+    #             new_fname, new_lnum = keystr.split()
+    #         except StopIteration:
+    #             stack.pop()
+    #             break
+    #         else:
+    #             newkey = "{} {}".format(new_fname, new_lnum)
+    #             print("NEWKEY:", newkey)
+    #             stack.append((newkey, d[newkey], iter(d[newkey])))
+
+    # import pprint
+    # pprint.pprint(call_tree)
 
     table = []
     idx = 1  # unique ID for use by Tabulator
     for key, (hits, obj) in sorted(dct.items(), key=lambda x: x[1]):
         fname, line_number, func = key
-        table.append({'id': idx, 'fname': fname, 'line_number': line_number, 'hits': hits, 'func': func, 'obj': obj})
+        table.append({'id': idx, 'fname': fname, 'line_number': line_number, 'hits': hits, 'func': func})
         idx += 1
 
     data = {
         'table': table,
         'heatmap': heatmap_dict,
+        'call_tree': call_tree,
     }
 
     port = options.port
@@ -247,7 +303,7 @@ class StatisticalProfiler(object):
         timer, sig = StatisticalProfiler.MODES[mode]
         signal.signal(sig, self._statprof_handler)
         signal.siginterrupt(sig, False)
-        self.struct = struct.Struct('i I i i i')
+        self.struct = struct.Struct('H H i H i H')
 
         self.stacks = []
         self.fnames = {'builtin': -1}
@@ -286,7 +342,7 @@ class StatisticalProfiler(object):
                                 'samples_taken': self.samples_taken,
                             }, f)
 
-    def record(self, frame):
+    def record(self, frame, is_root):
         global omtypes
         self._recording = True
         try:
@@ -314,9 +370,9 @@ class StatisticalProfiler(object):
                     self.functs[func] = len(self.functs)
                 func = self.functs[func]
 
-                data = self.struct.pack(fname, frame.f_lineno, func, frame.f_code.co_firstlineno, obj)
+                data = self.struct.pack(fname, frame.f_lineno, func, frame.f_code.co_firstlineno, obj, is_root)
             else:
-                data = self.struct.pack(fname, frame.f_lineno, -1, frame.f_code.co_firstlineno, -1)
+                data = self.struct.pack(fname, frame.f_lineno, -1, frame.f_code.co_firstlineno, -1, is_root)
 
             self.stream.write(data)
         finally:
@@ -334,11 +390,15 @@ class StatisticalProfiler(object):
 
         for tid, frame in iteritems(sys._current_frames()):
             while frame is not None:
-                if frame.f_code.co_name == '_statprof_py_file':
+                func = frame.f_code.co_name
+                if func == '_statprof_py_file':
                     break
-                if frame.f_code.co_name != '_statprof_handler':
-                    self.record(frame)
+                if func != '_statprof_handler':
+                    is_root = frame.f_back is not None and frame.f_back.f_code.co_name == '_statprof_py_file'
+                    self.record(frame, int(is_root))
                 frame = frame.f_back
+
+        frame = None
 
         self.samples_taken += 1
 
@@ -398,15 +458,15 @@ def _rawfile_iter(fname, maps):
     fnames = maps['fnames']
     functs = maps['functs']
     objs = maps['objs']
-    _struct = struct.Struct('i I i i i')
+    _struct = struct.Struct('H H i H i H')
     size = _struct.size
     with open(fname, 'rb') as f:
         while True:
             s = f.read(size)
             if len(s) == 0:
                 break
-            fname, lnum, func, funcstart, obj = _struct.unpack(s)
-            yield fnames[fname], lnum, functs[func], funcstart, objs[obj]
+            fname, lnum, func, funcstart, obj, frame_id = _struct.unpack(s)
+            yield fnames[fname], lnum, functs[func], funcstart, objs[obj], frame_id
 
 
 def _process_raw_statfile(fname, options):
@@ -423,15 +483,15 @@ def _process_raw_statfile(fname, options):
     samples_taken = maps['samples_taken']
 
     if options.groupby == 'line':
-        for fname, line_number, func, fstart, obj in _rawfile_iter(fname, maps):
+        for fname, line_number, func, fstart, obj, frame_id in _rawfile_iter(fname, maps):
             dct[fname, line_number] += 1
         display_line_data(dct, samples_taken, outstream)
     elif options.groupby == 'instance':
-        for fname, line_number, func, fstart, obj in _rawfile_iter(fname, maps):
+        for fname, line_number, func, fstart, obj, frame_id in _rawfile_iter(fname, maps):
             dct[line_number, func, fstart, obj] += 1
         display_instance_data(dct, samples_taken, outstream)
     elif options.groupby == 'instfunction':
-        for fname, line_number, func, fstart, obj in _rawfile_iter(fname, maps):
+        for fname, line_number, func, fstart, obj, frame_id in _rawfile_iter(fname, maps):
             if func == '<module>':
                 dct[fname, line_number] += 1
             else:
