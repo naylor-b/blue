@@ -1306,6 +1306,7 @@ class _TotalJacInfo(object):
             model._linearize(model._assembled_jac,
                              sub_do_ln=model._linear_solver._linearize_children())
         model._linear_solver._linearize()
+        self.J[:] = 0.0
 
         # Main loop over columns (fwd) or rows (rev) of the jacobian
         for mode in self.idx_iter_dict:
@@ -1355,7 +1356,7 @@ class _TotalJacInfo(object):
             # Debug outputs scaled derivatives.
             self._print_derivatives()
 
-        # np.save("total_jac.npy", self.J)
+        # np.save("total_jac%d.npy" % self.comm.rank, self.J)
 
         return self.J_final
 
