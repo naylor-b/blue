@@ -243,7 +243,7 @@ class _TotalJacInfo(object):
         # create scratch array for jac scatters
         self.jac_scratch = None
         if self.comm.size > 1:
-            scratch = np.empty(max(J.shape), dtype=J.dtype)
+            scratch = np.zeros(max(J.shape), dtype=J.dtype)
             self.jac_scratch = {}
             if 'fwd' in modes:
                 self.jac_scratch['fwd'] = scratch[:J.shape[0]]
