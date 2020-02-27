@@ -1194,7 +1194,6 @@ class _TotalJacInfo(object):
         dist = self.comm.size > 1
 
         J = self.J
-        scratch_size = J.shape[0] if fwd else J.shape[1]
         deriv_idxs, jac_idxs, _ = self.sol2jac_map[mode]
 
         # because simul_coloring cannot be used with vectorized derivs (matmat) or parallel
