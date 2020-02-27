@@ -1319,12 +1319,11 @@ class _TotalJacInfo(object):
                             varlist = '(' + ', '.join([name for name in par_deriv[key]]) + ')'
                             print('Solving color:', key, varlist)
                         else:
-                            print('In mode: {0}, Solving variable(s):'.format(
-                                  mode))
+                            print('In mode: %s, Solving variable(s) using simul coloring:' % mode)
                             if key == '@simul_coloring':
-                                local_inds = imeta['coloring']._local_indices(
-                                    inds=inds, mode=self.mode)
-                                print(*local_inds, sep='\n')
+                                for local_ind in imeta['coloring']._local_indices(inds=inds,
+                                                                                  mode=self.mode):
+                                    print("   {}".format(local_ind))
                             else:
                                 print("('{0}', [{1}])".format(key, inds))
 
@@ -1342,8 +1341,7 @@ class _TotalJacInfo(object):
                             model._solve_linear(model._lin_vec_names, mode, rel_systems)
 
                     if debug_print:
-                        print('Elapsed Time:', time.time() - t0, '\n')
-                        sys.stdout.flush()
+                        print('Elapsed Time:', time.time() - t0, '\n', flush=True)
 
                     jac_setter(inds, mode)
 

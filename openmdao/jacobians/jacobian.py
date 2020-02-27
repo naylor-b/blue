@@ -268,8 +268,6 @@ class Jacobian(object):
         ndarray or csc_matrix
             Randomized version of the subjac.
         """
-        return subjac
-
         if isinstance(subjac, sparse_types):  # sparse
             sparse = subjac.copy()
             sparse.data = rand(sparse.data.size)

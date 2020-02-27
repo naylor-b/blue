@@ -416,6 +416,43 @@ class MatMatParDevTestCase(unittest.TestCase):
         np.testing.assert_array_equal(J['par.C2.y', 'indeps.y'], np.array([[3.]]))
 
 
+@unittest.skipUnless(MPI and PETScVector, "MPI and PETSc are required.")
+class TestParallelJacBug(unittest.TestCase):
+
+    N_PROCS = 2
+
+    def test_par_jac_bug(self):
+
+        class ExComp(om.ExplicitComponent):
+            def setup(self):
+                self.add_input('accel', val=np.zeros(1))
+                self.add_output('deltav_dot', val=np.zeros(1))
+                self.declare_partials(of='deltav_dot', wrt='accel', val=1.0)
+
+            def compute(self, inputs, outputs):
+                outputs['deltav_dot'] = inputs['accel']
+
+        class SubGroup(om.Group):
+            def setup(self):
+                self.add_subsystem('rhs', om.IndepVarComp('accel'))
+                self.add_subsystem('ode', ExComp())
+                self.connect('rhs.accel', 'ode.accel')
+                self.add_design_var('rhs.accel', 3.0)
+
+        p = om.Problem()
+        model = p.model
+        par = model.add_subsystem('par', om.ParallelGroup())
+        par.add_subsystem('G1', SubGroup())
+        par.add_subsystem('G2', SubGroup())
+        p.setup(mode='rev')
+        p.run_model()
+        J1 = p.driver._compute_totals(of=['par.G1.ode.deltav_dot'], wrt=['par.G1.ode.deltav_dot'],
+                                      return_format='array')
+        Jsave = J1.copy()
+        J2 = p.driver._compute_totals(of=['par.G1.ode.deltav_dot'], wrt=['par.G1.ode.deltav_dot'],
+                                      return_format='array')
+        self.assertLess(np.max(np.abs(J2 - Jsave)), 1e-20)
+
 if __name__ == "__main__":
     from openmdao.utils.mpi import mpirun_tests
     mpirun_tests()
