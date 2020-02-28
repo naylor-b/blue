@@ -42,7 +42,7 @@ from openmdao.utils.coloring import _total_coloring_setup_parser, _total_colorin
     _view_coloring_setup_parser, _view_coloring_exec
 from openmdao.utils.scaffold import _scaffold_setup_parser, _scaffold_exec
 from openmdao.utils.general_utils import warn_deprecation
-from openmdao.utils.file_utils import _load_and_exec, _to_filename, list_tests
+from openmdao.utils.file_utils import _load_and_exec, _to_filename
 from openmdao.utils.entry_points import _list_installed_setup_parser, _list_installed_cmd, \
     split_ep, _compute_entry_points_setup_parser, _compute_entry_points_exec, \
         _find_plugins_setup_parser, _find_plugins_exec
@@ -498,41 +498,6 @@ def _tree_cmd(options, user_args):
     _load_and_exec(options.file[0], user_args)
 
 
-def _list_tests_setup_parser(parser):
-    """
-    Set up the openmdao subparser for the 'openmdao list_tests' command.
-
-    Parameters
-    ----------
-    parser : argparse subparser
-        The parser we're adding options to.
-    """
-    parser.add_argument('file', nargs=1, help='Python module.')
-    parser.add_argument('-o', action='store', dest='outfile',
-                        help='Name of output file.  By default, output goes to stdout.')
-    parser.add_argument('-p', '--prefix', action='store', dest='prefix', default='test_',
-                        help='Find tests with this prefix.  Default prefix is "test_".')
-
-
-def _list_tests_cmd(options, user_args):
-    """
-    Run the `openmdao list_tests` command.
-
-    Parameters
-    ----------
-    options : argparse Namespace
-        Command line options.
-    user_args : list of str
-        Args to be passed to the user script.
-    """
-    if options.outfile is None:
-        out = sys.stdout
-    else:
-        out = open(options.outfile, 'w')
-
-    list_tests(options.file[0], test_prefix=options.prefix, stream=out)
-
-
 def _cite_setup_parser(parser):
     """
     Set up the openmdao subparser for the 'openmdao cite' command.
@@ -597,8 +562,6 @@ _command_map = {
                      'Generate total timings of calls to particular object instances.'),
     'list_installed': (_list_installed_setup_parser, _list_installed_cmd,
                        'List installed types recognized by OpenMDAO.'),
-    'list_tests': (_list_tests_setup_parser, _list_tests_cmd,
-                   'Print test specs for all tests in the given file.'),
     'mem': (_mem_prof_setup_parser, _mem_prof_exec,
             'Profile memory used by OpenMDAO related functions.'),
     'mempost': (_mempost_setup_parser, _mempost_exec, 'Post-process memory profile output.'),

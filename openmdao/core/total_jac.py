@@ -243,12 +243,14 @@ class _TotalJacInfo(object):
         # create scratch array for jac scatters
         self.jac_scratch = None
         if self.comm.size > 1:
+            # need 2 scratch vectors of the same size here
             scratch = np.zeros(max(J.shape), dtype=J.dtype)
+            scratch2 = scratch.copy()
             self.jac_scratch = {}
             if 'fwd' in modes:
-                self.jac_scratch['fwd'] = scratch[:J.shape[0]]
+                self.jac_scratch['fwd'] = (scratch[:J.shape[0]], scratch2[:J.shape[0]])
             if 'rev' in modes:
-                self.jac_scratch['rev'] = scratch[:J.shape[1]]
+                self.jac_scratch['rev'] = (scratch[:J.shape[1]], scratch2[:J.shape[1]])
 
         if not approx:
             self.sol2jac_map = {}
@@ -1142,7 +1144,7 @@ class _TotalJacInfo(object):
                                 addv=False, mode=False)
                 self.J[:, i] = self.tgt_petsc[mode].array
         else:  # rev
-            scratch = self.jac_scratch['rev']
+            scratch = self.jac_scratch['rev'][1]
             scratch[:] = self.J[i]
             self.comm.Allreduce(scratch, self.J[i], op=MPI.SUM)
 
@@ -1203,7 +1205,7 @@ class _TotalJacInfo(object):
         if self.jac_scratch is None:
             reduced_derivs = deriv_val[deriv_idxs['linear']]
         else:
-            reduced_derivs = self.jac_scratch[mode]
+            reduced_derivs = self.jac_scratch[mode][0]
             reduced_derivs[:] = 0.0
             reduced_derivs[jac_idxs['linear']] = deriv_val[deriv_idxs['linear']]
 
