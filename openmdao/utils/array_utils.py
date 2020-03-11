@@ -459,16 +459,18 @@ def dv_abs_complex(x, x_deriv):
     return x, x_deriv
 
 
-def yield_slices(names, sizes):
+def yield_var_map(names, name2meta, ncol=1):
     """
-    Yield (name, slice) for the given list of names and sizes.
+    Yield (name, (slice, shape)) for the given list of names and metadata.
 
     Parameters
     ----------
     names : iter of str
         Variable names.
-    sizes : iter of int
-        Sizes of variables.
+    name2meta : dict
+        Mapping of name to metadata dict.
+    ncol : int
+        Number of columns in a vector (only happens when using vectorized derivatives).
 
     Yields
     ------
@@ -476,7 +478,11 @@ def yield_slices(names, sizes):
         (viable_name, corresponding slice)
     """
     start = end = 0
-    for name, size in zip(names, sizes):
-        end += size
-        yield name, slice(start, end)
+    for name in names:
+        meta = name2meta[name]
+        if ncol == 1:
+            end += meta['size']
+        else:
+            end += meta['size'] * ncol
+        yield name, (slice(start, end), meta['shape'])
         start = end

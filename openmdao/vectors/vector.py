@@ -7,7 +7,7 @@ from collections import OrderedDict
 import numpy as np
 
 from openmdao.utils.name_maps import prom_name2abs_name, rel_name2abs_name
-from openmdao.utils.array_utils import yield_slices
+from openmdao.utils.array_utils import yield_var_map
 
 _full_slice = slice(None)
 _type_map = {
@@ -204,16 +204,9 @@ class Vector(object):
         """
         if self._slices is None:
             system = self._system()
-            abs2meta = system._var_abs2meta
             abs_names = system._var_relevant_names[self._name][self._typ]
-            if self._ncol == 1:
-                slices = yield_slices(abs_names, (abs2meta[n]['size'] for n in abs_names))
-            else:
-                slices = yield_slices(abs_names,
-                                      (abs2meta[n]['size'] * self._ncol for n in abs_names))
-
-            self._slices = OrderedDict(tup for tup in slices)
-
+            self._slices = OrderedDict(t for t in yield_var_map(abs_names, system._var_abs2meta,
+                                                                self._ncol))
         return self._slices
 
     def keys(self):

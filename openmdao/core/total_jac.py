@@ -662,7 +662,7 @@ class _TotalJacInfo(object):
 
                 if name in abs2idx and name in slices:
                     var_idx = abs2idx[name]
-                    slc = slices[name]
+                    slc, _ = slices[name]
                     if meta['distributed']:
                         dist_offset = np.sum(sizes[:myproc, var_idx])
                         if indices is not None:

@@ -189,7 +189,7 @@ class ApproximationScheme(object):
                 jac_slices[(abs_of, abs_wrt)] = (rslice, slice(coffset, cend))
 
             if is_total and (approx_of_idx or len_full_ofs > len(of_names)):
-                slc = out_slices[abs_of]
+                slc, _ = out_slices[abs_of]
                 if abs_of in approx_of_idx:
                     full_idxs.append(np.arange(slc.start, slc.stop)[approx_of_idx[abs_of]])
                 else:
@@ -259,12 +259,13 @@ class ApproximationScheme(object):
             if wrt in approx_wrt_idx:
                 in_idx = np.array(approx_wrt_idx[wrt], dtype=int)
                 if arr is not None:
-                    in_idx += slices[wrt].start
+                    in_idx += slices[wrt][0].start
             else:
                 if arr is None:
                     in_idx = range(abs2meta[wrt]['size'])
                 else:
-                    in_idx = range(slices[wrt].start, slices[wrt].stop)
+                    slc = slices[wrt][0]
+                    in_idx = range(slc.start, slc.stop)
 
             # Directional derivatives for quick partial checking.
             # We place the indices in a list so that they are all stepped at the same time.
@@ -357,7 +358,7 @@ class ApproximationScheme(object):
                                 results[(of, wrt)].append(
                                     (i_count,
                                         self._transform_result(
-                                            result[out_slices[of]][out_idxs]).copy()))
+                                            result[out_slices[of][0]][out_idxs]).copy()))
                     else:
                         J['data'][:, i_count] = self._transform_result(result[full_idxs])
 
@@ -566,7 +567,7 @@ def _get_wrt_subjacs(system, approxs):
             full_idxs = []
             for sof in sorted_ofs:
                 if sof in slicedict:
-                    slc = slicedict[sof]
+                    slc, _ = slicedict[sof]
                     if sof in approx_of_idx:
                         full_idxs.append(np.arange(slc.start, slc.stop)[approx_of_idx[sof]])
                     else:
