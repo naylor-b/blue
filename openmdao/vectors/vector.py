@@ -2,11 +2,12 @@
 from copy import deepcopy
 import os
 import weakref
+from collections import OrderedDict
 
 import numpy as np
 
 from openmdao.utils.name_maps import prom_name2abs_name, rel_name2abs_name
-from openmdao.utils.array_utils import map_slices
+from openmdao.utils.array_utils import yield_slices
 
 _full_slice = slice(None)
 _type_map = {
@@ -206,10 +207,12 @@ class Vector(object):
             abs2meta = system._var_abs2meta
             abs_names = system._var_relevant_names[self._name][self._typ]
             if self._ncol == 1:
-                self._slices = map_slices(abs_names, (abs2meta[n]['size'] for n in abs_names))
+                slices = yield_slices(abs_names, (abs2meta[n]['size'] for n in abs_names))
             else:
-                self._slices = map_slices(abs_names,
-                                          (abs2meta[n]['size'] * self._ncol for n in abs_names))
+                slices = yield_slices(abs_names,
+                                      (abs2meta[n]['size'] * self._ncol for n in abs_names))
+
+            self._slices = OrderedDict(tup for tup in slices)
 
         return self._slices
 

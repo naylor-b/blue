@@ -459,9 +459,9 @@ def dv_abs_complex(x, x_deriv):
     return x, x_deriv
 
 
-def map_slices(names, sizes):
+def yield_slices(names, sizes):
     """
-    Return a dict of names mapped to their slice given their sizes.
+    Yield (name, slice) for the given list of names and sizes.
 
     Parameters
     ----------
@@ -470,16 +470,13 @@ def map_slices(names, sizes):
     sizes : iter of int
         Sizes of variables.
 
-    Returns
-    -------
-    dict
-        Mapping of name to slice.
+    Yields
+    ------
+    tuple of the form (str, slice)
+        (viable_name, corresponding slice)
     """
-    slices = OrderedDict()
     start = end = 0
     for name, size in zip(names, sizes):
         end += size
-        slices[name] = slice(start, end)
+        yield name, slice(start, end)
         start = end
-
-    return slices
