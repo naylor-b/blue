@@ -138,8 +138,8 @@ class ApproximationScheme(object):
         prom2abs_in = system._var_allprocs_prom2abs_list['input']
         approx_wrt_idx = system._owns_approx_wrt_idx
 
-        out_slices = outputs.get_slice_dict()
-        in_slices = inputs.get_slice_dict()
+        out_slices = outputs.get_var_map()
+        in_slices = inputs.get_var_map()
 
         is_total = isinstance(system, Group)
 
@@ -230,8 +230,8 @@ class ApproximationScheme(object):
         inputs = system._inputs
         abs2meta = system._var_allprocs_abs2meta
 
-        out_slices = outputs.get_slice_dict()
-        in_slices = inputs.get_slice_dict()
+        out_slices = outputs.get_var_map()
+        in_slices = inputs.get_var_map()
 
         approx_wrt_idx = system._owns_approx_wrt_idx
         coloring = system._get_static_coloring()
@@ -499,7 +499,7 @@ def _get_wrt_subjacs(system, approxs):
     J = {}
     ofdict = {}
     nondense = {}
-    slicedict = system._outputs.get_slice_dict()
+    slicedict = system._outputs.get_var_map()
     abs_out_names = [n for n in system._var_allprocs_abs_names['output'] if n in slicedict]
 
     for key, options in approxs:

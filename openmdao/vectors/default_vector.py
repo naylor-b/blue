@@ -28,9 +28,8 @@ class DefaultVector(Vector):
         ndarray
             zeros array of correct size to hold all of this vector's variables.
         """
-        ncol = self._ncol
         size = np.sum(self._system()._var_sizes[self._name][self._typ][self._iproc, :])
-        return np.zeros(size) if ncol == 1 else np.zeros((size, ncol))
+        return np.zeros(size) if self._ncol == 1 else np.zeros((size, self._ncol))
 
     def _update_root_data(self):
         """
@@ -107,7 +106,16 @@ class DefaultVector(Vector):
             the root's vector instance or None, if we are at the root.
         """
         if root_vector is None:  # we're the root
-            self._data = self._create_data()
+            system = self._system()
+            abs_names = system._var_relevant_names[self._name][self._typ]
+            if abs_names:
+                vmap = self.get_var_map()
+                self._data = np.zeros(vmap[abs_names[-1]][0].stop - vmap[abs_names[0]][0].start)
+            else:
+                self._data = np.zeros(0)
+
+            if self._ncol > 1:
+                self._data = self._data.reshape((self._data.size // self._ncol, self._ncol))
 
             if self._do_scaling:
                 self._scaling = {}

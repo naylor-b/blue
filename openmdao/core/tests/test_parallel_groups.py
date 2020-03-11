@@ -402,6 +402,7 @@ class MatMatParDevTestCase(unittest.TestCase):
         p.model.add_design_var('indeps.y', vectorize_derivs=True, parallel_deriv_color='foo')
         par.add_objective('C2.y')
         par.add_constraint('C1.y', lower=0.0)
+
         p.setup(mode='fwd')
 
         p.run_model()

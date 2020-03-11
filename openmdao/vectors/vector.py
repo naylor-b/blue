@@ -193,7 +193,7 @@ class Vector(object):
         """
         return self._data.size
 
-    def get_slice_dict(self):
+    def get_var_map(self):
         """
         Return a dict of var names mapped to their slice in the local data array.
 
@@ -205,8 +205,8 @@ class Vector(object):
         if self._slices is None:
             system = self._system()
             abs_names = system._var_relevant_names[self._name][self._typ]
-            self._slices = OrderedDict(t for t in yield_var_map(abs_names, system._var_abs2meta,
-                                                                self._ncol))
+            self._slices = dict(yield_var_map(abs_names, system._var_abs2meta, self._ncol))
+
         return self._slices
 
     def keys(self):

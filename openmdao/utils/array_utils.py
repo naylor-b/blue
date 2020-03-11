@@ -478,11 +478,13 @@ def yield_var_map(names, name2meta, ncol=1):
         (viable_name, corresponding slice)
     """
     start = end = 0
-    for name in names:
-        meta = name2meta[name]
-        if ncol == 1:
-            end += meta['size']
-        else:
-            end += meta['size'] * ncol
-        yield name, (slice(start, end), meta['shape'])
-        start = end
+    if ncol == 1:
+        for name in names:
+            end += name2meta[name]['size']
+            yield name, (slice(start, end), name2meta[name]['shape'])
+            start = end
+    else:
+        for name in names:
+            end += name2meta[name]['size'] * ncol
+            yield name, (slice(start, end), name2meta[name]['shape'])
+            start = end
