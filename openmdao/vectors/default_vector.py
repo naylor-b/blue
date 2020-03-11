@@ -204,15 +204,6 @@ class DefaultVector(Vector):
 
         self._names = frozenset(views)
 
-    def _clone_data(self):
-        """
-        For each item in _data, replace it with a copy of the data.
-        """
-        self._data = self._data.copy()
-
-        if self._under_complex_step and self._cplx_data is not None:
-            self._cplx_data = self._cplx_data.copy()
-
     def __iadd__(self, vec):
         """
         Perform in-place vector addition.
@@ -325,26 +316,6 @@ class DefaultVector(Vector):
             norm of this vector.
         """
         return np.linalg.norm(self._data)
-
-    def get_slice_dict(self):
-        """
-        Return a dict of var names mapped to their slice in the local data array.
-
-        Returns
-        -------
-        dict
-            Mapping of var name to slice.
-        """
-        if self._slices is None:
-            slices = {}
-            start = end = 0
-            for name in self._system()._var_relevant_names[self._name][self._typ]:
-                end += self._views_flat[name].size
-                slices[name] = slice(start, end)
-                start = end
-            self._slices = slices
-
-        return self._slices
 
     def _enforce_bounds_vector(self, du, alpha, lower_bounds, upper_bounds):
         """

@@ -4,6 +4,7 @@ Utils for dealing with arrays.
 import sys
 from itertools import product
 from copy import copy
+from collections import OrderedDict
 
 import numpy as np
 
@@ -456,3 +457,29 @@ def dv_abs_complex(x, x_deriv):
     x_deriv[idx_neg] = -x_deriv[idx_neg]
 
     return x, x_deriv
+
+
+def map_slices(names, sizes):
+    """
+    Return a dict of names mapped to their slice given their sizes.
+
+    Parameters
+    ----------
+    names : iter of str
+        Variable names.
+    sizes : iter of int
+        Sizes of variables.
+
+    Returns
+    -------
+    dict
+        Mapping of name to slice.
+    """
+    slices = OrderedDict()
+    start = end = 0
+    for name, size in zip(names, sizes):
+        end += size
+        slices[name] = slice(start, end)
+        start = end
+
+    return slices

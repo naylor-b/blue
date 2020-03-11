@@ -6,7 +6,7 @@ import weakref
 import numpy as np
 
 from openmdao.utils.name_maps import prom_name2abs_name, rel_name2abs_name
-
+from openmdao.utils.array_utils import map_slices
 
 _full_slice = slice(None)
 _type_map = {
@@ -192,28 +192,6 @@ class Vector(object):
         """
         return self._data.size
 
-    def _clone(self, initialize_views=False):
-        """
-        Return a copy that optionally provides view access to its data.
-
-        Parameters
-        ----------
-        initialize_views : bool
-            Whether to initialize the views into the clone.
-
-        Returns
-        -------
-        <Vector>
-            instance of the clone; the data is copied.
-        """
-        vec = self.__class__(self._name, self._kind, self._system(), self._root_vector,
-                             alloc_complex=self._alloc_complex, ncol=self._ncol)
-        vec._under_complex_step = self._under_complex_step
-        vec._clone_data()
-        if initialize_views:
-            vec._initialize_views()
-        return vec
-
     def _copy_views(self):
         """
         Return a dictionary containing just the views.
@@ -224,6 +202,24 @@ class Vector(object):
             Dictionary containing the _views.
         """
         return deepcopy(self._views)
+
+    def get_slice_dict(self):
+        """
+        Return a dict of var names mapped to their slice in the local data array.
+
+        Returns
+        -------
+        dict
+            Mapping of var name to slice.
+        """
+        if self._slices is None:
+            system = self._system()
+            abs2meta = system._var_abs2meta
+            ncol = self._ncol
+            names = system._var_relevant_names[self._name][self._typ]
+            self._slices = map_slices(names, (abs2meta[n]['size'] * ncol for n in names))
+
+        return self._slices
 
     def keys(self):
         """
@@ -392,15 +388,6 @@ class Vector(object):
         - _views_flat
         """
         raise NotImplementedError('_initialize_views not defined for vector type %s' %
-                                  type(self).__name__)
-
-    def _clone_data(self):
-        """
-        For each item in _data, replace it with a copy of the data.
-
-        Must be implemented by the subclass.
-        """
-        raise NotImplementedError('_clone_data not defined for vector type %s' %
                                   type(self).__name__)
 
     def __iadd__(self, vec):

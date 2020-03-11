@@ -287,8 +287,8 @@ class TestJacobian(unittest.TestCase):
     def _check_fwd(self, prob, check_vec):
         d_inputs, d_outputs, d_residuals = prob.model.get_linear_vectors()
 
-        work = d_outputs._clone()
-        work.set_const(1.0)
+        work = d_outputs._data.copy()
+        work[:] = 1.0
 
         # fwd apply_linear test
         d_outputs.set_const(1.0)
@@ -302,14 +302,14 @@ class TestJacobian(unittest.TestCase):
 
         prob.model.run_solve_linear(['linear'], 'fwd')
 
-        d_outputs -= work
+        d_outputs._data -= work
         self.assertAlmostEqual(d_outputs.get_norm(), 0, delta=1e-6)
 
     def _check_rev(self, prob, check_vec):
         d_inputs, d_outputs, d_residuals = prob.model.get_linear_vectors()
 
-        work = d_outputs._clone()
-        work.set_const(1.0)
+        work = d_outputs._data.copy()
+        work[:] = 1.0
 
         # rev apply_linear test
         d_residuals.set_const(1.0)
@@ -321,7 +321,7 @@ class TestJacobian(unittest.TestCase):
         d_residuals.set_const(0.0)
         d_outputs._data[:] = check_vec
         prob.model.run_solve_linear(['linear'], 'rev')
-        d_residuals -= work
+        d_residuals._data -= work
         self.assertAlmostEqual(d_residuals.get_norm(), 0, delta=1e-6)
 
     dtypes = [
