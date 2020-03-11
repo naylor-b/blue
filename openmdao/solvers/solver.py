@@ -609,8 +609,8 @@ class NonlinearSolver(Solver):
         """
         system = self._system()
         if self.options['debug_print']:
-            self._err_cache['inputs'] = system._inputs._copy_views()
-            self._err_cache['outputs'] = system._outputs._copy_views()
+            self._err_cache['input'] = system._inputs._data.copy()
+            self._err_cache['output'] = system._outputs._data.copy()
 
         if self.options['maxiter'] > 0:
             self._run_apply()
@@ -654,8 +654,11 @@ class NonlinearSolver(Solver):
         coord = self._recording_iter.get_formatted_iteration_coordinate()
 
         out_strs = ["\n# Inputs and outputs at start of iteration '%s':\n" % coord]
-        for vec_type, views in self._err_cache.items():
-            out_strs.append('\n# nonlinear %s\n' % vec_type)
+        system = self._system()
+        for vec_type, arr in self._err_cache.items():
+            out_strs.append('\n# nonlinear %ss\n' % vec_type)
+            vec = system._vectors[vec_type]['nonlinear']
+            views = {n: arr[slc] for n, slc in vec.get_slice_dict().items()}
             out_strs.append(pprint.pformat(views))
             out_strs.append('\n')
 

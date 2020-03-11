@@ -291,8 +291,8 @@ class BroydenSolver(NonlinearSolver):
         """
         system = self._system()
         if self.options['debug_print']:
-            self._err_cache['inputs'] = system._inputs._copy_views()
-            self._err_cache['outputs'] = system._outputs._copy_views()
+            self._err_cache['input'] = system._inputs._data.copy()
+            self._err_cache['output'] = system._outputs._data.copy()
 
         # Convert local storage if we are under complex step.
         if system.under_complex_step:

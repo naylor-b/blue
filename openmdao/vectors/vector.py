@@ -192,17 +192,6 @@ class Vector(object):
         """
         return self._data.size
 
-    def _copy_views(self):
-        """
-        Return a dictionary containing just the views.
-
-        Returns
-        -------
-        dict
-            Dictionary containing the _views.
-        """
-        return deepcopy(self._views)
-
     def get_slice_dict(self):
         """
         Return a dict of var names mapped to their slice in the local data array.
@@ -215,9 +204,12 @@ class Vector(object):
         if self._slices is None:
             system = self._system()
             abs2meta = system._var_abs2meta
-            ncol = self._ncol
-            names = system._var_relevant_names[self._name][self._typ]
-            self._slices = map_slices(names, (abs2meta[n]['size'] * ncol for n in names))
+            abs_names = system._var_relevant_names[self._name][self._typ]
+            if self._ncol == 1:
+                self._slices = map_slices(abs_names, (abs2meta[n]['size'] for n in abs_names))
+            else:
+                self._slices = map_slices(abs_names,
+                                          (abs2meta[n]['size'] * self._ncol for n in abs_names))
 
         return self._slices
 

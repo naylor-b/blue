@@ -177,8 +177,8 @@ class NewtonSolver(NonlinearSolver):
         system = self._system()
 
         if self.options['debug_print']:
-            self._err_cache['inputs'] = system._inputs._copy_views()
-            self._err_cache['outputs'] = system._outputs._copy_views()
+            self._err_cache['input'] = system._inputs._data.copy()
+            self._err_cache['output'] = system._outputs._data.copy()
 
         # When under a complex step from higher in the hierarchy, sometimes the step is too small
         # to trigger reconvergence, so nudge the outputs slightly so that we always get at least
