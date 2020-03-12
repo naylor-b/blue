@@ -211,7 +211,19 @@ class DefaultVector(Vector):
                         vec[0][ind1:ind2] = scale0
                     vec[1][ind1:ind2] = scale1
 
-        self._names = frozenset(views)
+    def add_at_indices(self, idxs, value):
+        """
+        Add the given value to the vector at the specified indices.
+
+        Parameters
+        ----------
+        idxs : ndarray
+            Index array.
+        value : float or ndarray
+            The value being added.
+        """
+        # self._root_vector._data[idxs] += value
+        self._data[idxs] += value
 
     def __iadd__(self, vec):
         """

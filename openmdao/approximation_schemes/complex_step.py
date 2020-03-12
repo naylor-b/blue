@@ -183,7 +183,7 @@ class ComplexStep(ApproximationScheme):
         """
         for vec, idxs in idx_info:
             if vec is not None:
-                vec._data[idxs] += delta
+                vec.add_at_indices(idxs, delta)  # _data[idxs] += delta
 
         if total:
             system.run_solve_nonlinear()

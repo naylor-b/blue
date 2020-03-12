@@ -130,9 +130,8 @@ class Vector(object):
         self._views = {}
         self._views_flat = {}
 
-        # self._names will either be equivalent to self._views or to the
-        # set of variables relevant to the current matvec product.
-        self._names = self._views
+        # self._names will be the set of variables relevant to the current matvec product.
+        self._names = frozenset(system._var_relevant_names[self._name][self._typ])
 
         self._root_vector = None
         self._data = None
@@ -205,6 +204,12 @@ class Vector(object):
         if self._slices is None:
             system = self._system()
             abs_names = system._var_relevant_names[self._name][self._typ]
+            # if self is self._root_vector:
+            #     self._slices = OrderedDict(yield_var_map(abs_names, system._var_abs2meta,
+            #                                self._ncol))
+            # else:
+            #     root_vmap = self._root_vector.get_var_map()
+            #     self._slices = OrderedDict((n, root_vmap[n]) for n in abs_names)
             self._slices = dict(yield_var_map(abs_names, system._var_abs2meta, self._ncol))
 
         return self._slices
@@ -307,6 +312,17 @@ class Vector(object):
                 return self._views[abs_name]
             else:
                 return self._views[abs_name][:, self._icol]
+            # vmap = self.get_var_map()
+            # slc, shape = vmap[abs_name]
+            # if self._ncol > 1:
+            #     slc = slice(slc.start // self._ncol, slc.stop // self._ncol)
+            #     if self._icol is None:
+            #         shape = tuple(list(shape) + [self._ncol])
+            # val = self._root_vector._data[slc]
+            # if self._icol is not None:
+            #     val = val[:, self._icol]
+            # val.shape = shape
+            # return val
         else:
             raise KeyError('Variable name "{}" not found.'.format(name))
 
