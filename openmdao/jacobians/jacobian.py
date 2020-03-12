@@ -91,7 +91,7 @@ class Jacobian(object):
         abs2meta = system._var_allprocs_abs2meta
         of, wrt = abs_key
         if system.comm.size > 1:
-            if wrt in system._outputs._views:
+            if wrt in system._outputs._names:
                 sz = abs2meta[wrt]['global_size']
             else:
                 sz = abs2meta[wrt]['size']

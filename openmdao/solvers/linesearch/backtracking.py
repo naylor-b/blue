@@ -27,16 +27,16 @@ def _print_violations(unknowns, lower, upper):
     upper : <Vector>
         Vector containing the upper bounds.
     """
-    for name, val in unknowns._views_flat.items():
-        if any(val > upper._views_flat[name]):
+    for name, val in unknowns.abs_item_iter():
+        if np.any(val > upper.get_flat_view(name)):
             print("'%s' exceeds upper bounds" % name)
             print("  Val:", val)
-            print("  Upper:", upper._views_flat[name], '\n')
+            print("  Upper:", upper.get_flat_view(name), '\n')
 
-        if any(val < lower._views_flat[name]):
+        if np.any(val < lower.get_flat_view(name)):
             print("'%s' exceeds lower bounds" % name)
             print("  Val:", val)
-            print("  Lower:", lower._views_flat[name], '\n')
+            print("  Lower:", lower.get_flat_view(name), '\n')
 
 
 class LinesearchSolver(NonlinearSolver):

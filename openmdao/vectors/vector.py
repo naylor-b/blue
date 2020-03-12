@@ -54,6 +54,8 @@ class Vector(object):
         Dictionary mapping absolute variable names to the flattened ndarray views.
     _names : set([str, ...])
         Set of variables that are relevant in the current context.
+    _full_names : set([str, ...])
+        Full set of variables contained in this vector.
     _root_vector : Vector
         Pointer to the vector owned by the root system.
     _alloc_complex : Bool
@@ -132,6 +134,7 @@ class Vector(object):
 
         # self._names will be the set of variables relevant to the current matvec product.
         self._names = frozenset(system._var_relevant_names[self._name][self._typ])
+        self._full_names = self._names
 
         self._root_vector = None
         self._data = None
@@ -234,7 +237,7 @@ class Vector(object):
         list
             the variable values.
         """
-        return [v for n, v in self._views.items() if n in self._names]
+        return [v for n, v in self.abs_item_iter() if n in self._names]
 
     def name2abs_name(self, name):
         """
@@ -276,6 +279,30 @@ class Vector(object):
 
         return (n[idx:] for n in system._var_abs_names[self._typ] if n in self._names)
 
+    def abs_iter(self):
+        """
+        Yield an iterator over variables involved in the current mat-vec product (absolute names).
+
+        Returns
+        -------
+        listiterator
+            iterator over the variable names.
+        """
+        return (n for n in self._system()._var_abs_names[self._typ] if n in self._names)
+
+    def abs_item_iter(self):
+        """
+        Yield an iterator over names and values involved in the current mat-vec product.
+
+        Names are absolute names.
+
+        Returns
+        -------
+        listiterator
+            iterator over the variable names and values.
+        """
+        return ((n, self[n]) for n in self._system()._var_abs_names[self._typ] if n in self._names)
+
     def __contains__(self, name):
         """
         Check if the variable is involved in the current mat-vec product.
@@ -291,6 +318,22 @@ class Vector(object):
             True or False.
         """
         return self.name2abs_name(name) is not None
+
+    def contains_abs(self, abs_name):
+        """
+        Check if the variable is involved in the current mat-vec product.
+
+        Parameters
+        ----------
+        abs_name : str
+            Absolute variable name.
+
+        Returns
+        -------
+        boolean
+            True or False.
+        """
+        return abs_name in self._names
 
     def __getitem__(self, name):
         """
@@ -326,6 +369,52 @@ class Vector(object):
         else:
             raise KeyError('Variable name "{}" not found.'.format(name))
 
+    def get_view(self, abs_name):
+        """
+        Return the view associated with the given absolute name.
+
+        Parameters
+        ----------
+        abs_name : str
+            The absolute variable name.
+
+        Returns
+        -------
+        ndarray
+            Array view corresponding to the given variable name.
+        """
+        try:
+            if self._icol is None:
+                return self._views[abs_name]
+            else:
+                return self._views[abs_name][:, self._icol]
+        except KeyError:
+            raise KeyError('Variable name "{}" not found.'.format(abs_name))
+
+    def get_flat_view(self, abs_name):
+        """
+        Get the variable value in flattened form.
+
+        Parameters
+        ----------
+        abs_name : str
+            Absolute variable name.
+
+        Returns
+        -------
+        float or ndarray
+            flattened variable value.
+        """
+        if abs_name in self._names:
+            if self._icol is None:
+                return self._views_flat[abs_name]
+            else:
+                arr = self._views_flat[abs_name]
+                colsize = arr.size // self._ncol
+                return arr[colsize * self._icol:(colsize + 1) * self._icol]
+        else:
+            raise KeyError('Variable name "{}" not found.'.format(abs_name))
+
     def __setitem__(self, name, value):
         """
         Set the variable value.
@@ -343,24 +432,35 @@ class Vector(object):
                 msg = "Attempt to set value of '{}' in {} vector when it is read only."
                 raise ValueError(msg.format(name, self._kind))
 
-            if self._icol is None:
-                slc = _full_slice
-                oldval = self._views[abs_name]
-            else:
-                slc = (_full_slice, self._icol)
-                oldval = self._views[abs_name][slc]
-
-            value = np.asarray(value)
-            if value.shape != () and value.shape != (1,) and oldval.shape != value.shape:
-                raise ValueError("Incompatible shape for '%s': "
-                                 "Expected %s but got %s." %
-                                 (name, oldval.shape, value.shape))
-
-            self._views[abs_name][slc] = value
-
+            self.set_val_abs(abs_name, value)
         else:
             msg = 'Variable name "{}" not found.'
             raise KeyError(msg.format(name))
+
+    def set_val_abs(self, abs_name, value):
+        """
+        Set the variable value.
+
+        Parameters
+        ----------
+        abs_name : str
+            Absolute variable name.
+        value : float or list or tuple or ndarray
+            variable value to set
+        """
+        if self._icol is None:
+            slc = _full_slice
+            oldval = self._views[abs_name]
+        else:
+            slc = (_full_slice, self._icol)
+            oldval = self._views[abs_name][slc]
+
+        value = np.asarray(value)
+        if value.shape != () and value.shape != (1,) and oldval.shape != value.shape:
+            raise ValueError("Incompatible shape for '%s': Expected %s but got %s." %
+                             (abs_name, oldval.shape, value.shape))
+
+        self._views[abs_name][slc] = value
 
     def _initialize_data(self, root_vector):
         """

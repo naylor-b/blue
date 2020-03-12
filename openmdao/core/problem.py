@@ -418,9 +418,9 @@ class Problem(object):
             else:
                 abs_name = name
 
-            if abs_name in self.model._outputs._views:
+            if abs_name in self.model._outputs._names:
                 self.model._outputs[abs_name] = value
-            elif abs_name in self.model._inputs._views:
+            elif abs_name in self.model._inputs._names:
                 self.model._inputs[abs_name] = value
             elif abs_name in self.model._discrete_outputs:
                 self.model._discrete_outputs[abs_name] = value
@@ -975,10 +975,10 @@ class Problem(object):
                             inp_abs = rel_name2abs_name(comp, inp)
 
                             try:
-                                flat_view = dinputs._views_flat[inp_abs]
+                                flat_view = dinputs.get_flat_view(inp_abs)
                             except KeyError:
                                 # Implicit state
-                                flat_view = dstate._views_flat[inp_abs]
+                                flat_view = dstate.get_flat_view(inp_abs)
 
                             n_in = len(flat_view)
                             for idx in range(n_in):
@@ -987,7 +987,7 @@ class Problem(object):
                                 dstate.set_const(0.0)
 
                                 # Dictionary access returns a scalar for 1d input, and we
-                                # need a vector for clean code, so use _views_flat.
+                                # need a vector for clean code, so use flat view.
                                 flat_view[idx] = 1.0
 
                                 # Matrix Vector Product
@@ -997,10 +997,10 @@ class Problem(object):
                                     out_abs = rel_name2abs_name(comp, out)
 
                                     try:
-                                        derivs = doutputs._views_flat[out_abs]
+                                        derivs = doutputs.get_flat_view(out_abs)
                                     except KeyError:
                                         # Implicit state
-                                        derivs = dstate._views_flat[out_abs]
+                                        derivs = dstate.get_flat_view(out_abs)
 
                                     if mode == 'fwd':
                                         key = out, inp

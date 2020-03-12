@@ -297,13 +297,13 @@ class Solver(object):
             excl = ['.'.join((system.pathname, i)) for i in excl]
 
         if self.recording_options['record_solver_residuals']:
-            myresiduals = [n for n in system._residuals._views if check_path(n, incl, excl)]
+            myresiduals = [n for n in system._residuals.abs_iter() if check_path(n, incl, excl)]
 
         if self.recording_options['record_outputs']:
-            myoutputs = [n for n in system._outputs._views if check_path(n, incl, excl)]
+            myoutputs = [n for n in system._outputs.abs_iter() if check_path(n, incl, excl)]
 
         if self.recording_options['record_inputs']:
-            myinputs = [n for n in system._inputs._views if check_path(n, incl, excl)]
+            myinputs = [n for n in system._inputs.abs_iter() if check_path(n, incl, excl)]
 
         self._filtered_vars_to_record = {
             'input': myinputs,
@@ -658,8 +658,8 @@ class NonlinearSolver(Solver):
         for vec_type, arr in self._err_cache.items():
             out_strs.append('\n# nonlinear %ss\n' % vec_type)
             vec = system._vectors[vec_type]['nonlinear']
-            views = {n: arr[slc[0]] for n, slc in vec.get_var_map().items()}
-            out_strs.append(pprint.pformat(views))
+            vdict = {n: arr[slc[0]] for n, slc in vec.get_var_map().items()}
+            out_strs.append(pprint.pformat(vdict))
             out_strs.append('\n')
 
         out_str = ''.join(out_strs)

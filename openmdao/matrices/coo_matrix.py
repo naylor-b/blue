@@ -261,7 +261,7 @@ class COOMatrix(Matrix):
         ndarray or None
             The mask array or None.
         """
-        if len(d_inputs._views) > len(d_inputs._names):
+        if len(d_inputs._full_names) > len(d_inputs._names):
             input_names = d_inputs._names
             mask = None
             for key, val in self._key_ranges.items():

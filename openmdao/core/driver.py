@@ -267,7 +267,7 @@ class Driver(object):
 
         # Now determine if later we'll need to allgather cons, objs, or desvars.
         if model.comm.size > 1 and model._subsystems_allprocs:
-            local_out_vars = set(model._outputs._views)
+            local_out_vars = model._outputs._names
             remote_dvs = set(self._designvars) - local_out_vars
             remote_cons = set(self._cons) - local_out_vars
             remote_objs = set(self._objs) - local_out_vars
@@ -429,7 +429,7 @@ class Driver(object):
         """
         model = self._problem().model
         comm = model.comm
-        vec = model._outputs._views_flat
+        outputs = model._outputs
         indices = meta['indices']
 
         if name in remote_vois:
@@ -442,9 +442,9 @@ class Driver(object):
             else:
                 if owner == comm.rank:
                     if indices is None:
-                        val = vec[name].copy()
+                        val = outputs.get_flat_view(name).copy()
                     else:
-                        val = vec[name][indices]
+                        val = outputs.get_flat_view(name)[indices]
                 else:
                     if indices is not None:
                         size = len(indices)
@@ -467,9 +467,9 @@ class Driver(object):
                     raise ValueError(msg)
 
             elif indices is None:
-                val = vec[name].copy()
+                val = outputs.get_flat_view(name).copy()
             else:
-                val = vec[name][indices]
+                val = outputs.get_flat_view(name)[indices]
 
         if self._has_scaling and driver_scaling:
             # Scale design variable values
@@ -521,7 +521,7 @@ class Driver(object):
             problem.model._discrete_outputs[name] = int(value)
 
         else:
-            desvar = problem.model._outputs._views_flat[name]
+            desvar = problem.model._outputs.get_flat_view(name)
             desvar[indices] = value
 
             # Undo driver scaling when setting design var values into model.

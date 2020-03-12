@@ -247,10 +247,10 @@ class ApproximationScheme(object):
             wrt = key[0]
             directional = key[-1]
             data = self._get_approx_data(system, key)
-            if wrt in inputs._views_flat:
+            if inputs.contains_abs(wrt):
                 arr = inputs
                 slices = in_slices
-            elif wrt in outputs._views_flat:
+            elif outputs.contains_abs(wrt):
                 arr = outputs
                 slices = out_slices
             else:  # wrt is remote

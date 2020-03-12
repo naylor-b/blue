@@ -61,7 +61,8 @@ if __name__ == '__main__':
             vector = scaling_factors[in_out][linear_type]
             print(indent, in_out, linear_type)
             if vector:
-                for abs_name, view in vector._views.items():
+                abs_names = vector._system()._var_abs_names[vector._typ]
+                for abs_name, view in zip(abs_names, vector.values()):
                     print(2 * indent, abs_name, view)
             else:
                 print(2 * indent, 'None')
