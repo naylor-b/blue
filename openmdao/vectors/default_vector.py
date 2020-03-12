@@ -16,21 +16,6 @@ class DefaultVector(Vector):
 
     TRANSFER = DefaultTransfer
 
-    def _create_data(self):
-        """
-        Allocate data array.
-
-        This happens only in the top level system.  Child systems use views of the array
-        we allocate here.
-
-        Returns
-        -------
-        ndarray
-            zeros array of correct size to hold all of this vector's variables.
-        """
-        size = np.sum(self._system()._var_sizes[self._name][self._typ][self._iproc, :])
-        return np.zeros(size) if self._ncol == 1 else np.zeros((size, self._ncol))
-
     def _update_root_data(self):
         """
         Resize the root data if necesary (i.e., due to reconfiguration).
@@ -39,9 +24,17 @@ class DefaultVector(Vector):
         type_ = self._typ
         vec_name = self._name
         root_vec = self._root_vector
+        vmap = root_vec.get_var_map()
+        abs_names = system._var_relevant_names[self._name][type_]
 
-        sys_offset, size_after_sys = system._ext_sizes[vec_name][type_]
-        sys_size = np.sum(system._var_sizes[vec_name][type_][self._iproc, :])
+        if abs_names:
+            sys_offset = vmap[abs_names[0]][0].start
+            last = vmap[abs_names[-1]][0].stop
+            sys_size = last - sys_offset
+            size_after_sys = root_vec._data.size - last
+        else:
+            sys_offset = size_after_sys = sys_size = 0
+
         old_sizes_total = root_vec._data.size
 
         root_vec._data = np.concatenate([
@@ -68,6 +61,8 @@ class DefaultVector(Vector):
         type_ = self._typ
         iproc = self._iproc
         root_vec = self._root_vector
+        vmap = root_vec.get_var_map()
+        abs_names = system._var_relevant_names[self._name][type_]
 
         cplx_data = None
         scaling = {}
@@ -75,9 +70,15 @@ class DefaultVector(Vector):
             scaling['phys'] = {}
             scaling['norm'] = {}
 
-        sizes = system._var_sizes[self._name][type_]
-        ind1 = system._ext_sizes[self._name][type_][0]
-        ind2 = ind1 + np.sum(sizes[iproc, :])
+        if abs_names:
+            ind1 = vmap[abs_names[0]][0].start
+            ind2 = vmap[abs_names[-1]][0].stop
+        else:
+            ind1 = ind2 = 0
+
+        if self._ncol > 1:
+            ind1 = ind1 // self._ncol
+            ind2 = ind2 // self._ncol
 
         data = root_vec._data[ind1:ind2]
 

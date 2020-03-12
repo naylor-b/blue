@@ -11,9 +11,9 @@ class TestCodeUtils(unittest.TestCase):
     def test_get_nested_calls(self):
         devnull = open(os.devnull, "w")
 
-        graph = get_nested_calls(Group, '_final_setup', stream=devnull)
-        self.assertIn(('Group._setup_global', 'System._setup_global'),
-                      graph.edges(), "System._setup_global not called by Group._setup_global")
+        graph = get_nested_calls(Group, '_setup', stream=devnull)
+        self.assertIn(('Group._setup_var_data', 'System._setup_var_data'),
+                      graph.edges(), "System._setup_var_data not called by Group._setup_var_data")
 
 
 if __name__ == '__main__':

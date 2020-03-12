@@ -179,8 +179,6 @@ class System(object):
     _conn_global_abs_in2out : {'abs_in': 'abs_out'}
         Dictionary containing all explicit & implicit connections owned by this system
         or any descendant system. The data is the same across all processors.
-    _ext_sizes : {'input': (int, int), 'output': (int, int)}
-        Total size of allprocs variables in system before/after this one.
     _vec_names : [str, ...]
         List of names of all vectors, including the nonlinear vector.
     _lin_vec_names : [str, ...]
@@ -386,8 +384,6 @@ class System(object):
 
         self._full_comm = None
 
-        self._ext_sizes = {'input': (0, 0), 'output': (0, 0)}
-
         self._vectors = {'input': {}, 'output': {}, 'residual': {}}
 
         self._inputs = None
@@ -556,37 +552,6 @@ class System(object):
         Configure this system to assign children settings.
         """
         pass
-
-    def _get_initial_global(self, initial):
-        """
-        Get initial values for _ext_sizes.
-
-        Parameters
-        ----------
-        initial : bool
-            Whether we are reconfiguring - i.e., the model has been previously setup.
-
-        Returns
-        -------
-        _ext_sizes : {'input': (int, int), 'output': (int, int)}
-            Total size of allprocs variables in system before/after this one.
-        """
-        if not initial:
-            return self._ext_sizes
-        else:
-            ext_sizes = {}
-
-            vec_names = self._lin_rel_vec_name_list if self._use_derivatives else self._vec_names
-
-            for vec_name in vec_names:
-                ext_sizes[vec_name] = {}
-                for type_ in ['input', 'output']:
-                    ext_sizes[vec_name][type_] = (0, 0)
-
-            if self._use_derivatives:
-                ext_sizes['nonlinear'] = ext_sizes['linear']
-
-            return ext_sizes
 
     def _get_root_vectors(self, initial, force_alloc_complex=False):
         """
@@ -872,8 +837,6 @@ class System(object):
 
         # For vector-related, setup, recursion is always necessary, even for updating.
         # For reconfiguration setup, we resize the vectors once, only in the current system.
-        ext_sizes = self._get_initial_global(initial)
-        self._setup_global(ext_sizes)
         root_vectors = self._get_root_vectors(initial, force_alloc_complex=force_alloc_complex)
         self._setup_vectors(root_vectors, resize=resize)
 
@@ -1685,17 +1648,6 @@ class System(object):
             Whether to call this method in subsystems.
         """
         pass
-
-    def _setup_global(self, ext_sizes):
-        """
-        Compute total number and total size of variables in systems before / after this system.
-
-        Parameters
-        ----------
-        ext_sizes : {'input': (int, int), 'output': (int, int)}
-            Total size of allprocs variables in system before/after this one.
-        """
-        self._ext_sizes = ext_sizes
 
     def _setup_vectors(self, root_vectors, resize=False, alloc_complex=False):
         """
