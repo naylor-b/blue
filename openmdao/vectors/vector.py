@@ -50,8 +50,6 @@ class Vector(object):
         Length of flattened vector.
     _views : dict
         Dictionary mapping absolute variable names to the ndarray views.
-    _views_flat : dict
-        Dictionary mapping absolute variable names to the flattened ndarray views.
     _names : set([str, ...])
         Set of variables that are relevant in the current context.
     _full_names : set([str, ...])
@@ -68,9 +66,6 @@ class Vector(object):
         Actual allocated data under complex step.
     _cplx_views : dict
         Dictionary mapping absolute variable names to the ndarray views under complex step.
-    _cplx_views_flat : dict
-        Dictionary mapping absolute variable names to the flattened ndarray views under complex
-        step.
     _under_complex_step : bool
         When True, this vector is under complex step, and data is swapped with the complex data.
     _ncol : int
@@ -130,7 +125,6 @@ class Vector(object):
 
         self._iproc = system.comm.rank
         self._views = {}
-        self._views_flat = {}
 
         # self._names will be the set of variables relevant to the current matvec product.
         self._names = frozenset(system._var_relevant_names[self._name][self._typ])
@@ -144,7 +138,6 @@ class Vector(object):
         self._alloc_complex = alloc_complex
         self._cplx_data = None
         self._cplx_views = {}
-        self._cplx_views_flat = {}
         self._under_complex_step = False
 
         self._do_scaling = ((kind == 'input' and system._has_input_scaling) or
@@ -351,21 +344,7 @@ class Vector(object):
         """
         abs_name = self.name2abs_name(name)
         if abs_name is not None:
-            if self._icol is None:
-                return self._views[abs_name]
-            else:
-                return self._views[abs_name][:, self._icol]
-            # vmap = self.get_var_map()
-            # slc, shape = vmap[abs_name]
-            # if self._ncol > 1:
-            #     slc = slice(slc.start // self._ncol, slc.stop // self._ncol)
-            #     if self._icol is None:
-            #         shape = tuple(list(shape) + [self._ncol])
-            # val = self._root_vector._data[slc]
-            # if self._icol is not None:
-            #     val = val[:, self._icol]
-            # val.shape = shape
-            # return val
+            return self.get_view(abs_name)
         else:
             raise KeyError('Variable name "{}" not found.'.format(name))
 
@@ -383,13 +362,21 @@ class Vector(object):
         ndarray
             Array view corresponding to the given variable name.
         """
-        try:
-            if self._icol is None:
-                return self._views[abs_name]
-            else:
-                return self._views[abs_name][:, self._icol]
-        except KeyError:
+        if abs_name not in self._names:
             raise KeyError('Variable name "{}" not found.'.format(abs_name))
+
+        vmap = self.get_var_map()
+        slc, shape = vmap[abs_name]
+
+        if self._ncol > 1:
+            slc = slice(slc.start // self._ncol, slc.stop // self._ncol)
+            if self._icol is None:
+                shape = tuple(list(shape) + [self._ncol])
+        val = self._data[slc]
+        if self._icol is not None:
+            val = val[:, self._icol]
+        val.shape = shape
+        return val
 
     def get_flat_view(self, abs_name):
         """
@@ -405,15 +392,19 @@ class Vector(object):
         float or ndarray
             flattened variable value.
         """
-        if abs_name in self._names:
-            if self._icol is None:
-                return self._views_flat[abs_name]
-            else:
-                arr = self._views_flat[abs_name]
-                colsize = arr.size // self._ncol
-                return arr[colsize * self._icol:(colsize + 1) * self._icol]
-        else:
+        if abs_name not in self._names:
             raise KeyError('Variable name "{}" not found.'.format(abs_name))
+
+        vmap = self.get_var_map()
+        slc, shape = vmap[abs_name]
+
+        if self._ncol > 1:
+            slc = slice(slc.start // self._ncol, slc.stop // self._ncol)
+
+        if self._icol is None:
+            return self._data[slc]
+        else:
+            return self._data[slc][:, self._icol]
 
     def __setitem__(self, name, value):
         """
@@ -448,19 +439,13 @@ class Vector(object):
         value : float or list or tuple or ndarray
             variable value to set
         """
-        if self._icol is None:
-            slc = _full_slice
-            oldval = self._views[abs_name]
-        else:
-            slc = (_full_slice, self._icol)
-            oldval = self._views[abs_name][slc]
-
+        oldval = self.get_view(abs_name)
         value = np.asarray(value)
         if value.shape != () and value.shape != (1,) and oldval.shape != value.shape:
             raise ValueError("Incompatible shape for '%s': Expected %s but got %s." %
                              (abs_name, oldval.shape, value.shape))
 
-        self._views[abs_name][slc] = value
+        oldval[:] = value
 
     def _initialize_data(self, root_vector):
         """
@@ -489,7 +474,6 @@ class Vector(object):
         Sets the following attributes:
 
         - _views
-        - _views_flat
         """
         raise NotImplementedError('_initialize_views not defined for vector type %s' %
                                   type(self).__name__)
@@ -712,5 +696,4 @@ class Vector(object):
 
         self._data, self._cplx_data = self._cplx_data, self._data
         self._views, self._cplx_views = self._cplx_views, self._views
-        self._views_flat, self._cplx_views_flat = self._cplx_views_flat, self._views_flat
         self._under_complex_step = active

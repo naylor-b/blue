@@ -508,14 +508,14 @@ class System(object):
                 new_in = self._inputs
                 new_out = self._outputs
 
-                # Reload input and output values where possible
-                for vold, vnew in [(old_in, new_in), (old_out, new_out)]:
-                    for abs_name, old_view in vold._views_flat.items():
-                        if abs_name in vnew._views_flat:
-                            new_view = vnew._views_flat[abs_name]
+                # # Reload input and output values where possible
+                # for vold, vnew in [(old_in, new_in), (old_out, new_out)]:
+                #     for abs_name, old_view in vold._views_flat.items():
+                #         if abs_name in vnew._views_flat:
+                #             new_view = vnew._views_flat[abs_name]
 
-                            if len(old_view) == len(new_view):
-                                new_view[:] = old_view
+                #             if len(old_view) == len(new_view):
+                #                 new_view[:] = old_view
 
             self._reconfigured = True
 

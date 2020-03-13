@@ -46,7 +46,7 @@ class DefaultVector(Vector):
         if self._alloc_complex and root_vec._cplx_data.size != root_vec._data.size:
             root_vec._cplx_data = np.zeros(root_vec._data.size, dtype=complex)
 
-        root_vec._initialize_views()
+        root_vec._slices =_initialize_views()
 
     def _extract_root_data(self):
         """
@@ -146,7 +146,6 @@ class DefaultVector(Vector):
 
         Sets the following attributes:
         _views
-        _views_flat
         """
         system = self._system()
         type_ = self._typ
@@ -160,11 +159,9 @@ class DefaultVector(Vector):
             scaling = self._scaling
 
         self._views = views = {}
-        self._views_flat = views_flat = {}
 
         alloc_complex = self._alloc_complex
         self._cplx_views = cplx_views = {}
-        self._cplx_views_flat = cplx_views_flat = {}
 
         allprocs_abs2idx_t = system._var_allprocs_abs2idx[self._name]
         sizes_t = system._var_sizes[self._name][type_]
@@ -190,14 +187,14 @@ class DefaultVector(Vector):
                     shape = (shape,)
                 shape = tuple(list(shape) + [ncol])
 
-            views_flat[abs_name] = v = self._data[ind1:ind2]
+            v = self._data[ind1:ind2]
             if shape != v.shape:
                 v = v.view()
                 v.shape = shape
             views[abs_name] = v
 
             if alloc_complex:
-                cplx_views_flat[abs_name] = v = self._cplx_data[ind1:ind2]
+                v = self._cplx_data[ind1:ind2]
                 if shape != v.shape:
                     v = v.view()
                     v.shape = shape
