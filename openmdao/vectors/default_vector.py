@@ -46,7 +46,8 @@ class DefaultVector(Vector):
         if self._alloc_complex and root_vec._cplx_data.size != root_vec._data.size:
             root_vec._cplx_data = np.zeros(root_vec._data.size, dtype=complex)
 
-        root_vec._slices =_initialize_views()
+        root_vec._slices = None
+        root_vec._initialize_views()
 
     def _extract_root_data(self):
         """
@@ -143,9 +144,6 @@ class DefaultVector(Vector):
     def _initialize_views(self):
         """
         Internally assemble views onto the vectors.
-
-        Sets the following attributes:
-        _views
         """
         system = self._system()
         type_ = self._typ
@@ -158,10 +156,7 @@ class DefaultVector(Vector):
             factors = system._scale_factors
             scaling = self._scaling
 
-        self._views = views = {}
-
         alloc_complex = self._alloc_complex
-        self._cplx_views = cplx_views = {}
 
         allprocs_abs2idx_t = system._var_allprocs_abs2idx[self._name]
         sizes_t = system._var_sizes[self._name][type_]
@@ -191,14 +186,12 @@ class DefaultVector(Vector):
             if shape != v.shape:
                 v = v.view()
                 v.shape = shape
-            views[abs_name] = v
 
             if alloc_complex:
                 v = self._cplx_data[ind1:ind2]
                 if shape != v.shape:
                     v = v.view()
                     v.shape = shape
-                cplx_views[abs_name] = v
 
             if do_scaling:
                 for scaleto in ('phys', 'norm'):

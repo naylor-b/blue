@@ -48,8 +48,6 @@ class Vector(object):
         Global processor index.
     _length : int
         Length of flattened vector.
-    _views : dict
-        Dictionary mapping absolute variable names to the ndarray views.
     _names : set([str, ...])
         Set of variables that are relevant in the current context.
     _full_names : set([str, ...])
@@ -64,8 +62,6 @@ class Vector(object):
         Mapping of var name to slice.
     _cplx_data : ndarray
         Actual allocated data under complex step.
-    _cplx_views : dict
-        Dictionary mapping absolute variable names to the ndarray views under complex step.
     _under_complex_step : bool
         When True, this vector is under complex step, and data is swapped with the complex data.
     _ncol : int
@@ -124,7 +120,6 @@ class Vector(object):
         self._system = weakref.ref(system)
 
         self._iproc = system.comm.rank
-        self._views = {}
 
         # self._names will be the set of variables relevant to the current matvec product.
         self._names = frozenset(system._var_relevant_names[self._name][self._typ])
@@ -137,7 +132,6 @@ class Vector(object):
         # Support for Complex Step
         self._alloc_complex = alloc_complex
         self._cplx_data = None
-        self._cplx_views = {}
         self._under_complex_step = False
 
         self._do_scaling = ((kind == 'input' and system._has_input_scaling) or
@@ -230,7 +224,7 @@ class Vector(object):
         list
             the variable values.
         """
-        return [v for n, v in self.abs_item_iter() if n in self._names]
+        return [v for n, v in self.abs_item_iter()]
 
     def name2abs_name(self, name):
         """
@@ -294,7 +288,8 @@ class Vector(object):
         listiterator
             iterator over the variable names and values.
         """
-        return ((n, self[n]) for n in self._system()._var_abs_names[self._typ] if n in self._names)
+        return ((n, self.get_view(n)) for n in self._system()._var_abs_names[self._typ]
+                if n in self._names)
 
     def __contains__(self, name):
         """
@@ -463,19 +458,6 @@ class Vector(object):
             the root's vector instance or None, if we are at the root.
         """
         raise NotImplementedError('_initialize_data not defined for vector type %s' %
-                                  type(self).__name__)
-
-    def _initialize_views(self):
-        """
-        Internally assemble views onto the vectors.
-
-        Must be implemented by the subclass.
-
-        Sets the following attributes:
-
-        - _views
-        """
-        raise NotImplementedError('_initialize_views not defined for vector type %s' %
                                   type(self).__name__)
 
     def __iadd__(self, vec):
@@ -695,5 +677,4 @@ class Vector(object):
             self._cplx_data[:] = self._data.real
 
         self._data, self._cplx_data = self._cplx_data, self._data
-        self._views, self._cplx_views = self._cplx_views, self._views
         self._under_complex_step = active
