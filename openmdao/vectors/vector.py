@@ -204,6 +204,35 @@ class Vector(object):
 
         return self._slices
 
+    def get_root_slice(self):
+        """
+        Return the slice that this vector occurpies in the root vector.
+
+        Returns
+        -------
+        slice
+            The root vector slice.
+        """
+        if self is self._root_vector:
+            return slice(None)
+
+        abs_names = self._system()._var_relevant_names[self._name][self._typ]
+
+        if abs_names:
+            vmap = self._root_vector.get_var_map()
+
+            # get the extent of the slice this entire vec occupies in the root vec
+            start = vmap[abs_names[0]][0].start
+            stop = vmap[abs_names[-1]][0].stop
+
+            if self._ncol > 1:
+                start = start // self._ncol
+                stop = stop // self._ncol
+
+            return slice(start, stop)
+
+        return slice(0, 0)
+
     def keys(self):
         """
         Return variable names of variables contained in this vector (relative names).

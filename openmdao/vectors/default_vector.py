@@ -58,43 +58,28 @@ class DefaultVector(Vector):
         ndarray
             zeros array of correct size.
         """
-        system = self._system()
-        type_ = self._typ
-        iproc = self._iproc
         root_vec = self._root_vector
-        vmap = root_vec.get_var_map()
-        abs_names = system._var_relevant_names[self._name][type_]
 
-        cplx_data = None
-        scaling = {}
-        if self._do_scaling:
-            scaling['phys'] = {}
-            scaling['norm'] = {}
+        slc = self.get_root_slice()
 
-        if abs_names:
-            ind1 = vmap[abs_names[0]][0].start
-            ind2 = vmap[abs_names[-1]][0].stop
-        else:
-            ind1 = ind2 = 0
-
-        if self._ncol > 1:
-            ind1 = ind1 // self._ncol
-            ind2 = ind2 // self._ncol
-
-        data = root_vec._data[ind1:ind2]
+        data = root_vec._data[slc]
 
         # Extract view for complex storage too.
+        cplx_data = None
         if self._alloc_complex:
-            cplx_data = root_vec._cplx_data[ind1:ind2]
+            cplx_data = root_vec._cplx_data[slc]
 
         if self._do_scaling:
-            for typ in ('phys', 'norm'):
+            scaling = {'phys': {}, 'norm': {}}
+            for typ in scaling:
                 root_scale = root_vec._scaling[typ]
                 rs0 = root_scale[0]
                 if rs0 is None:
-                    scaling[typ] = (rs0, root_scale[1][ind1:ind2])
+                    scaling[typ] = (rs0, root_scale[1][slc])
                 else:
-                    scaling[typ] = (rs0[ind1:ind2], root_scale[1][ind1:ind2])
+                    scaling[typ] = (rs0[slc], root_scale[1][slc])
+        else:
+            scaling = None
 
         return data, cplx_data, scaling
 
@@ -145,61 +130,18 @@ class DefaultVector(Vector):
         """
         Internally assemble views onto the vectors.
         """
-        system = self._system()
-        type_ = self._typ
-        kind = self._kind
-        iproc = self._iproc
-        ncol = self._ncol
-
-        do_scaling = self._do_scaling
-        if do_scaling:
-            factors = system._scale_factors
+        if self._do_scaling:
+            kind = self._kind
+            factors = self._system()._scale_factors
             scaling = self._scaling
 
-        alloc_complex = self._alloc_complex
-
-        allprocs_abs2idx_t = system._var_allprocs_abs2idx[self._name]
-        sizes_t = system._var_sizes[self._name][type_]
-        offs = system._get_var_offsets()[self._name][type_]
-        if offs.size > 0:
-            offs = offs[iproc].copy()
-            # turn global offset into local offset
-            start = offs[0]
-            offs -= start
-        else:
-            offs = offs[0].copy()
-        offsets_t = offs
-
-        abs2meta = system._var_abs2meta
-        for abs_name in system._var_relevant_names[self._name][type_]:
-            idx = allprocs_abs2idx_t[abs_name]
-
-            ind1 = offsets_t[idx]
-            ind2 = ind1 + sizes_t[iproc, idx]
-            shape = abs2meta[abs_name]['shape']
-            if ncol > 1:
-                if not isinstance(shape, tuple):
-                    shape = (shape,)
-                shape = tuple(list(shape) + [ncol])
-
-            v = self._data[ind1:ind2]
-            if shape != v.shape:
-                v = v.view()
-                v.shape = shape
-
-            if alloc_complex:
-                v = self._cplx_data[ind1:ind2]
-                if shape != v.shape:
-                    v = v.view()
-                    v.shape = shape
-
-            if do_scaling:
+            for abs_name, (slc, _) in self.get_var_map().items():
                 for scaleto in ('phys', 'norm'):
                     scale0, scale1 = factors[abs_name][kind, scaleto]
                     vec = scaling[scaleto]
                     if vec[0] is not None:
-                        vec[0][ind1:ind2] = scale0
-                    vec[1][ind1:ind2] = scale1
+                        vec[0][slc] = scale0
+                    vec[1][slc] = scale1
 
     def add_at_indices(self, idxs, value):
         """
