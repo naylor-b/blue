@@ -112,7 +112,7 @@ class DefaultVector(Vector):
                     self._scaling['norm'] = (np.zeros(data.size), np.ones(data.size))
                 elif self._name == 'linear':
                     # reuse the nonlinear scaling vecs since they're the same as ours
-                    nlvec = self._system()._root_vecs[self._kind]['nonlinear']
+                    nlvec = system._root_vecs[self._kind]['nonlinear']
                     self._scaling['phys'] = (None, nlvec._scaling['phys'][1])
                     self._scaling['norm'] = (None, nlvec._scaling['norm'][1])
                 else:
