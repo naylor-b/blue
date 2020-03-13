@@ -134,12 +134,6 @@ class Vector(object):
         self._cplx_data = None
         self._under_complex_step = False
 
-        self._do_scaling = ((kind == 'input' and system._has_input_scaling) or
-                            (kind == 'output' and system._has_output_scaling) or
-                            (kind == 'residual' and system._has_resid_scaling))
-
-        self._scaling = {}
-
         if root_vector is None:
             self._root_vector = self
         else:
@@ -152,8 +146,12 @@ class Vector(object):
                     'been created in system %s' % system.pathname)
             self._update_root_data()
 
+        self._do_scaling = ((kind == 'input' and system._has_input_scaling) or
+                            (kind == 'output' and system._has_output_scaling) or
+                            (kind == 'residual' and system._has_resid_scaling))
+
         self._initialize_data(root_vector)
-        self._initialize_views()
+        self._init_scaling()
 
         self.read_only = False
 

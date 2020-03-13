@@ -20,25 +20,23 @@ class DefaultVector(Vector):
         """
         Resize the root data if necesary (i.e., due to reconfiguration).
         """
-        system = self._system()
         type_ = self._typ
-        vec_name = self._name
         root_vec = self._root_vector
-        vmap = root_vec.get_var_map()
-        abs_names = system._var_relevant_names[self._name][type_]
+        abs_names = self._system()._var_relevant_names[self._name][type_]
 
         if abs_names:
-            sys_offset = vmap[abs_names[0]][0].start
-            last = vmap[abs_names[-1]][0].stop
-            sys_size = last - sys_offset
-            size_after_sys = root_vec._data.size - last
+            slc = self.get_root_slice()
+            start = slc.start
+            stop = slc.stop
+            sys_size = stop - start
+            size_after_sys = root_vec._data.size - stop
         else:
-            sys_offset = size_after_sys = sys_size = 0
+            start = size_after_sys = sys_size = 0
 
         old_sizes_total = root_vec._data.size
 
         root_vec._data = np.concatenate([
-            root_vec._data[:sys_offset],
+            root_vec._data[:start],
             np.zeros(sys_size),
             root_vec._data[old_sizes_total - size_after_sys:],
         ])
@@ -47,7 +45,7 @@ class DefaultVector(Vector):
             root_vec._cplx_data = np.zeros(root_vec._data.size, dtype=complex)
 
         root_vec._slices = None
-        root_vec._initialize_views()
+        root_vec._init_scaling()
 
     def _extract_root_data(self):
         """
@@ -126,7 +124,7 @@ class DefaultVector(Vector):
         else:
             self._data, self._cplx_data, self._scaling = self._extract_root_data()
 
-    def _initialize_views(self):
+    def _init_scaling(self):
         """
         Internally assemble views onto the vectors.
         """
