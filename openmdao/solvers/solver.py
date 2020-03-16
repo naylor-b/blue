@@ -658,7 +658,7 @@ class NonlinearSolver(Solver):
         for vec_type, arr in self._err_cache.items():
             out_strs.append('\n# nonlinear %ss\n' % vec_type)
             vec = system._vectors[vec_type]['nonlinear']
-            vdict = {n: arr[slc[0]] for n, slc in vec.get_var_map().items()}
+            vdict = {n: arr[slc[0]] for n, slc in vec.get_var_slice_info()[0].items()}
             out_strs.append(pprint.pformat(vdict))
             out_strs.append('\n')
 

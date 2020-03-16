@@ -647,7 +647,7 @@ class _TotalJacInfo(object):
             sizes = model._var_sizes[vecname]['output']
             offsets = model._var_offsets[vecname]['output']
             ncols = model._vectors['output'][vecname]._ncol
-            slices = model._vectors['output'][vecname].get_var_map()
+            slices, _ = model._vectors['output'][vecname].get_var_slice_info()
             abs2idx = model._var_allprocs_abs2idx[vecname]
             jstart = jend = 0
 

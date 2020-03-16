@@ -7,7 +7,7 @@ from collections import OrderedDict
 import numpy as np
 
 from openmdao.utils.name_maps import prom_name2abs_name, rel_name2abs_name
-from openmdao.utils.array_utils import yield_var_map
+from openmdao.utils.array_utils import yield_slice_info
 
 _full_slice = slice(None)
 _type_map = {
@@ -180,7 +180,7 @@ class Vector(object):
         """
         return self._data.size
 
-    def get_var_map(self):
+    def get_var_slice_info(self):
         """
         Return a dict of var names mapped to their slice in the local data array.
 
@@ -192,15 +192,15 @@ class Vector(object):
         if self._slices is None:
             system = self._system()
             abs_names = system._var_relevant_names[self._name][self._typ]
-            # if self is self._root_vector:
-            #     self._slices = OrderedDict(yield_var_map(abs_names, system._var_abs2meta,
-            #                                self._ncol))
-            # else:
-            #     root_vmap = self._root_vector.get_var_map()
-            #     self._slices = OrderedDict((n, root_vmap[n]) for n in abs_names)
-            self._slices = dict(yield_var_map(abs_names, system._var_abs2meta, self._ncol))
+            self._slices = slices = {}
+            stop = 0
+            for abs_name, start, stop, shape in yield_slice_info(abs_names, system._var_abs2meta,
+                                                                 self._ncol):
+                slices[abs_name] = (slice(start, stop), shape)
 
-        return self._slices
+            self._loc_size = stop
+
+        return self._slices, self._loc_size
 
     def get_root_slice(self):
         """
@@ -217,7 +217,7 @@ class Vector(object):
         abs_names = self._system()._var_relevant_names[self._name][self._typ]
 
         if abs_names:
-            vmap = self._root_vector.get_var_map()
+            vmap, _ = self._root_vector.get_var_slice_info()
 
             # get the extent of the slice this entire vec occupies in the root vec
             start = vmap[abs_names[0]][0].start
@@ -387,7 +387,7 @@ class Vector(object):
         if abs_name not in self._names:
             raise KeyError('Variable name "{}" not found.'.format(abs_name))
 
-        vmap = self.get_var_map()
+        vmap, _ = self.get_var_slice_info()
         slc, shape = vmap[abs_name]
 
         if self._ncol > 1:
@@ -417,7 +417,7 @@ class Vector(object):
         if abs_name not in self._names:
             raise KeyError('Variable name "{}" not found.'.format(abs_name))
 
-        vmap = self.get_var_map()
+        vmap, _ = self.get_var_slice_info()
         slc, shape = vmap[abs_name]
 
         if self._ncol > 1:

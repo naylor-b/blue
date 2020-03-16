@@ -94,28 +94,29 @@ class DefaultVector(Vector):
             system = self._system()
             abs_names = system._var_relevant_names[self._name][self._typ]
             if abs_names:
-                vmap = self.get_var_map()
-                self._data = np.zeros(vmap[abs_names[-1]][0].stop - vmap[abs_names[0]][0].start)
+                vmap, size = self.get_var_slice_info()
+                self._data = np.zeros(size)
             else:
                 self._data = np.zeros(0)
+                size = 0
 
             if self._ncol > 1:
-                self._data = self._data.reshape((self._data.size // self._ncol, self._ncol))
+                self._data = self._data.reshape((size // self._ncol, self._ncol))
 
             if self._do_scaling:
                 self._scaling = {}
                 data = self._data
                 if self._name == 'nonlinear':
-                    self._scaling['phys'] = (np.zeros(data.size), np.ones(data.size))
-                    self._scaling['norm'] = (np.zeros(data.size), np.ones(data.size))
+                    self._scaling['phys'] = (np.zeros(size), np.ones(data.size))
+                    self._scaling['norm'] = (np.zeros(size), np.ones(data.size))
                 elif self._name == 'linear':
                     # reuse the nonlinear scaling vecs since they're the same as ours
                     nlvec = system._root_vecs[self._kind]['nonlinear']
                     self._scaling['phys'] = (None, nlvec._scaling['phys'][1])
                     self._scaling['norm'] = (None, nlvec._scaling['norm'][1])
                 else:
-                    self._scaling['phys'] = (None, np.ones(data.size))
-                    self._scaling['norm'] = (None, np.ones(data.size))
+                    self._scaling['phys'] = (None, np.ones(size))
+                    self._scaling['norm'] = (None, np.ones(size))
 
             # Allocate imaginary for complex step
             if self._alloc_complex:
@@ -133,13 +134,13 @@ class DefaultVector(Vector):
             factors = self._system()._scale_factors
             scaling = self._scaling
 
-            for abs_name, (slc, _) in self.get_var_map().items():
+            for abs_name, (slc, _) in self.get_var_slice_info()[0].items():
                 for scaleto in ('phys', 'norm'):
                     scale0, scale1 = factors[abs_name][kind, scaleto]
-                    vec = scaling[scaleto]
-                    if vec[0] is not None:
-                        vec[0][slc] = scale0
-                    vec[1][slc] = scale1
+                    vec0, vec1 = scaling[scaleto]
+                    if vec0 is not None:
+                        vec0[slc] = scale0
+                    vec1[slc] = scale1
 
     def add_at_indices(self, idxs, value):
         """

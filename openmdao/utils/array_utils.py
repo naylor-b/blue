@@ -459,9 +459,9 @@ def dv_abs_complex(x, x_deriv):
     return x, x_deriv
 
 
-def yield_var_map(names, name2meta, ncol=1):
+def yield_slice_info(names, name2meta, ncol=1):
     """
-    Yield (name, (slice, shape)) for the given list of names and metadata.
+    Yield (name, start, stop, shape) for the given list of names and metadata.
 
     Parameters
     ----------
@@ -474,17 +474,17 @@ def yield_var_map(names, name2meta, ncol=1):
 
     Yields
     ------
-    tuple of the form (str, slice)
-        (viable_name, corresponding slice)
+    tuple of the form (str, int, int, tuple)
+        (viable_name, start, stop, shape)
     """
-    start = end = 0
+    start = stop = 0
     if ncol == 1:
         for name in names:
-            end += name2meta[name]['size']
-            yield name, (slice(start, end), name2meta[name]['shape'])
-            start = end
+            stop += name2meta[name]['size']
+            yield name, start, stop, name2meta[name]['shape']
+            start = stop
     else:
         for name in names:
-            end += name2meta[name]['size'] * ncol
-            yield name, (slice(start, end), name2meta[name]['shape'])
-            start = end
+            stop += name2meta[name]['size'] * ncol
+            yield name, start, stop, name2meta[name]['shape']
+            start = stop
