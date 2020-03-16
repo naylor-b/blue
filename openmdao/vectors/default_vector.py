@@ -117,6 +117,8 @@ class DefaultVector(Vector):
                 else:
                     self._scaling['phys'] = (None, np.ones(size))
                     self._scaling['norm'] = (None, np.ones(size))
+            else:
+                self._scaling = None
 
             # Allocate imaginary for complex step
             if self._alloc_complex:

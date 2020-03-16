@@ -1680,6 +1680,7 @@ class System(object):
             self._vector_class = self._local_vector_class
 
         vector_class = self._vector_class
+        root_sys = root_vectors['output']['nonlinear']._system()
 
         for vec_name in self._rel_vec_name_list:
 
@@ -1688,9 +1689,12 @@ class System(object):
 
             for kind in ['input', 'output', 'residual']:
                 rootvec = root_vectors[kind][vec_name]
-                vectors[kind][vec_name] = vector_class(
-                    vec_name, kind, self, rootvec, resize=resize,
-                    alloc_complex=vec_alloc_complex, ncol=rootvec._ncol)
+                if self is root_sys:
+                    vectors[kind][vec_name] = root_vectors[kind][vec_name]
+                else:
+                    vectors[kind][vec_name] = vector_class(
+                        vec_name, kind, self, rootvec, resize=resize,
+                        alloc_complex=vec_alloc_complex, ncol=rootvec._ncol)
 
         self._inputs = vectors['input']['nonlinear']
         self._outputs = vectors['output']['nonlinear']
