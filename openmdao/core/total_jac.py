@@ -646,8 +646,9 @@ class _TotalJacInfo(object):
             jac_inds = []
             sizes = model._var_sizes[vecname]['output']
             offsets = model._var_offsets[vecname]['output']
-            ncols = model._vectors['output'][vecname]._ncol
-            slices, _ = model._vectors['output'][vecname].get_var_slice_info()
+            vec = model._vectors['output'][vecname]
+            ncols = vec._ncol
+            slices, _, _ = vec._get_offset_view()
             abs2idx = model._var_allprocs_abs2idx[vecname]
             jstart = jend = 0
 
@@ -662,7 +663,7 @@ class _TotalJacInfo(object):
 
                 if name in abs2idx and name in slices:
                     var_idx = abs2idx[name]
-                    slc, _ = slices[name]
+                    start, stop, _ = slices[name]
                     if meta['distributed']:
                         dist_offset = np.sum(sizes[:myproc, var_idx])
                         if indices is not None:
@@ -676,7 +677,7 @@ class _TotalJacInfo(object):
                                 if fwd:
                                     name2jinds[name] = jac_inds[-1]
                         else:
-                            inds.append(np.arange(slc.start / ncols, slc.stop / ncols,
+                            inds.append(np.arange(start // ncols, stop // ncols,
                                                   dtype=INT_DTYPE))
                             jac_inds.append(np.arange(jstart + dist_offset,
                                             jstart + dist_offset + sizes[myproc, var_idx],
@@ -684,7 +685,7 @@ class _TotalJacInfo(object):
                             if fwd:
                                 name2jinds[name] = jac_inds[-1]
                     else:
-                        idx_array = np.arange(slc.start // ncols, slc.stop // ncols,
+                        idx_array = np.arange(start // ncols, stop // ncols,
                                               dtype=INT_DTYPE)
                         if indices is not None:
                             idx_array = idx_array[indices]

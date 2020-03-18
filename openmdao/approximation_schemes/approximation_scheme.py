@@ -138,9 +138,7 @@ class ApproximationScheme(object):
         prom2abs_in = system._var_allprocs_prom2abs_list['input']
         approx_wrt_idx = system._owns_approx_wrt_idx
 
-        out_slices, _ = outputs.get_var_slice_info()
-        in_slices, _ = inputs.get_var_slice_info()
-
+        out_slices, _, _ = outputs._get_offset_view()
         is_total = isinstance(system, Group)
 
         system._update_wrt_matches(system._coloring_info)
@@ -189,11 +187,11 @@ class ApproximationScheme(object):
                 jac_slices[(abs_of, abs_wrt)] = (rslice, slice(coffset, cend))
 
             if is_total and (approx_of_idx or len_full_ofs > len(of_names)):
-                slc, _ = out_slices[abs_of]
+                start, stop, _ = out_slices[abs_of]
                 if abs_of in approx_of_idx:
-                    full_idxs.append(np.arange(slc.start, slc.stop)[approx_of_idx[abs_of]])
+                    full_idxs.append(np.arange(start, stop)[approx_of_idx[abs_of]])
                 else:
-                    full_idxs.append(range(slc.start, slc.stop))
+                    full_idxs.append(range(start, stop))
         if full_idxs:
             tmpJ['@row_idx_map'] = np.hstack(full_idxs)
 
@@ -230,8 +228,8 @@ class ApproximationScheme(object):
         inputs = system._inputs
         abs2meta = system._var_allprocs_abs2meta
 
-        out_slices, _ = outputs.get_var_slice_info()
-        in_slices, _ = inputs.get_var_slice_info()
+        out_slices, _, _ = outputs._get_offset_view()
+        in_slices, _, _ = inputs._get_offset_view()
 
         approx_wrt_idx = system._owns_approx_wrt_idx
         coloring = system._get_static_coloring()
@@ -259,13 +257,13 @@ class ApproximationScheme(object):
             if wrt in approx_wrt_idx:
                 in_idx = np.array(approx_wrt_idx[wrt], dtype=int)
                 if arr is not None:
-                    in_idx += slices[wrt][0].start
+                    in_idx += slices[wrt][0]
             else:
                 if arr is None:
                     in_idx = range(abs2meta[wrt]['size'])
                 else:
-                    slc = slices[wrt][0]
-                    in_idx = range(slc.start, slc.stop)
+                    start, stop, _ = slices[wrt]
+                    in_idx = range(start, stop)
 
             # Directional derivatives for quick partial checking.
             # We place the indices in a list so that they are all stepped at the same time.
@@ -355,10 +353,11 @@ class ApproximationScheme(object):
                     if is_parallel:
                         for of, (oview, out_idxs, _, _) in J['ofs'].items():
                             if owns[of] == iproc:
+                                start, stop, _ = out_slices[of]
                                 results[(of, wrt)].append(
                                     (i_count,
                                         self._transform_result(
-                                            result[out_slices[of][0]][out_idxs]).copy()))
+                                            result[start:stop][out_idxs]).copy()))
                     else:
                         J['data'][:, i_count] = self._transform_result(result[full_idxs])
 
@@ -499,8 +498,8 @@ def _get_wrt_subjacs(system, approxs):
     J = {}
     ofdict = {}
     nondense = {}
-    slicedict, _ = system._outputs.get_var_slice_info()
-    abs_out_names = [n for n in system._var_allprocs_abs_names['output'] if n in slicedict]
+    active_outs = system._outputs._names
+    abs_out_names = [n for n in system._var_allprocs_abs_names['output'] if n in active_outs]
 
     for key, options in approxs:
         of, wrt = key
@@ -565,13 +564,14 @@ def _get_wrt_subjacs(system, approxs):
 
         if abs_out_names != sorted_ofs:
             full_idxs = []
+            slicedict, _, _ = system._outputs._get_offset_view()
             for sof in sorted_ofs:
                 if sof in slicedict:
-                    slc, _ = slicedict[sof]
+                    start, stop, _ = slicedict[sof]
                     if sof in approx_of_idx:
-                        full_idxs.append(np.arange(slc.start, slc.stop)[approx_of_idx[sof]])
+                        full_idxs.append(np.arange(start, stop)[approx_of_idx[sof]])
                     else:
-                        full_idxs.append(range(slc.start, slc.stop))
+                        full_idxs.append(range(start, stop))
             J[wrt]['loc_outvec_idxs'] = np.hstack(full_idxs)
         else:
             J[wrt]['loc_outvec_idxs'] = _full_slice

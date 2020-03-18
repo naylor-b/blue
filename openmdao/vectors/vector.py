@@ -58,8 +58,6 @@ class Vector(object):
         If True, then space for the complex vector is also allocated.
     _data : ndarray
         Actual allocated data.
-    _slices : dict
-        Mapping of var name to slice.
     _cplx_data : ndarray
         Actual allocated data under complex step.
     _under_complex_step : bool
@@ -80,6 +78,14 @@ class Vector(object):
         When True, values in the vector cannot be changed via the user __setitem__ API.
     _under_complex_step : bool
         When True, self._data is replaced with self._cplx_data.
+    _age : int
+        Used to determine if this vector needs to update its cached values from the root vector.
+    _start : int
+        Starting index for this vector within the root vector.
+    _stop : int
+        Ending index + 1 for this vector within the root vector.
+    _offset_view : OffsetDict
+        Dict of range and shape for each variable into this vector.
     """
 
     # Listing of relevant citations that should be referenced when
@@ -116,6 +122,8 @@ class Vector(object):
         self._ncol = ncol
         self._icol = None
         self._relevant = relevant
+        self._age = -1
+        self._offset_view = None
 
         self._system = weakref.ref(system)
 
@@ -127,7 +135,8 @@ class Vector(object):
 
         self._root_vector = None
         self._data = None
-        self._slices = None
+        self._start = None
+        self._stop = None
 
         # Support for Complex Step
         self._alloc_complex = alloc_complex
@@ -151,7 +160,7 @@ class Vector(object):
                             (kind == 'residual' and system._has_resid_scaling))
 
         self._initialize_data(root_vector)
-        self._init_scaling()
+        # self._init_scaling()
 
         self.read_only = False
 
@@ -179,57 +188,6 @@ class Vector(object):
             Total flattened length of this vector.
         """
         return self._data.size
-
-    def get_var_slice_info(self):
-        """
-        Return a dict of var names mapped to their slice in the local data array.
-
-        Returns
-        -------
-        dict
-            Mapping of var name to slice.
-        """
-        if self._slices is None:
-            system = self._system()
-            abs_names = system._var_relevant_names[self._name][self._typ]
-            self._slices = slices = {}
-            stop = 0
-            for abs_name, start, stop, shape in yield_slice_info(abs_names, system._var_abs2meta,
-                                                                 self._ncol):
-                slices[abs_name] = (slice(start, stop), shape)
-
-            self._loc_size = stop
-
-        return self._slices, self._loc_size
-
-    def get_root_slice(self):
-        """
-        Return the slice that this vector occurpies in the root vector.
-
-        Returns
-        -------
-        slice
-            The root vector slice.
-        """
-        if self is self._root_vector:
-            return slice(None)
-
-        abs_names = self._system()._var_relevant_names[self._name][self._typ]
-
-        if abs_names:
-            vmap, _ = self._root_vector.get_var_slice_info()
-
-            # get the extent of the slice this entire vec occupies in the root vec
-            start = vmap[abs_names[0]][0].start
-            stop = vmap[abs_names[-1]][0].stop
-
-            if self._ncol > 1:
-                start = start // self._ncol
-                stop = stop // self._ncol
-
-            return slice(start, stop)
-
-        return slice(0, 0)
 
     def keys(self):
         """
@@ -310,13 +268,19 @@ class Vector(object):
 
         Names are absolute names.
 
-        Returns
-        -------
-        listiterator
-            iterator over the variable names and values.
+        Yields
+        ------
+        tuple (str, ndarray)
+            Name and value of each variable.
         """
-        return ((n, self.get_view(n)) for n in self._system()._var_abs_names[self._typ]
-                if n in self._names)
+        vmap, _, _ = self._get_offset_view()
+        data = self._data
+        for n in vmap:
+            if n in self._names:
+                start, stop, shape = vmap[n]
+                val = data[start:stop]
+                val.shape = shape
+                yield (n, val)
 
     def __contains__(self, name):
         """
@@ -387,16 +351,19 @@ class Vector(object):
         if abs_name not in self._names:
             raise KeyError('Variable name "{}" not found.'.format(abs_name))
 
-        vmap, _ = self.get_var_slice_info()
-        slc, shape = vmap[abs_name]
+        start, stop, shape = self._get_offset_view()[0][abs_name]
 
-        if self._ncol > 1:
-            slc = slice(slc.start // self._ncol, slc.stop // self._ncol)
+        if self._ncol == 1:
+            val = self._data[start:stop]
+        else:
+            start = start // self._ncol
+            stop = stop // self._ncol
             if self._icol is None:
                 shape = tuple(list(shape) + [self._ncol])
-        val = self._data[slc]
-        if self._icol is not None:
-            val = val[:, self._icol]
+            val = self._data[start:stop]
+            if self._icol is not None:
+                val = val[:, self._icol]
+
         val.shape = shape
         return val
 
@@ -417,16 +384,94 @@ class Vector(object):
         if abs_name not in self._names:
             raise KeyError('Variable name "{}" not found.'.format(abs_name))
 
-        vmap, _ = self.get_var_slice_info()
-        slc, shape = vmap[abs_name]
+        vmap, _, _ = self._get_offset_view()
+        start, stop, _ = vmap[abs_name]
 
         if self._ncol > 1:
-            slc = slice(slc.start // self._ncol, slc.stop // self._ncol)
+            start = start // self._ncol
+            stop = stop // self._ncol
+            if self._icol is not None:
+                return self._data[start:stop][:, self._icol]
 
-        if self._icol is None:
-            return self._data[slc]
+        return self._data[start:stop]
+
+    def get_var_to_var_root_range(self, var1, var2):
+        """
+        Return the slice that contains variables var1 to var2.
+
+        The variables are assumed to be in ascending order by index.
+
+        Parameters
+        ----------
+        var1 : str
+            Name of starting variable.
+        var2 : str
+            Name of ending variable.
+
+        Returns
+        -------
+        int
+            The offset of this array within the root array.
+        int
+            The end index + 1 of this array within the root array.
+        """
+        vmap, _, _ = self._root_vector._get_offset_view()
+
+        # get the extent of the slice this entire vec occupies in the root vec
+        start = vmap[var1][0]
+        stop = vmap[var2][1]
+
+        if self._ncol > 1:
+            start = start // self._ncol
+            stop = stop // self._ncol
+
+        return start, stop
+
+    def get_root_range(self):
+        """
+        Return the slice that this vector occupies in the root vector.
+
+        Returns
+        -------
+        int
+            The offset of this array within the root array.
+        int
+            The end index + 1 of this array within the root array.
+        """
+        if self is self._root_vector:
+            return 0, self._data.size
+
+        abs_names = self._system()._var_relevant_names[self._name][self._typ]
+
+        if abs_names:
+            return self.get_var_to_var_root_range(abs_names[0], abs_names[-1])
+
+        return 0, 0
+
+    def _get_offset_view(self):
+        if self._age != self._root_vector._age or self._age == -1:
+            self._offset_view, self._start, self._stop = self._create_offset_view()
+            self._data = self._root_vector._data[self._start:self._stop]
+            if self._alloc_complex:
+                self._cplx_data = self._root_vector._cplx_data[self._start:self._stop]
+                if self._under_complex_step and self._data.dtype != np.complex:
+                    self._data, self._cplx_data = self._cplx_data, self._data
+
+            if self._age == -1:  # only will happen for root
+                self._age = 0
+
+        return self._offset_view, self._start, self._stop
+
+    def _create_offset_view(self):
+        vmap, _ = self._root_vector._system().get_var_range_info(self._name, self._typ, self._ncol)
+        start, stop = self.get_root_range()
+        self._age = self._root_vector._age
+        if self is self._root_vector:
+            dct = vmap
         else:
-            return self._data[slc][:, self._icol]
+            dct = _OffsetDict(vmap, start,
+                              self._system()._var_relevant_names[self._name][self._typ])
+        return dct, start, stop
 
     def __setitem__(self, name, value):
         """
@@ -554,15 +599,16 @@ class Vector(object):
         scale_to : str
             Values are "phys" or "norm" to scale to physical or normalized.
         """
-        adder, scaler = self._scaling[scale_to]
+        _, start, stop = self._get_offset_view()
+        adder, scaler = self._root_vector._scaling[scale_to]
         if self._ncol == 1:
-            self._data *= scaler
+            self._data *= scaler[start:stop]
             if adder is not None:  # nonlinear only
-                self._data += adder
+                self._data += adder[start:stop]
         else:
-            self._data *= scaler[:, np.newaxis]
+            self._data *= scaler[start:stop, np.newaxis]
             if adder is not None:  # nonlinear only
-                self._data += adder
+                self._data += adder[start:stop, np.newaxis]
 
     def set_vec(self, vec):
         """
@@ -705,3 +751,49 @@ class Vector(object):
 
         self._data, self._cplx_data = self._cplx_data, self._data
         self._under_complex_step = active
+
+
+class _OffsetDict(object):
+    """
+    Fake dictionary that returns offset values for variable ranges.
+
+    Attributes
+    ----------
+    _root_dct : OrderedDict
+        Mapping of var name to start, stop, shape in root vector.
+    _offset : int
+        The offset of these ranges from the root vector ranges.
+    _vnames : list of str
+        List of names of variables in this fake dict.
+    """
+
+    __slots__ = ['_root_dct', '_offset', '_vnames']
+
+    def __init__(self, root_dct, offset, vnames):
+        self._root_dct = root_dct
+        self._offset = offset
+        self._vnames = vnames
+
+    def __getitem__(self, abs_name):
+        start, stop, shape = self._root_dct[abs_name]
+        return start - self._offset, stop - self._offset, shape
+
+    def __iter__(self):
+        return iter(self._vnames)
+
+    def keys(self):
+        return iter(self._vnames)
+
+    def values(self):
+        rdct = self._root_dct
+        off = self._offset
+        for n in self._vnames:
+            start, stop, shape = rdct[n]
+            yield (start - off, stop - off, shape)
+
+    def items(self):
+        rdct = self._root_dct
+        off = self._offset
+        for n in self._vnames:
+            start, stop, shape = rdct[n]
+            yield (n, (start - off, stop - off, shape))

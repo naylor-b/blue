@@ -29,7 +29,7 @@ from openmdao.utils.mpi import MPI
 from openmdao.utils.options_dictionary import OptionsDictionary
 from openmdao.utils.record_util import create_local_meta, check_path
 from openmdao.utils.variable_table import write_var_table
-from openmdao.utils.array_utils import evenly_distrib_idxs
+from openmdao.utils.array_utils import evenly_distrib_idxs, yield_slice_info
 from openmdao.utils.graph_utils import all_connected_nodes
 from openmdao.utils.name_maps import rel_name2abs_name, name2abs_name
 from openmdao.utils.coloring import _compute_coloring, Coloring, \
@@ -303,6 +303,8 @@ class System(object):
         used if this System does no partial or semi-total coloring.
     _first_call_to_linearize : bool
         If True, this is the first call to _linearize.
+    _var_slice_infos : dict
+        Dict of varname mapped to start, stop, shape for each vector name/type.
     """
 
     _undefined = object()
@@ -377,6 +379,8 @@ class System(object):
         self._var_allprocs_discrete = {'input': {}, 'output': {}}
 
         self._var_allprocs_abs2idx = {}
+
+        self._var_slice_infos = {}
 
         self._var_sizes = None
         self._owned_sizes = None
@@ -607,8 +611,10 @@ class System(object):
                 self._vector_class = self._local_vector_class
 
             vector_class = self._vector_class
+            self._var_slice_infos = {}
 
             for vec_name in vec_names:
+                self._var_slice_infos[vec_name] = slice_infos = {}
                 sizes = self._var_sizes[vec_name]['output']
                 ncol = 1
                 rel = None
@@ -628,10 +634,13 @@ class System(object):
                         rdct, _ = relevant[vec_name]['@all']
                         rel = rdct['output']
 
-                for key in ['input', 'output', 'residual']:
-                    root_vectors[key][vec_name] = vector_class(vec_name, key, self,
-                                                               alloc_complex=alloc_complex,
-                                                               ncol=ncol, relevant=rel)
+                for typ in ('input', 'output'):
+                    slice_infos[typ] = self.get_var_range_info(vec_name, typ, ncol)
+
+                for key in ('input', 'output', 'residual'):
+                    root_vectors[key][vec_name] = rv = vector_class(vec_name, key, self,
+                                                                    alloc_complex=alloc_complex,
+                                                                    ncol=ncol, relevant=rel)
         else:
 
             for key, vardict in self._vectors.items():
@@ -643,6 +652,42 @@ class System(object):
         root_vectors['upper'] = upper
 
         return root_vectors
+
+    def get_var_range_info(self, vec_name, vec_type, ncol):
+        """
+        Return a dict of var names mapped to their range in the local data array.
+
+        Parameters
+        ----------
+        vec_name : str
+            Name of vector ('nonlinear', 'linear', etc.)
+        vec_type : str
+            'input' or 'output'
+        ncol : int
+            Number of columns in data array.
+
+        Returns
+        -------
+        dict
+            Mapping of var name to (start, stop, shape).
+        int
+            Full array local size.
+        """
+        try:
+            # after root vectors are computed, there will be no KeyErrors
+            return self._var_slice_infos[vec_name][vec_type]
+        except KeyError:
+            pass
+
+        abs_names = self._var_relevant_names[vec_name][vec_type]
+        slices = OrderedDict()
+        stop = 0
+        for abs_name, start, stop, shape in yield_slice_info(abs_names, self._var_abs2meta, ncol):
+            slices[abs_name] = (start, stop, shape)
+
+        self._var_slice_infos[vec_name][vec_type] = slices
+
+        return slices, stop
 
     def _get_approx_scheme(self, method):
         """

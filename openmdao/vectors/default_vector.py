@@ -25,9 +25,7 @@ class DefaultVector(Vector):
         abs_names = self._system()._var_relevant_names[self._name][type_]
 
         if abs_names:
-            slc = self.get_root_slice()
-            start = slc.start
-            stop = slc.stop
+            start, stop = self.get_root_range()
             sys_size = stop - start
             size_after_sys = root_vec._data.size - stop
         else:
@@ -44,7 +42,6 @@ class DefaultVector(Vector):
         if self._alloc_complex and root_vec._cplx_data.size != root_vec._data.size:
             root_vec._cplx_data = np.zeros(root_vec._data.size, dtype=complex)
 
-        root_vec._slices = None
         root_vec._init_scaling()
 
     def _extract_root_data(self):
@@ -58,7 +55,8 @@ class DefaultVector(Vector):
         """
         root_vec = self._root_vector
 
-        slc = self.get_root_slice()
+        start, stop = self.get_root_range()
+        slc = slice(start, stop)
 
         data = root_vec._data[slc]
 
@@ -94,7 +92,7 @@ class DefaultVector(Vector):
             system = self._system()
             abs_names = system._var_relevant_names[self._name][self._typ]
             if abs_names:
-                vmap, size = self.get_var_slice_info()
+                vmap, size = system.get_var_range_info(self._name, self._typ, self._ncol)
                 self._data = np.zeros(size)
             else:
                 self._data = np.zeros(0)
@@ -102,6 +100,10 @@ class DefaultVector(Vector):
 
             if self._ncol > 1:
                 self._data = self._data.reshape((size // self._ncol, self._ncol))
+
+            # Allocate imaginary for complex step
+            if self._alloc_complex:
+                self._cplx_data = np.zeros(self._data.shape, dtype=np.complex)
 
             if self._do_scaling:
                 self._scaling = {}
@@ -117,12 +119,10 @@ class DefaultVector(Vector):
                 else:
                     self._scaling['phys'] = (None, np.ones(size))
                     self._scaling['norm'] = (None, np.ones(size))
+
+                self._init_scaling()
             else:
                 self._scaling = None
-
-            # Allocate imaginary for complex step
-            if self._alloc_complex:
-                self._cplx_data = np.zeros(self._data.shape, dtype=np.complex)
 
         else:
             self._data, self._cplx_data, self._scaling = self._extract_root_data()
@@ -135,14 +135,15 @@ class DefaultVector(Vector):
             kind = self._kind
             factors = self._system()._scale_factors
             scaling = self._scaling
+            slcdict, _, _ = self._get_offset_view()
 
-            for abs_name, (slc, _) in self.get_var_slice_info()[0].items():
+            for abs_name, (start, stop, _) in slcdict.items():
                 for scaleto in ('phys', 'norm'):
                     scale0, scale1 = factors[abs_name][kind, scaleto]
                     vec0, vec1 = scaling[scaleto]
                     if vec0 is not None:
-                        vec0[slc] = scale0
-                    vec1[slc] = scale1
+                        vec0[start:stop] = scale0
+                    vec1[start:stop] = scale1
 
     def add_at_indices(self, idxs, value):
         """
@@ -155,7 +156,6 @@ class DefaultVector(Vector):
         value : float or ndarray
             The value being added.
         """
-        # self._root_vector._data[idxs] += value
         self._data[idxs] += value
 
     def __iadd__(self, vec):

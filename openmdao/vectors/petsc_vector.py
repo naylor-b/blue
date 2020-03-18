@@ -129,11 +129,11 @@ class PETScVector(DefaultVector):
                 # temporarilly zero them out for the norm calculation.
                 dup_inds = []
                 abs2meta = system._var_allprocs_abs2meta
-                for name, tup in self.get_var_slice_info()[0].items():
-                    idx_slice, _ = tup
+                for name, tup in self._get_offset_view()[0].items():
+                    start, stop, _ = tup
                     owning_rank = system._owning_rank[name]
                     if not abs2meta[name]['distributed'] and owning_rank != system.comm.rank:
-                        dup_inds.extend(range(idx_slice.start, idx_slice.stop))
+                        dup_inds.extend(range(start, stop))
 
                 self._dup_inds = np.array(dup_inds, dtype=int)
             else:
