@@ -736,8 +736,29 @@ class System(object):
         else:
             lower = vector_class('nonlinear', 'output', self)
             upper = vector_class('nonlinear', 'output', self)
-            lower._data[:] = -np.inf
-            upper._data[:] = np.inf
+            lower.set_val(-np.inf)
+            upper.set_val(np.inf)
+
+            if self._has_bounds:
+                abs2meta = self._var_abs2meta
+                for abs_name in self._var_abs_names['output']:
+                    meta = abs2meta[abs_name]
+                    var_lower = meta['lower']
+                    var_upper = meta['upper']
+                    ref0 = meta['ref0']
+                    ref = meta['ref']
+
+                    if not np.isscalar(ref0):
+                        ref0 = ref0.reshape(meta['shape'])
+                    if not np.isscalar(ref):
+                        ref = ref.reshape(meta['shape'])
+
+                    if var_lower is not None:
+                        lower.set_val_abs(abs_name, (var_lower - ref0) / (ref - ref0))
+
+                    if var_upper is not None:
+                        upper.set_val_abs(abs_name, (var_upper - ref0) / (ref - ref0))
+
             return lower, upper
 
     def resetup(self, setup_mode='full'):
@@ -1764,32 +1785,16 @@ class System(object):
         resize : bool
             Whether to resize the root vectors - i.e, because this system is initiating a reconf.
         """
-        vector_class = root_lower.__class__
-        self._lower_bounds = lower = vector_class(
+        if self is root_lower._system():
+            self._lower_bounds = root_lower
+            self._upper_bounds = root_upper
+            return
+
+        self._lower_bounds = root_lower.__class__(
             'nonlinear', 'output', self, root_lower, resize=resize)
 
-        self._upper_bounds = upper = vector_class(
+        self._upper_bounds = root_upper.__class__(
             'nonlinear', 'output', self, root_upper, resize=resize)
-
-        if self._has_bounds:
-            abs2meta = self._var_abs2meta
-            for abs_name in self._var_abs_names['output']:
-                meta = abs2meta[abs_name]
-                var_lower = meta['lower']
-                var_upper = meta['upper']
-                ref0 = meta['ref0']
-                ref = meta['ref']
-
-                if not np.isscalar(ref0):
-                    ref0 = ref0.reshape(meta['shape'])
-                if not np.isscalar(ref):
-                    ref = ref.reshape(meta['shape'])
-
-                if var_lower is not None:
-                    lower.set_val_abs(abs_name, (var_lower - ref0) / (ref - ref0))
-
-                if var_upper is not None:
-                    upper.set_val_abs(abs_name, (var_upper - ref0) / (ref - ref0))
 
     def _compute_root_scale_factors(self):
         """
