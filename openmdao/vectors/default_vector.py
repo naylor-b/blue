@@ -44,41 +44,6 @@ class DefaultVector(Vector):
 
         root_vec._init_scaling()
 
-    def _extract_root_data(self):
-        """
-        Extract views of arrays from root_vector.
-
-        Returns
-        -------
-        ndarray
-            zeros array of correct size.
-        """
-        root_vec = self._root_vector
-
-        start, stop = self.get_root_range()
-        slc = slice(start, stop)
-
-        data = root_vec._data[slc]
-
-        # Extract view for complex storage too.
-        cplx_data = None
-        if self._alloc_complex:
-            cplx_data = root_vec._cplx_data[slc]
-
-        if self._do_scaling:
-            scaling = {'phys': {}, 'norm': {}}
-            for typ in scaling:
-                root_scale = root_vec._scaling[typ]
-                rs0 = root_scale[0]
-                if rs0 is None:
-                    scaling[typ] = (rs0, root_scale[1][slc])
-                else:
-                    scaling[typ] = (rs0[slc], root_scale[1][slc])
-        else:
-            scaling = None
-
-        return data, cplx_data, scaling
-
     def _initialize_data(self, root_vector):
         """
         Internally allocate data array.
@@ -125,7 +90,7 @@ class DefaultVector(Vector):
                 self._scaling = None
 
         else:
-            self._data, self._cplx_data, self._scaling = self._extract_root_data()
+            self._get_offset_view()
 
     def _init_scaling(self):
         """

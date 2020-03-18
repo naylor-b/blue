@@ -611,6 +611,30 @@ class Vector(object):
             if adder is not None:  # nonlinear only
                 self._data += adder[start:stop, np.newaxis]
 
+    def get_scaling(self):
+        """
+        Return the scaling dictionary for this vector.
+
+        Returns
+        -------
+        dict
+            The scaling dictionary.
+        """
+        if self is self._root_vector:
+            return self._scaling
+
+        if self._do_scaling:
+            _, start, stop = self._get_offset_view()
+            scaling = self._root_vector._scaling.copy()
+            for scale_to in scaling:
+                adder, scaler = scaling[scale_to]
+                scaler = scaler[start:stop]
+                if adder is not None:
+                    adder = adder[start:stop]
+                scaling[scale_to] = (adder, scaler)
+
+            return scaling
+
     def set_vec(self, vec):
         """
         Set the value of this vector to that of the incoming vector.
