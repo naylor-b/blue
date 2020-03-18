@@ -360,9 +360,9 @@ class Vector(object):
             stop = stop // self._ncol
             if self._icol is None:
                 shape = tuple(list(shape) + [self._ncol])
-            val = self._data[start:stop]
-            if self._icol is not None:
-                val = val[:, self._icol]
+                val = self._data[start:stop]
+            else:
+                val = self._data[start:stop, self._icol]
 
         val.shape = shape
         return val
@@ -469,7 +469,8 @@ class Vector(object):
         if self is self._root_vector:
             dct = vmap
         else:
-            dct = _OffsetDict(vmap, start,
+            strt = start if self._ncol == 1 else start * self._ncol
+            dct = _OffsetDict(vmap, strt,
                               self._system()._var_relevant_names[self._name][self._typ])
         return dct, start, stop
 
@@ -624,9 +625,9 @@ class Vector(object):
         raise NotImplementedError('set_vec not defined for vector type %s' %
                                   type(self).__name__)
 
-    def set_const(self, val):
+    def set_val(self, val):
         """
-        Set the value of this vector to a constant scalar value.
+        Set the value of this vector to a value.
 
         Must be implemented by the subclass.
 
@@ -635,7 +636,7 @@ class Vector(object):
         val : int or float
             scalar to set self to.
         """
-        raise NotImplementedError('set_const not defined for vector type %s' %
+        raise NotImplementedError('set_val not defined for vector type %s' %
                                   type(self).__name__)
 
     def dot(self, vec):

@@ -172,7 +172,10 @@ class DefaultVector(Vector):
         <Vector>
             self + vec
         """
-        self._data += vec._data
+        if isinstance(vec, Vector):
+            self._data += vec._data
+        else:
+            self._data += vec
         return self
 
     def __isub__(self, vec):
@@ -189,7 +192,10 @@ class DefaultVector(Vector):
         <Vector>
             self - vec
         """
-        self._data -= vec._data
+        if isinstance(vec, Vector):
+            self._data -= vec._data
+        else:
+            self._data -= vec
         return self
 
     def __imul__(self, val):
@@ -233,9 +239,9 @@ class DefaultVector(Vector):
         """
         self._data[:] = vec._data
 
-    def set_const(self, val):
+    def set_val(self, val):
         """
-        Set the value of this vector to a constant scalar value.
+        Set the value of this vector to a value.
 
         Parameters
         ----------
