@@ -351,7 +351,7 @@ class Vector(object):
         if abs_name not in self._names:
             raise KeyError('Variable name "{}" not found.'.format(abs_name))
 
-        start, stop, shape = self._get_offset_view()[0][abs_name]
+        start, stop, shape = self._offset_view[abs_name]
 
         if self._ncol == 1:
             val = self._data[start:stop]
@@ -384,8 +384,7 @@ class Vector(object):
         if abs_name not in self._names:
             raise KeyError('Variable name "{}" not found.'.format(abs_name))
 
-        vmap, _, _ = self._get_offset_view()
-        start, stop, _ = vmap[abs_name]
+        start, stop, _ = self._offset_view[abs_name]
 
         if self._ncol > 1:
             start = start // self._ncol
@@ -450,29 +449,35 @@ class Vector(object):
 
     def _get_offset_view(self):
         if self._age != self._root_vector._age or self._age == -1:
-            self._offset_view, self._start, self._stop = self._create_offset_view()
-            self._data = self._root_vector._data[self._start:self._stop]
-            if self._alloc_complex:
-                self._cplx_data = self._root_vector._cplx_data[self._start:self._stop]
-                if self._under_complex_step and self._data.dtype != np.complex:
-                    self._data, self._cplx_data = self._cplx_data, self._data
-
-            if self._age == -1:  # only will happen for root
-                self._age = 0
+            self._create_offset_views()
 
         return self._offset_view, self._start, self._stop
 
-    def _create_offset_view(self):
+    def _create_offset_views(self):
         vmap, _ = self._root_vector._system().get_var_range_info(self._name, self._typ, self._ncol)
-        start, stop = self.get_root_range()
+        offset, end = self.get_root_range()
         self._age = self._root_vector._age
         if self is self._root_vector:
             dct = vmap
         else:
-            strt = start if self._ncol == 1 else start * self._ncol
-            dct = _OffsetDict(vmap, strt,
-                              self._system()._var_relevant_names[self._name][self._typ])
-        return dct, start, stop
+            off = offset if self._ncol == 1 else offset * self._ncol
+            dct = {}
+            for abs_name in self._system()._var_relevant_names[self._name][self._typ]:
+                start, stop, shape = vmap[abs_name]
+                dct[abs_name] = (start - off, stop - off, shape)
+
+        self._offset_view = dct
+        self._start = offset
+        self._stop = end
+
+        self._data = self._root_vector._data[offset:end]
+        if self._alloc_complex:
+            self._cplx_data = self._root_vector._cplx_data[offset:end]
+            if self._under_complex_step and self._data.dtype != np.complex:
+                self._data, self._cplx_data = self._cplx_data, self._data
+
+        if self._age == -1:  # only will happen for root
+            self._age = 0
 
     def __setitem__(self, name, value):
         """
