@@ -183,7 +183,7 @@ class ComplexStep(ApproximationScheme):
         """
         for vec, idxs in idx_info:
             if vec is not None:
-                vec._data[idxs] += delta
+                vec.iadd(delta, idxs)
 
         if total:
             system.run_solve_nonlinear()
@@ -192,10 +192,10 @@ class ComplexStep(ApproximationScheme):
             system.run_apply_nonlinear()
             results_vec = system._residuals
 
-        result_array[:] = results_vec._data
+        result_array[:] = results_vec.get_val()
 
         for vec, idxs in idx_info:
             if vec is not None:
-                vec._data[idxs] -= delta
+                vec.isub(delta, idxs)
 
         return result_array

@@ -53,7 +53,7 @@ class TestVector(unittest.TestCase):
         p.final_setup()
 
         new_vec = p.model._outputs._clone()
-        new_vec.set_const(3.)
+        new_vec.set_val(3.)
 
         self.assertEqual(new_vec.dot(p.model._outputs), 9.)
 
@@ -155,9 +155,9 @@ class TestPETScVector2Proc(unittest.TestCase):
         assert_near_equal(norm_val, 0.22595230821097395, 1e-10)
 
         # test petsc dot while we're at it
-        vec.set_const(3.)
+        vec.set_val(3.)
         vec2 = prob.model._vectors['residual']['linear']
-        vec2.set_const(4.)
+        vec2.set_val(4.)
         assert_near_equal(vec.dot(vec2), 12.*6, 1e-10)
 
 @unittest.skipUnless(MPI and PETScVector, "MPI and PETSc are required.")
@@ -187,9 +187,9 @@ class TestPETScVector3Proc(unittest.TestCase):
         assert_near_equal(norm_val, 0.22595230821097395, 1e-10)
 
         # test petsc dot while we're at it
-        vec.set_const(3.)
+        vec.set_val(3.)
         vec2 = prob.model._vectors['residual']['linear']
-        vec2.set_const(4.)
+        vec2.set_val(4.)
         assert_near_equal(vec.dot(vec2), 12.*6, 1e-10)
 
     def test_distributed_norm_parallel_group(self):
@@ -227,9 +227,9 @@ class TestPETScVector3Proc(unittest.TestCase):
         assert_near_equal(norm_val, 8.888194417315589, 1e-10)
 
         # test petsc dot while we're at it
-        vec.set_const(3.)
+        vec.set_val(3.)
         vec2 = prob.model._vectors['residual']['linear']
-        vec2.set_const(4.)
+        vec2.set_val(4.)
         assert_near_equal(vec.dot(vec2), 12.*13, 1e-10)
 
 

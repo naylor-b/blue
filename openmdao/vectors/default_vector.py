@@ -8,6 +8,8 @@ from openmdao.vectors.vector import Vector, INT_DTYPE
 from openmdao.vectors.default_transfer import DefaultTransfer
 from openmdao.utils.mpi import MPI, multi_proc_exception_check
 
+_full_slice = slice(None)
+
 
 class DefaultVector(Vector):
     """
@@ -227,7 +229,10 @@ class DefaultVector(Vector):
         <Vector>
             self + vec
         """
-        self._data += vec._data
+        if isinstance(vec, Vector):
+            self._data += vec._data
+        else:
+            self._data += vec
         return self
 
     def __isub__(self, vec):
@@ -244,24 +249,30 @@ class DefaultVector(Vector):
         <Vector>
             self - vec
         """
-        self._data -= vec._data
+        if isinstance(vec, Vector):
+            self._data -= vec._data
+        else:
+            self._data -= vec
         return self
 
-    def __imul__(self, val):
+    def __imul__(self, vec):
         """
-        Perform in-place scalar multiplication.
+        Perform in-place multiplication.
 
         Parameters
         ----------
-        val : int or float
-            scalar to multiply self.
+        vec : Vector, int, float or ndarray
+            Value to multiply self.
 
         Returns
         -------
         <Vector>
-            self * val
+            self * vec
         """
-        self._data *= val
+        if isinstance(vec, Vector):
+            self._data *= vec._data
+        else:
+            self._data *= vec
         return self
 
     def add_scal_vec(self, val, vec):
@@ -288,16 +299,60 @@ class DefaultVector(Vector):
         """
         self._data[:] = vec._data
 
-    def set_const(self, val):
+    def set_val(self, val, idxs=_full_slice):
         """
-        Set the value of this vector to a constant scalar value.
+        Fill the data array with the value at the specified indices or slice(s).
 
         Parameters
         ----------
-        val : int or float
-            scalar to set self to.
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
         """
-        self._data[:] = val
+        self._data[idxs] = val
+
+    def get_val(self, idxs=_full_slice):
+        """
+        Return parts of the data array at the specified indices or slice(s).
+
+        Parameters
+        ----------
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations to pull from the data array.
+
+        Returns
+        -------
+        ndarray
+            Array of values.
+        """
+        return self._data[idxs]
+
+    def iadd(self, val, idxs=_full_slice):
+        """
+        Add the value to the data array at the specified indices or slice(s).
+
+        Parameters
+        ----------
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
+        """
+        self._data[idxs] += val
+
+    def isub(self, val, idxs=_full_slice):
+        """
+        Subtract the value from the data array at the specified indices or slice(s).
+
+        Parameters
+        ----------
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
+        """
+        self._data[idxs] -= val
 
     def dot(self, vec):
         """

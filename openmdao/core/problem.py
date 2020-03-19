@@ -586,7 +586,7 @@ class Problem(object):
         rvec = self.model._vectors[rkind]['linear']
         lvec = self.model._vectors[lkind]['linear']
 
-        rvec._data[:] = 0.
+        rvec.set_val(0.)
 
         # set seed values into dresids (fwd) or doutputs (rev)
         try:
@@ -983,8 +983,8 @@ class Problem(object):
                             n_in = len(flat_view)
                             for idx in range(n_in):
 
-                                dinputs.set_const(0.0)
-                                dstate.set_const(0.0)
+                                dinputs.set_val(0.0)
+                                dstate.set_val(0.0)
 
                                 # Dictionary access returns a scalar for 1d input, and we
                                 # need a vector for clean code, so use _views_flat.

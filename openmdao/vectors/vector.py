@@ -494,7 +494,7 @@ class Vector(object):
         raise NotImplementedError('set_vec not defined for vector type %s' %
                                   type(self).__name__)
 
-    def set_const(self, val):
+    def set_val(self, val, idxs=_full_slice):
         """
         Set the value of this vector to a constant scalar value.
 
@@ -504,8 +504,10 @@ class Vector(object):
         ----------
         val : int or float
             scalar to set self to.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
         """
-        raise NotImplementedError('set_const not defined for vector type %s' %
+        raise NotImplementedError('set_val not defined for vector type %s' %
                                   type(self).__name__)
 
     def dot(self, vec):

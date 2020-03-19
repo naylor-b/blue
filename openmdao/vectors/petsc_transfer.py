@@ -249,7 +249,7 @@ class PETScTransfer(DefaultTransfer):
             out_petsc_imag.array = out_vec._data.imag
             self._scatter(out_petsc_imag, in_petsc_imag, addv=flag, mode=flag)
 
-            in_vec._data[:] = in_petsc.array + in_petsc_imag.array * 1j
+            in_vec.set_val(in_petsc.array + in_petsc_imag.array * 1j)
 
         else:
 
@@ -265,7 +265,7 @@ class PETScTransfer(DefaultTransfer):
             self._scatter(out_petsc, in_petsc, addv=flag, mode=flag)
 
             if in_vec._alloc_complex:
-                in_vec._data[:] = in_petsc.array
+                in_vec.set_val(in_petsc.array)
 
     def _multi_transfer(self, in_vec, out_vec, mode='fwd'):
         """

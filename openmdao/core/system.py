@@ -735,8 +735,8 @@ class System(object):
         else:
             lower = vector_class('nonlinear', 'output', self)
             upper = vector_class('nonlinear', 'output', self)
-            lower._data[:] = -np.inf
-            upper._data[:] = np.inf
+            lower.set_val(-np.inf)
+            upper.set_val(np.inf)
             return lower, upper
 
     def resetup(self, setup_mode='full'):
@@ -1144,10 +1144,10 @@ class System(object):
         for i in range(info['num_full_jacs']):
             # randomize inputs (and outputs if implicit)
             if i > 0:
-                self._inputs._data[:] = \
-                    starting_inputs + in_offsets * np.random.random(in_offsets.size)
-                self._outputs._data[:] = \
-                    starting_outputs + out_offsets * np.random.random(out_offsets.size)
+                self._inputs.set_val(
+                    starting_inputs + in_offsets * np.random.random(in_offsets.size))
+                self._outputs.set_val(
+                    starting_outputs + out_offsets * np.random.random(out_offsets.size))
 
                 if is_total:
                     self._solve_nonlinear()
@@ -1224,9 +1224,9 @@ class System(object):
             coloring_mod._CLASS_COLORINGS[coloring_fname] = coloring
 
         # restore original inputs/outputs
-        self._inputs._data[:] = starting_inputs
-        self._outputs._data[:] = starting_outputs
-        self._residuals._data[:] = starting_resids
+        self._inputs.set_val(starting_inputs)
+        self._outputs.set_val(starting_outputs)
+        self._residuals.set_val(starting_resids)
 
         self._first_call_to_linearize = save_first_call
 
@@ -2221,10 +2221,10 @@ class System(object):
 
         if clear:
             if mode == 'fwd':
-                d_residuals.set_const(0.0)
+                d_residuals.set_val(0.0)
             else:  # rev
-                d_inputs.set_const(0.0)
-                d_outputs.set_const(0.0)
+                d_inputs.set_val(0.0)
+                d_outputs.set_val(0.0)
 
         if scope_out is None and scope_in is None:
             yield d_inputs, d_outputs, d_residuals
