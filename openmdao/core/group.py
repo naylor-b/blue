@@ -1065,29 +1065,24 @@ class Group(System):
                 # if units are defined and different, we need input scaling.
                 needs_input_scaling = (in_units and out_units and in_units != out_units)
 
+                # handle case where unit strings are different but units are actually the same
+                if needs_input_scaling:
+                    try:
+                        factor, offset = get_conversion(out_units, in_units)
+                        if factor == 1.0 and offset == 0.0:
+                            needs_input_scaling = False
+                    except TypeError:
+                        pass   # ignore conversion error here.  Will be caught below
+
                 # we also need it if a connected output has any scaling.
                 if not needs_input_scaling:
                     out_meta = allprocs_abs2meta[abs_out]
 
-                    ref = out_meta['ref']
-                    if np.isscalar(ref):
-                        needs_input_scaling = ref != 1.0
-                    else:
-                        needs_input_scaling = np.any(ref != 1.0)
-
-                    if not needs_input_scaling:
-                        ref0 = out_meta['ref0']
-                        if np.isscalar(ref0):
-                            needs_input_scaling = ref0 != 0.0
-                        else:
-                            needs_input_scaling = np.any(ref0)
-
-                        if not needs_input_scaling:
-                            res_ref = out_meta['res_ref']
-                            if np.isscalar(res_ref):
-                                needs_input_scaling = res_ref != 1.0
-                            else:
-                                needs_input_scaling = np.any(res_ref != 1.0)
+                    needs_input_scaling = (
+                        np.any(out_meta['ref'] != 1.0) or
+                        np.any(out_meta['ref0']) or
+                        np.any(out_meta['res_ref'] != 1.0)
+                    )
 
                 self._has_input_scaling = needs_input_scaling
 
