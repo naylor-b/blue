@@ -51,7 +51,8 @@ class DefaultTransfer(Transfer):
         vectors = group._vectors
         offsets = _global2local_offsets(group._get_var_offsets())
 
-        vec_names = group._lin_rel_vec_name_list if group._use_derivatives else group._vec_names
+        # vec_names = group._lin_rel_vec_name_list if group._use_derivatives else group._vec_names
+        vec_names = group._vec_names
 
         mypathlen = len(group.pathname + '.' if group.pathname else '')
         sub_inds = group._subsystems_inds
@@ -166,8 +167,8 @@ class DefaultTransfer(Transfer):
                     else:
                         transfers[vec_name]['rev', isub] = None
 
-        if group._use_derivatives:
-            transfers['nonlinear'] = transfers['linear']
+        # if group._use_derivatives:
+        #     transfers['nonlinear'] = transfers['linear']
 
     @staticmethod
     def _setup_discrete_transfers(group, recurse=True):
@@ -266,11 +267,11 @@ class DefaultTransfer(Transfer):
         """
         if mode == 'fwd':
             # this works whether the vecs have multi columns or not due to broadcasting
-            in_vec.set_val(out_vec.get_val(self._out_inds), self._in_inds)
+            in_vec._data[self._in_inds] = out_vec._data[self._out_inds]
 
         else:  # rev
             if out_vec._ncol == 1:
-                out_vec.iadd(np.bincount(self._out_inds, in_vec.get_val(self._in_inds),
-                                         minlength=out_vec._data.size))
+                out_vec._data[:] += np.bincount(self._out_inds, in_vec._data[self._in_inds],
+                                                minlength=out_vec._data.size)
             else:  # matrix-matrix   (bincount only works with 1d arrays)
-                np.add.at(out_vec._data, self._out_inds, in_vec.get_val(self._in_inds))
+                np.add.at(out_vec._data, self._out_inds, in_vec._data[self._in_inds])

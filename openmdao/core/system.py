@@ -399,6 +399,8 @@ class System(object):
         self._discrete_inputs = None
         self._discrete_outputs = None
 
+        self._nocopy_inputs = {}
+
         self._lower_bounds = None
         self._upper_bounds = None
 
@@ -582,7 +584,7 @@ class System(object):
             ext_num_vars = {}
             ext_sizes = {}
 
-            vec_names = self._lin_rel_vec_name_list if self._use_derivatives else self._vec_names
+            vec_names = self._vec_names
 
             for vec_name in vec_names:
                 ext_num_vars[vec_name] = {}
@@ -591,9 +593,9 @@ class System(object):
                     ext_num_vars[vec_name][type_] = (0, 0)
                     ext_sizes[vec_name][type_] = (0, 0)
 
-            if self._use_derivatives:
-                ext_num_vars['nonlinear'] = ext_num_vars['linear']
-                ext_sizes['nonlinear'] = ext_sizes['linear']
+            # if self._use_derivatives:
+            #     ext_num_vars['nonlinear'] = ext_num_vars['linear']
+            #     ext_sizes['nonlinear'] = ext_sizes['linear']
 
             return ext_num_vars, ext_sizes
 
@@ -672,10 +674,15 @@ class System(object):
                         rdct, _ = relevant[vec_name]['@all']
                         rel = rdct['output']
 
-                for key in ['input', 'output', 'residual']:
+                for key in ['output', 'residual', 'input']:
+                    if key == 'input' and vec_name == 'nonlinear':
+                        outvec = root_vectors['output'][vec_name]
+                    else:
+                        outvec = None
                     root_vectors[key][vec_name] = vector_class(vec_name, key, self,
                                                                alloc_complex=alloc_complex,
-                                                               ncol=ncol, relevant=rel)
+                                                               ncol=ncol, relevant=rel,
+                                                               outvec=outvec)
         else:
 
             for key, vardict in self._vectors.items():
@@ -834,6 +841,7 @@ class System(object):
         self._setup_var_index_ranges(recurse=recurse)
         self._setup_var_sizes(recurse=recurse)
         self._setup_connections(recurse=recurse)
+        self._setup_nocopy(self._nocopy_inputs, recurse=recurse)
 
     def _post_configure(self):
         """
@@ -1122,17 +1130,17 @@ class System(object):
         is_total = isinstance(self, Group)
 
         # compute perturbations
-        starting_inputs = self._inputs._data.copy()
+        starting_inputs = self._inputs.get_val().copy()
         in_offsets = starting_inputs.copy()
         in_offsets[in_offsets == 0.0] = 1.0
         in_offsets *= info['perturb_size']
 
-        starting_outputs = self._outputs._data.copy()
+        starting_outputs = self._outputs.get_val().copy()
         out_offsets = starting_outputs.copy()
         out_offsets[out_offsets == 0.0] = 1.0
         out_offsets *= info['perturb_size']
 
-        starting_resids = self._residuals._data.copy()
+        starting_resids = self._residuals.get_val().copy()
 
         # for groups, this does some setup of approximations
         self._setup_approx_coloring()
@@ -1696,6 +1704,21 @@ class System(object):
         """
         pass
 
+    def _setup_nocopy(self, nocopy_inputs, recurse=True):
+        # Recursion
+
+        if nocopy_inputs:
+            if recurse:
+                for subsys in self._subsystems_myproc:
+                    subsys._setup_nocopy(nocopy_inputs, recurse)
+
+            iproc = self.comm.rank
+            abs2idx = self._var_allprocs_abs2idx['nonlinear']
+            vsizes = self._var_sizes['nonlinear']['input']
+            for name in set(nocopy_inputs).intersection(self._var_relevant_names['nonlinear']['input']):
+                # get rid of any storage for this var in the input vector
+                vsizes[iproc, abs2idx[name]] = 0
+
     def _setup_global(self, ext_num_vars, ext_sizes):
         """
         Compute total number and total size of variables in systems before / after this system.
@@ -1747,11 +1770,15 @@ class System(object):
             # Only allocate complex in the vectors we need.
             vec_alloc_complex = root_vectors['output'][vec_name]._alloc_complex
 
-            for kind in ['input', 'output', 'residual']:
+            for kind in ['output', 'residual', 'input']:
                 rootvec = root_vectors[kind][vec_name]
+                if kind == 'input' and vec_name == 'nonlinear':
+                    outvec = root_vectors['output'][vec_name]
+                else:
+                    outvec = None
                 vectors[kind][vec_name] = vector_class(
                     vec_name, kind, self, rootvec, resize=resize,
-                    alloc_complex=vec_alloc_complex, ncol=rootvec._ncol)
+                    alloc_complex=vec_alloc_complex, ncol=rootvec._ncol, outvec=outvec)
 
         self._inputs = vectors['input']['nonlinear']
         self._outputs = vectors['output']['nonlinear']
@@ -2294,7 +2321,7 @@ class System(object):
         """
         if self._var_offsets is None:
             offsets = self._var_offsets = {}
-            vec_names = self._lin_rel_vec_name_list if self._use_derivatives else self._vec_names
+            vec_names = self._vec_names
 
             for vec_name in vec_names:
                 offsets[vec_name] = off_vn = {}
@@ -2307,9 +2334,6 @@ class System(object):
                         off_vn[type_] = csum.reshape(vsizes.shape)
                     else:
                         off_vn[type_] = np.zeros(0, dtype=int).reshape((1, 0))
-
-            if self._use_derivatives:
-                offsets['nonlinear'] = offsets['linear']
 
         return self._var_offsets
 
@@ -3928,8 +3952,8 @@ class System(object):
             'of' and 'wrt' variable sizes.
         """
         iproc = self.comm.rank
-        out_sizes = self._var_sizes['nonlinear']['output'][iproc]
-        in_sizes = self._var_sizes['nonlinear']['input'][iproc]
+        out_sizes = self._var_sizes['linear']['output'][iproc]
+        in_sizes = self._var_sizes['linear']['input'][iproc]
         return out_sizes, np.hstack((out_sizes, in_sizes))
 
     def _get_gradient_nl_solver_systems(self):
@@ -3968,7 +3992,7 @@ class System(object):
                 new_list.append((abs2prom_in[abs_name], offset, end, idxs))
         return new_list
 
-    def _abs_get_val(self, abs_name, get_remote=False, rank=None, vec_name=None, kind=None,
+    def _abs_get_val(self, abs_name, get_remote=False, rank=None, vec_name='nonlinear', kind=None,
                      flat=False):
         """
         Return the value of the variable specified by the given absolute name.
@@ -4034,8 +4058,8 @@ class System(object):
             loc_val = val if val is not System._undefined else np.zeros(0)
             if rank is None:   # bcast
                 if distrib:
-                    idx = self._var_allprocs_abs2idx['nonlinear'][abs_name]
-                    sizes = self._var_sizes['nonlinear'][typ][:, idx]
+                    idx = self._var_allprocs_abs2idx[vec_name][abs_name]
+                    sizes = self._var_sizes[vec_name][typ][:, idx]
                     # TODO: could cache these offsets
                     offsets = np.zeros(sizes.size, dtype=INT_DTYPE)
                     offsets[1:] = np.cumsum(sizes[:-1])
@@ -4049,8 +4073,8 @@ class System(object):
                     val = new_val
             else:   # retrieve to rank
                 if distrib:
-                    idx = self._var_allprocs_abs2idx['nonlinear'][abs_name]
-                    sizes = self._var_sizes['nonlinear'][typ][:, idx]
+                    idx = self._var_allprocs_abs2idx[vec_name][abs_name]
+                    sizes = self._var_sizes[vec_name][typ][:, idx]
                     # TODO: could cache these offsets
                     offsets = np.zeros(sizes.size, dtype=INT_DTYPE)
                     offsets[1:] = np.cumsum(sizes[:-1])

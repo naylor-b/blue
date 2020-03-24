@@ -2,6 +2,7 @@
 from copy import deepcopy
 import os
 import weakref
+from collections import OrderedDict
 
 import numpy as np
 
@@ -92,7 +93,7 @@ class Vector(object):
     cite = ""
 
     def __init__(self, name, kind, system, root_vector=None, resize=False, alloc_complex=False,
-                 ncol=1, relevant=None):
+                 ncol=1, relevant=None, outvec=None):
         """
         Initialize all attributes.
 
@@ -115,6 +116,8 @@ class Vector(object):
         relevant : dict
             Mapping of a VOI to a tuple containing dependent inputs, dependent outputs,
             and dependent systems.
+        outvec : Vector or None
+            Used to setup nocopy inputs.
         """
         self._name = name
         self._typ = _type_map[kind]
@@ -126,8 +129,8 @@ class Vector(object):
         self._system = weakref.ref(system)
 
         self._iproc = system.comm.rank
-        self._views = {}
-        self._views_flat = {}
+        self._views = OrderedDict()
+        self._views_flat = OrderedDict()
 
         # self._names will either be equivalent to self._views or to the
         # set of variables relevant to the current matvec product.
@@ -140,8 +143,8 @@ class Vector(object):
         # Support for Complex Step
         self._alloc_complex = alloc_complex
         self._cplx_data = None
-        self._cplx_views = {}
-        self._cplx_views_flat = {}
+        self._cplx_views = OrderedDict()
+        self._cplx_views_flat = OrderedDict()
         self._under_complex_step = False
 
         self._do_scaling = ((kind == 'input' and system._has_input_scaling) or
@@ -160,10 +163,10 @@ class Vector(object):
                 raise RuntimeError(
                     'Cannot resize the vector because the root vector has not yet '
                     'been created in system %s' % system.pathname)
-            self._update_root_data()
+            self._update_root_data(outvec)
 
         self._initialize_data(root_vector)
-        self._initialize_views()
+        self._initialize_views(outvec)
 
         self.read_only = False
 
@@ -191,28 +194,6 @@ class Vector(object):
             Total flattened length of this vector.
         """
         return self._data.size
-
-    def _clone(self, initialize_views=False):
-        """
-        Return a copy that optionally provides view access to its data.
-
-        Parameters
-        ----------
-        initialize_views : bool
-            Whether to initialize the views into the clone.
-
-        Returns
-        -------
-        <Vector>
-            instance of the clone; the data is copied.
-        """
-        vec = self.__class__(self._name, self._kind, self._system(), self._root_vector,
-                             alloc_complex=self._alloc_complex, ncol=self._ncol)
-        vec._under_complex_step = self._under_complex_step
-        vec._clone_data()
-        if initialize_views:
-            vec._initialize_views()
-        return vec
 
     def _copy_views(self):
         """
@@ -380,7 +361,7 @@ class Vector(object):
         raise NotImplementedError('_initialize_data not defined for vector type %s' %
                                   type(self).__name__)
 
-    def _initialize_views(self):
+    def _initialize_views(self, outvec):
         """
         Internally assemble views onto the vectors.
 
@@ -392,15 +373,6 @@ class Vector(object):
         - _views_flat
         """
         raise NotImplementedError('_initialize_views not defined for vector type %s' %
-                                  type(self).__name__)
-
-    def _clone_data(self):
-        """
-        For each item in _data, replace it with a copy of the data.
-
-        Must be implemented by the subclass.
-        """
-        raise NotImplementedError('_clone_data not defined for vector type %s' %
                                   type(self).__name__)
 
     def __iadd__(self, vec):
@@ -472,9 +444,12 @@ class Vector(object):
         """
         adder, scaler = self._scaling[scale_to]
         if self._ncol == 1:
+            # print(self._system().pathname, self._name, 'scale_to', scale_to, 'before', self._data)
+            # print("adder", adder, 'scaler', scaler)
             self._data *= scaler
             if adder is not None:  # nonlinear only
                 self._data += adder
+            # print('after', self._data)
         else:
             self._data *= scaler[:, np.newaxis]
             if adder is not None:  # nonlinear only

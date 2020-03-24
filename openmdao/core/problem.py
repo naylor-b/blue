@@ -923,8 +923,8 @@ class Problem(object):
         partials_data = defaultdict(lambda: defaultdict(dict))
 
         # Caching current point to restore after setups.
-        input_cache = model._inputs._clone()
-        output_cache = model._outputs._clone()
+        input_cache = model._inputs.get_val()
+        output_cache = model._outputs.get_val().copy()
 
         # Keep track of derivative keys that are declared dependent so that we don't print them
         # unless they are in error.
@@ -932,8 +932,8 @@ class Problem(object):
 
         # Analytic Jacobians
         for mode in ('fwd', 'rev'):
-            model._inputs.set_vec(input_cache)
-            model._outputs.set_vec(output_cache)
+            model._inputs.set_val(input_cache)
+            model._outputs.set_val(output_cache)
             # Make sure we're in a valid state
             model.run_apply_nonlinear()
 
@@ -1076,8 +1076,8 @@ class Problem(object):
 
                             partials_data[c_name][rel_key][jac_key] = deriv_value.copy()
 
-        model._inputs.set_vec(input_cache)
-        model._outputs.set_vec(output_cache)
+        model._inputs.set_val(input_cache)
+        model._outputs.set_val(output_cache)
         model.run_apply_nonlinear()
 
         # Finite Difference to calculate Jacobian

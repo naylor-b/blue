@@ -1,8 +1,10 @@
 """Define the default Vector class."""
 from copy import deepcopy
 import numbers
+from collections import OrderedDict
 
 import numpy as np
+from numpy import logical_and
 
 from openmdao.vectors.vector import Vector, INT_DTYPE
 from openmdao.vectors.default_transfer import DefaultTransfer
@@ -34,7 +36,7 @@ class DefaultVector(Vector):
         size = np.sum(self._system()._var_sizes[self._name][self._typ][self._iproc, :])
         return np.zeros(size) if ncol == 1 else np.zeros((size, ncol))
 
-    def _update_root_data(self):
+    def _update_root_data(self, outvec):
         """
         Resize the root data if necesary (i.e., due to reconfiguration).
         """
@@ -56,7 +58,7 @@ class DefaultVector(Vector):
         if self._alloc_complex and root_vec._cplx_data.size != root_vec._data.size:
             root_vec._cplx_data = np.zeros(root_vec._data.size, dtype=complex)
 
-        root_vec._initialize_views()
+        root_vec._initialize_views(outvec)
 
     def _extract_root_data(self):
         """
@@ -81,8 +83,12 @@ class DefaultVector(Vector):
         sizes = system._var_sizes[self._name][type_]
         ind1 = system._ext_sizes[self._name][type_][0]
         ind2 = ind1 + np.sum(sizes[iproc, :])
+        # if self._kind == 'input':
+        #     print(system.pathname, self._name, self._kind, "sizes", sizes[iproc,:], 'ind1', ind1, 'ind2', ind2)
 
         data = root_vec._data[ind1:ind2]
+        # if self._kind == 'input':
+        #     print("root_data", root_vec._data, "data", data)
 
         # Extract view for complex storage too.
         if self._alloc_complex:
@@ -91,6 +97,8 @@ class DefaultVector(Vector):
         if self._do_scaling:
             for typ in ('phys', 'norm'):
                 root_scale = root_vec._scaling[typ]
+                # if self._kind == 'input':
+                #     print("root_scale", typ, root_scale)
                 rs0 = root_scale[0]
                 if rs0 is None:
                     scaling[typ] = (rs0, root_scale[1][ind1:ind2])
@@ -117,11 +125,11 @@ class DefaultVector(Vector):
                 if self._name == 'nonlinear':
                     self._scaling['phys'] = (np.zeros(data.size), np.ones(data.size))
                     self._scaling['norm'] = (np.zeros(data.size), np.ones(data.size))
-                elif self._name == 'linear':
-                    # reuse the nonlinear scaling vecs since they're the same as ours
-                    nlvec = self._system()._root_vecs[self._kind]['nonlinear']
-                    self._scaling['phys'] = (None, nlvec._scaling['phys'][1])
-                    self._scaling['norm'] = (None, nlvec._scaling['norm'][1])
+                # elif self._name == 'linear':
+                    # # reuse the nonlinear scaling vecs since they're the same as ours
+                    # nlvec = self._system()._root_vecs[self._kind]['nonlinear']
+                    # self._scaling['phys'] = (None, nlvec._scaling['phys'][1])
+                    # self._scaling['norm'] = (None, nlvec._scaling['norm'][1])
                 else:
                     self._scaling['phys'] = (None, np.ones(data.size))
                     self._scaling['norm'] = (None, np.ones(data.size))
@@ -133,7 +141,7 @@ class DefaultVector(Vector):
         else:
             self._data, self._cplx_data, self._scaling = self._extract_root_data()
 
-    def _initialize_views(self):
+    def _initialize_views(self, outvec):
         """
         Internally assemble views onto the vectors.
 
@@ -146,18 +154,19 @@ class DefaultVector(Vector):
         kind = self._kind
         iproc = self._iproc
         ncol = self._ncol
+        nocopy = self._root_vector._system()._nocopy_inputs if ncol == 1 and kind == 'input' and self._name == 'nonlinear' else {}
 
         do_scaling = self._do_scaling
         if do_scaling:
             factors = system._scale_factors
             scaling = self._scaling
 
-        self._views = views = {}
-        self._views_flat = views_flat = {}
+        self._views = views = OrderedDict()
+        self._views_flat = views_flat = OrderedDict()
 
         alloc_complex = self._alloc_complex
-        self._cplx_views = cplx_views = {}
-        self._cplx_views_flat = cplx_views_flat = {}
+        self._cplx_views = cplx_views = OrderedDict()
+        self._cplx_views_flat = cplx_views_flat = OrderedDict()
 
         allprocs_abs2idx_t = system._var_allprocs_abs2idx[self._name]
         sizes_t = system._var_sizes[self._name][type_]
@@ -175,45 +184,44 @@ class DefaultVector(Vector):
         for abs_name in system._var_relevant_names[self._name][type_]:
             idx = allprocs_abs2idx_t[abs_name]
 
-            ind1 = offsets_t[idx]
-            ind2 = ind1 + sizes_t[iproc, idx]
             shape = abs2meta[abs_name]['shape']
             if ncol > 1:
                 if not isinstance(shape, tuple):
                     shape = (shape,)
                 shape = tuple(list(shape) + [ncol])
 
-            views_flat[abs_name] = v = self._data[ind1:ind2]
+            ind1 = offsets_t[idx]
+            ind2 = ind1 + sizes_t[iproc, idx]
+            if abs_name in nocopy:  # nocopy input
+                views_flat[abs_name] = v = outvec._views_flat[nocopy[abs_name]]
+            else:
+                views_flat[abs_name] = v = self._data[ind1:ind2]
             if shape != v.shape:
                 v = v.view()
                 v.shape = shape
             views[abs_name] = v
 
             if alloc_complex:
-                cplx_views_flat[abs_name] = v = self._cplx_data[ind1:ind2]
+                if abs_name in nocopy:  # nocopy input
+                    cplx_views_flat[abs_name] = v = outvec._cplx_views_flat[nocopy[abs_name]]
+                else:
+                    cplx_views_flat[abs_name] = v = self._cplx_data[ind1:ind2]
                 if shape != v.shape:
                     v = v.view()
                     v.shape = shape
                 cplx_views[abs_name] = v
 
             if do_scaling:
+                # print(system.pathname, abs_name, ind1, ind2)
                 for scaleto in ('phys', 'norm'):
                     scale0, scale1 = factors[abs_name][kind, scaleto]
                     vec = scaling[scaleto]
+                    # print(scaleto, "factors", scale0, scale1, 'scale vec', vec)
                     if vec[0] is not None:
                         vec[0][ind1:ind2] = scale0
                     vec[1][ind1:ind2] = scale1
 
         self._names = frozenset(views)
-
-    def _clone_data(self):
-        """
-        For each item in _data, replace it with a copy of the data.
-        """
-        self._data = self._data.copy()
-
-        if self._under_complex_step and self._cplx_data is not None:
-            self._cplx_data = self._cplx_data.copy()
 
     def __iadd__(self, vec):
         """
@@ -230,9 +238,9 @@ class DefaultVector(Vector):
             self + vec
         """
         if isinstance(vec, Vector):
-            self._data += vec._data
+            self.iadd(vec.get_val())
         else:
-            self._data += vec
+            self.iadd(vec)
         return self
 
     def __isub__(self, vec):
@@ -250,9 +258,9 @@ class DefaultVector(Vector):
             self - vec
         """
         if isinstance(vec, Vector):
-            self._data -= vec._data
+            self.isub(vec.get_val())
         else:
-            self._data -= vec
+            self.isub(vec)
         return self
 
     def __imul__(self, vec):
@@ -270,10 +278,24 @@ class DefaultVector(Vector):
             self * vec
         """
         if isinstance(vec, Vector):
-            self._data *= vec._data
+            self.imul(vec.get_val())
         else:
-            self._data *= vec
+            self.imul(vec)
         return self
+
+    def _sub_arr_iter(self, idxs):
+        start = end = 0
+        if idxs is _full_slice:
+            for arr in self._views_flat.values():
+                end += arr.size
+                yield arr, start, end, idxs
+                start = end
+        else:
+            for arr in self._views_flat.values():
+                end += arr.size
+                in_arr = logical_and(start <= idxs, idxs < end)
+                yield arr, start, end, in_arr
+                start = end
 
     def add_scal_vec(self, val, vec):
         """
@@ -286,7 +308,7 @@ class DefaultVector(Vector):
         vec : <Vector>
             this vector times val is added to self.
         """
-        self._data += val * vec._data
+        self.iadd(val * vec.get_val())
 
     def set_vec(self, vec):
         """
@@ -297,7 +319,7 @@ class DefaultVector(Vector):
         vec : <Vector>
             the vector whose values self is set to.
         """
-        self._data[:] = vec._data
+        self.set_val(vec.get_val())
 
     def set_val(self, val, idxs=_full_slice):
         """
@@ -310,7 +332,15 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        self._data[idxs] = val
+        if self._kind == 'input' and self._name == 'nonlinear':
+            if np.isscalar(val):
+                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                    arr[in_arr] = val
+            else:
+                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                    arr[in_arr] = val[start:end]
+        else:
+            self._data[idxs] = val
 
     def get_val(self, idxs=_full_slice):
         """
@@ -326,7 +356,10 @@ class DefaultVector(Vector):
         ndarray
             Array of values.
         """
-        return self._data[idxs]
+        if self._kind == 'input' and self._name == 'nonlinear':
+            return np.concatenate(list(self._views_flat.values()))
+        else:
+            return self._data[idxs]
 
     def iadd(self, val, idxs=_full_slice):
         """
@@ -339,7 +372,15 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        self._data[idxs] += val
+        if self._kind == 'input' and self._name == 'nonlinear':
+            if np.isscalar(val):
+                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                    arr[in_arr] += val
+            else:
+                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                    arr[in_arr] += val[start:end]
+        else:
+            self._data[idxs] += val
 
     def isub(self, val, idxs=_full_slice):
         """
@@ -352,7 +393,36 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        self._data[idxs] -= val
+        if self._kind == 'input' and self._name == 'nonlinear':
+            if np.isscalar(val):
+                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                    arr[in_arr] -= val
+            else:
+                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                    arr[in_arr] -= val[start:end]
+        else:
+            self._data[idxs] -= val
+
+    def imul(self, val, idxs=_full_slice):
+        """
+        Multiply the value to the data array at the specified indices or slice(s).
+
+        Parameters
+        ----------
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
+        """
+        if self._kind == 'input' and self._name == 'nonlinear':
+            if np.isscalar(val):
+                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                    arr[in_arr] *= val
+            else:
+                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                    arr[in_arr] *= val[start:end]
+        else:
+            self._data[idxs] *= val
 
     def dot(self, vec):
         """
@@ -368,7 +438,7 @@ class DefaultVector(Vector):
         float
             The computed dot product value.
         """
-        return np.dot(self._data, vec._data)
+        return np.dot(self.get_val(), vec.get_val())
 
     def get_norm(self):
         """
@@ -379,7 +449,7 @@ class DefaultVector(Vector):
         float
             norm of this vector.
         """
-        return np.linalg.norm(self._data)
+        return np.linalg.norm(self.get_val())
 
     def get_slice_dict(self):
         """

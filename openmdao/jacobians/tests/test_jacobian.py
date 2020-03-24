@@ -287,8 +287,9 @@ class TestJacobian(unittest.TestCase):
     def _check_fwd(self, prob, check_vec):
         d_inputs, d_outputs, d_residuals = prob.model.get_linear_vectors()
 
-        work = d_outputs._clone()
-        work.set_val(1.0)
+        work = np.ones(d_outputs._data.size)
+        # work = d_outputs._clone()
+        # work.set_val(1.0)
 
         # fwd apply_linear test
         d_outputs.set_val(1.0)
@@ -308,8 +309,9 @@ class TestJacobian(unittest.TestCase):
     def _check_rev(self, prob, check_vec):
         d_inputs, d_outputs, d_residuals = prob.model.get_linear_vectors()
 
-        work = d_outputs._clone()
-        work.set_val(1.0)
+        # work = d_outputs._clone()
+        # work.set_val(1.0)
+        work = np.ones(d_outputs._data.size)
 
         # rev apply_linear test
         d_residuals.set_val(1.0)

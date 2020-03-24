@@ -41,7 +41,7 @@ class PETScVector(DefaultVector):
     cite = CITATION
 
     def __init__(self, name, kind, system, root_vector=None, resize=False, alloc_complex=False,
-                 ncol=1, relevant=None):
+                 ncol=1, relevant=None, outvec=None):
         """
         Initialize all attributes.
 
@@ -64,10 +64,12 @@ class PETScVector(DefaultVector):
         relevant : dict
             Mapping of a VOI to a tuple containing dependent inputs, dependent outputs,
             and dependent systems.
+        outvec : Vector or None
+            Used to setup nocopy inputs.
         """
         super(PETScVector, self).__init__(name, kind, system, root_vector=root_vector,
                                           resize=resize, alloc_complex=alloc_complex, ncol=ncol,
-                                          relevant=relevant)
+                                          relevant=relevant, outvec=outvec)
 
         self._dup_inds = None
 

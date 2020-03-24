@@ -316,10 +316,10 @@ class Component(System):
         sizes = self._var_sizes
         abs2meta = self._var_abs2meta
 
-        if self._use_derivatives:
-            vec_names = self._lin_rel_vec_name_list
-        else:
-            vec_names = self._vec_names
+        # if self._use_derivatives:
+        #     vec_names = self._lin_rel_vec_name_list
+        # else:
+        vec_names = self._vec_names
 
         # Initialize empty arrays
         for vec_name in vec_names:
@@ -352,8 +352,8 @@ class Component(System):
                     for type_ in ['input', 'output']:
                         sizes[type_] = np.tile(sizes[type_][iproc], (nproc, 1))
 
-        if self._use_derivatives:
-            self._var_sizes['nonlinear'] = self._var_sizes['linear']
+        # if self._use_derivatives:
+        #     self._var_sizes['nonlinear'] = self._var_sizes['linear']
 
         self._owned_sizes = self._var_sizes['nonlinear']['output']
 

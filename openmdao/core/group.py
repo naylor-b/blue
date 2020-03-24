@@ -512,7 +512,7 @@ class Group(System):
 
         subsystems_var_range = self._subsystems_var_range = {}
 
-        vec_names = self._lin_rel_vec_name_list if self._use_derivatives else self._vec_names
+        vec_names = self._vec_names
 
         # First compute these on one processor for each subsystem
         for vec_name in vec_names:
@@ -554,8 +554,8 @@ class Group(System):
                         start, start + allprocs_counters[type_][isub]
                     )
 
-        if self._use_derivatives:
-            subsystems_var_range['nonlinear'] = subsystems_var_range['linear']
+        # if self._use_derivatives:
+        #     subsystems_var_range['nonlinear'] = subsystems_var_range['linear']
 
         self._setup_var_index_maps(recurse=recurse)
 
@@ -724,7 +724,8 @@ class Group(System):
         sizes = self._var_sizes
         relnames = self._var_allprocs_relevant_names
 
-        vec_names = self._lin_rel_vec_name_list if self._use_derivatives else self._vec_names
+        # vec_names = self._lin_rel_vec_name_list if self._use_derivatives else self._vec_names
+        vec_names = self._vec_names
 
         n_distrib_vars = 0
 
@@ -803,8 +804,8 @@ class Group(System):
             self._owned_sizes = self._var_sizes[vec_names[0]]['output']
             self._vector_class = self._local_vector_class
 
-        if self._use_derivatives:
-            self._var_sizes['nonlinear'] = self._var_sizes['linear']
+        # if self._use_derivatives:
+        #     self._var_sizes['nonlinear'] = self._var_sizes['linear']
 
         if self.comm.size > 1:
             self._setup_global_shapes()
@@ -1002,11 +1003,13 @@ class Group(System):
         pathname = self.pathname
         allprocs_discrete_in = self._var_allprocs_discrete['input']
         allprocs_discrete_out = self._var_allprocs_discrete['output']
+        self._nocopy_inputs = {}
 
         # Recursion
         if recurse:
             for subsys in self._subsystems_myproc:
                 subsys._setup_connections(recurse)
+                self._nocopy_inputs.update(subsys._nocopy_inputs)
 
         if MPI:
             # collect set of local (not remote, not distributed) subsystems so we can
@@ -1023,6 +1026,7 @@ class Group(System):
         path_len = len(path_dot)
 
         allprocs_abs2meta = self._var_allprocs_abs2meta
+        abs2meta = self._var_abs2meta
 
         nproc = self.comm.size
 
@@ -1030,6 +1034,8 @@ class Group(System):
         # to True for this Group if units are defined and different, or if
         # ref or ref0 are defined for the output.
         for abs_in, abs_out in global_abs_in2out.items():
+
+            needs_input_scaling = False
 
             # First, check that this system owns both the input and output.
             if abs_in[:path_len] == path_dot and abs_out[:path_len] == path_dot:
@@ -1057,22 +1063,12 @@ class Group(System):
                                 self._vector_class = self._distributed_vector_class
 
             # if connected output has scaling then we need input scaling
-            if not self._has_input_scaling and not (abs_in in allprocs_discrete_in or
-                                                    abs_out in allprocs_discrete_out):
+            if not (abs_in in allprocs_discrete_in or abs_out in allprocs_discrete_out):
                 out_units = allprocs_abs2meta[abs_out]['units']
                 in_units = allprocs_abs2meta[abs_in]['units']
 
                 # if units are defined and different, we need input scaling.
                 needs_input_scaling = (in_units and out_units and in_units != out_units)
-
-                # handle case where unit strings are different but units are actually the same
-                if needs_input_scaling:
-                    try:
-                        factor, offset = get_conversion(out_units, in_units)
-                        if factor == 1.0 and offset == 0.0:
-                            needs_input_scaling = False
-                    except TypeError:
-                        pass   # ignore conversion error here.  Will be caught below
 
                 # we also need it if a connected output has any scaling.
                 if not needs_input_scaling:
@@ -1084,7 +1080,11 @@ class Group(System):
                         np.any(out_meta['res_ref'] != 1.0)
                     )
 
-                self._has_input_scaling = needs_input_scaling
+                if (not needs_input_scaling and abs_in in abs2meta and
+                        abs2meta[abs_in]['src_indices'] is None):
+                    self._nocopy_inputs[abs_in] = abs_out
+
+            self._has_input_scaling |= needs_input_scaling
 
         # check compatability for any discrete connections
         for abs_in, abs_out in self._conn_discrete_in2out.items():
@@ -1120,6 +1120,7 @@ class Group(System):
                                        " incompatible with input units of "
                                        "'%s' for '%s'." %
                                        (self.msginfo, out_units, abs_out, in_units, abs_in))
+
             elif in_units is not None:
                 simple_warning("%s: Input '%s' with units of '%s' is "
                                "connected to output '%s' which has "
@@ -1334,7 +1335,7 @@ class Group(System):
             sub_ext_sizes = {}
 
             if subsys._use_derivatives:
-                vec_names = subsys._lin_rel_vec_name_list
+                vec_names = ['nonlinear'] + subsys._lin_rel_vec_name_list
             else:
                 vec_names = subsys._vec_names
 
@@ -1357,9 +1358,9 @@ class Group(System):
                         ext_sizes[vec_name][type_][1] + np.sum(sizes[type_][iproc, idx2:]),
                     )
 
-            if subsys._use_derivatives:
-                sub_ext_num_vars['nonlinear'] = sub_ext_num_vars['linear']
-                sub_ext_sizes['nonlinear'] = sub_ext_sizes['linear']
+            # if subsys._use_derivatives:
+            #     sub_ext_num_vars['nonlinear'] = sub_ext_num_vars['linear']
+            #     sub_ext_sizes['nonlinear'] = sub_ext_sizes['linear']
 
             subsys._setup_global(sub_ext_num_vars, sub_ext_sizes)
 

@@ -114,8 +114,8 @@ class AssembledJacobian(Jacobian):
         ext_mtx = self._matrix_class(system.comm, False)
 
         iproc = system.comm.rank
-        abs2idx = system._var_allprocs_abs2idx['nonlinear']
-        in_sizes = system._var_sizes['nonlinear']['input']
+        abs2idx = system._var_allprocs_abs2idx['linear']
+        in_sizes = system._var_sizes['linear']['input']
         out_ranges = self._out_ranges
         in_ranges = self._in_ranges
 
@@ -235,14 +235,14 @@ class AssembledJacobian(Jacobian):
         conns = {} if isinstance(system, Component) else system._conn_global_abs_in2out
 
         iproc = system.comm.rank
-        sizes = system._var_sizes['nonlinear']['input']
-        abs2idx = system._var_allprocs_abs2idx['nonlinear']
+        sizes = system._var_sizes['linear']['input']
+        abs2idx = system._var_allprocs_abs2idx['linear']
         in_offset = {n: np.sum(sizes[iproc, :abs2idx[n]]) for n in
                      system._var_abs_names['input'] if n not in conns}
 
         subjacs_info = self._subjacs_info
 
-        sizes = system._var_sizes['nonlinear']['output']
+        sizes = system._var_sizes['linear']['output']
         for s in system.system_iter(recurse=True, include_self=True, typ=Component):
             for res_abs_name in s._var_abs_names['output']:
                 res_offset = np.sum(sizes[iproc, :abs2idx[res_abs_name]])
@@ -262,8 +262,8 @@ class AssembledJacobian(Jacobian):
         if ext_mtx._submats:
             sizes = system._var_sizes
             iproc = system.comm.rank
-            out_size = np.sum(sizes['nonlinear']['output'][iproc, :])
-            in_size = np.sum(sizes['nonlinear']['input'][iproc, :])
+            out_size = np.sum(sizes['linear']['output'][iproc, :])
+            in_size = np.sum(sizes['linear']['input'][iproc, :])
             ext_mtx._build(out_size, in_size)
         else:
             ext_mtx = None

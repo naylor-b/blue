@@ -77,8 +77,8 @@ class ExplicitComponent(Component):
             'of' and 'wrt' variable sizes.
         """
         iproc = self.comm.rank
-        out_sizes = self._var_sizes['nonlinear']['output'][iproc]
-        in_sizes = self._var_sizes['nonlinear']['input'][iproc]
+        out_sizes = self._var_sizes['linear']['output'][iproc]
+        in_sizes = self._var_sizes['linear']['input'][iproc]
         return out_sizes, in_sizes
 
     def _jacobian_wrt_iter(self, wrt_matches=None):
