@@ -1080,7 +1080,7 @@ class Group(System):
                         np.any(out_meta['res_ref'] != 1.0)
                     )
 
-                if (not needs_input_scaling and abs_in in abs2meta and
+                if (not needs_input_scaling and abs_in in abs2meta and abs_out in abs2meta and
                         abs2meta[abs_in]['src_indices'] is None):
                     self._nocopy_inputs[abs_in] = abs_out
 

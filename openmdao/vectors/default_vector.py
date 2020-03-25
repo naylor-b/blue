@@ -291,10 +291,11 @@ class DefaultVector(Vector):
                 yield arr, start, end, idxs
                 start = end
         else:
+            idxs = np.asarray(idxs)
             for arr in self._views_flat.values():
                 end += arr.size
                 in_arr = logical_and(start <= idxs, idxs < end)
-                yield arr, start, end, in_arr
+                yield arr, start, end, idxs[in_arr] - start
                 start = end
 
     def add_scal_vec(self, val, vec):
