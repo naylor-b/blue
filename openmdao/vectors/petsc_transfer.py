@@ -107,14 +107,15 @@ class PETScTransfer(DefaultTransfer):
                 if abs_out not in relvars['output'] or abs_in not in relvars['input']:
                     continue
 
+                idx_in = allprocs_abs2idx[abs_in]
+
                 # Only continue if the input exists on this processor
-                if abs_in in abs2meta:
+                if sizes_in[myproc, idx_in] > 0:
 
                     # Get meta
                     meta_in = abs2meta[abs_in]
                     meta_out = allprocs_abs2meta[abs_out]
 
-                    idx_in = allprocs_abs2idx[abs_in]
                     idx_out = allprocs_abs2idx[abs_out]
 
                     # Read in and process src_indices
