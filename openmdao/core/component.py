@@ -299,7 +299,7 @@ class Component(System):
         else:
             self._discrete_inputs = self._discrete_outputs = ()
 
-    def _setup_var_sizes(self, recurse=True):
+    def _setup_var_sizes(self, nocopy_inputs, recurse=True):
         """
         Compute the arrays of local variable sizes for all variables/procs on this system.
 
@@ -308,7 +308,7 @@ class Component(System):
         recurse : bool
             Whether to call this method in subsystems.
         """
-        super(Component, self)._setup_var_sizes()
+        super(Component, self)._setup_var_sizes(nocopy_inputs)
 
         iproc = self.comm.rank
         nproc = self.comm.size
@@ -332,12 +332,16 @@ class Component(System):
                 relnames = self._var_allprocs_abs_names
 
             sizes[vec_name] = {}
-            for type_ in ('input', 'output'):
-                sizes[vec_name][type_] = sz = np.zeros((nproc, len(relnames[type_])), int)
-
-                # Compute _var_sizes
-                for idx, abs_name in enumerate(relnames[type_]):
+            sizes[vec_name]['input'] = sz = np.zeros((nproc, len(relnames['input'])), int)
+            nonlin = vec_name == 'nonlinear'
+            # Compute _var_sizes
+            for idx, abs_name in enumerate(relnames['input']):
+                if not nonlin or abs_name not in nocopy_inputs:
                     sz[iproc, idx] = abs2meta[abs_name]['size']
+            sizes[vec_name]['output'] = sz = np.zeros((nproc, len(relnames['output'])), int)
+            # Compute _var_sizes
+            for idx, abs_name in enumerate(relnames['output']):
+                sz[iproc, idx] = abs2meta[abs_name]['size']
 
         if nproc > 1:
             for vec_name in vec_names:

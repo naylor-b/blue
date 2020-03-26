@@ -841,9 +841,9 @@ class System(object):
         self._setup_global_connections(recurse=recurse)
         self._setup_relevance(mode, self._relevant)
         self._setup_var_index_ranges(recurse=recurse)
-        self._setup_var_sizes(recurse=recurse)
+        self._setup_var_sizes(self._nocopy_inputs, recurse=recurse)
         self._setup_connections(recurse=recurse)
-        self._setup_nocopy(self._nocopy_inputs, recurse=recurse)
+        # self._setup_nocopy(self._nocopy_inputs, recurse=recurse)
 
     def _post_configure(self):
         """
@@ -1526,7 +1526,7 @@ class System(object):
             for subsys in self._subsystems_myproc:
                 subsys._setup_var_index_maps(recurse)
 
-    def _setup_var_sizes(self, recurse=True):
+    def _setup_var_sizes(self, nocopy_inputs, recurse=True):
         """
         Compute the arrays of local variable sizes for all variables/procs on this system.
 
@@ -1706,21 +1706,21 @@ class System(object):
         """
         pass
 
-    def _setup_nocopy(self, nocopy_inputs, recurse=True):
-        # Recursion
+    # def _setup_nocopy(self, nocopy_inputs, recurse=True):
+    #     # Recursion
 
-        if nocopy_inputs:
-            if recurse:
-                for subsys in self._subsystems_myproc:
-                    subsys._setup_nocopy(nocopy_inputs, recurse)
+    #     if nocopy_inputs:
+    #         if recurse:
+    #             for subsys in self._subsystems_myproc:
+    #                 subsys._setup_nocopy(nocopy_inputs, recurse)
 
-            iproc = self.comm.rank
-            abs2idx = self._var_allprocs_abs2idx['nonlinear']
-            vsizes = self._var_sizes['nonlinear']['input']
-            nocopy_set = set(nocopy_inputs)
-            for name in nocopy_set.intersection(self._var_relevant_names['nonlinear']['input']):
-                # get rid of any storage for this var in the input vector
-                vsizes[iproc, abs2idx[name]] = 0
+    #         iproc = self.comm.rank
+    #         abs2idx = self._var_allprocs_abs2idx['nonlinear']
+    #         vsizes = self._var_sizes['nonlinear']['input']
+    #         nocopy_set = set(nocopy_inputs)
+    #         for name in nocopy_set.intersection(self._var_relevant_names['nonlinear']['input']):
+    #             # get rid of any storage for this var in the input vector
+    #             vsizes[iproc, abs2idx[name]] = 0
 
     def _setup_global(self, ext_num_vars, ext_sizes):
         """

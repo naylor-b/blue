@@ -616,8 +616,7 @@ class Group(System):
                 abs_names[type_].extend(subsys._var_abs_names[type_])
                 abs_names_discrete[type_].extend(subsys._var_abs_names_discrete[type_])
 
-                allprocs_discrete[type_].update({k: v for k, v in
-                                                 subsys._var_allprocs_discrete[type_].items()})
+                allprocs_discrete[type_].update(subsys._var_allprocs_discrete[type_])
                 var_discrete[type_].update({sub_prefix + k: v for k, v in
                                             subsys._var_discrete[type_].items()})
 
@@ -698,7 +697,7 @@ class Group(System):
         else:
             self._discrete_inputs = self._discrete_outputs = ()
 
-    def _setup_var_sizes(self, recurse=True):
+    def _setup_var_sizes(self, nocopy_inputs, recurse=True):
         """
         Compute the arrays of local variable sizes for all variables/procs on this system.
 
@@ -707,7 +706,7 @@ class Group(System):
         recurse : bool
             Whether to call this method in subsystems.
         """
-        super(Group, self)._setup_var_sizes()
+        super(Group, self)._setup_var_sizes(nocopy_inputs)
 
         self._var_offsets = None
 
@@ -719,7 +718,7 @@ class Group(System):
         # Recursion
         if recurse:
             for subsys in self._subsystems_myproc:
-                subsys._setup_var_sizes(recurse)
+                subsys._setup_var_sizes(nocopy_inputs, recurse)
 
         sizes = self._var_sizes
         relnames = self._var_allprocs_relevant_names
@@ -832,9 +831,11 @@ class Group(System):
         allprocs_prom2abs_list_in = self._var_allprocs_prom2abs_list['input']
         allprocs_prom2abs_list_out = self._var_allprocs_prom2abs_list['output']
         abs2meta = self._var_abs2meta
+        allprocs_abs2meta = self._var_allprocs_abs2meta
         pathname = self.pathname
 
         abs_in2out = {}
+        self._nocopy_inputs = {}
 
         if pathname == '':
             path_len = 0
@@ -855,7 +856,7 @@ class Group(System):
 
                     # if connection is contained in a subgroup, add to conns
                     # to pass down to subsystems.
-                    if inparts[:nparts + 1] == outparts[:nparts + 1]:
+                    if inparts[nparts] == outparts[nparts]:
                         new_conns[inparts[nparts]][abs_in] = abs_out
 
         # Add implicit connections (only ones owned by this group)
@@ -867,6 +868,8 @@ class Group(System):
                     in_subsys = abs_in[path_len:].split('.', 1)[0]
                     if out_subsys != in_subsys:
                         abs_in2out[abs_in] = abs_out
+
+        my_conns = {}
 
         # Add explicit connections (only ones declared by this group)
         for prom_in, (prom_out, src_indices, flat_src_indices) in \
@@ -937,6 +940,18 @@ class Group(System):
                 # if connection is contained in a subgroup, add to conns to pass down to subsystems.
                 if inparts[:nparts + 1] == outparts[:nparts + 1]:
                     new_conns[inparts[nparts]][abs_in] = abs_out
+                else:
+                    my_conns[abs_in] = abs_out
+
+        my_conns.update(global_abs_in2out)
+
+        self._mark_nocopy(my_conns)
+
+        # Compute global_abs_in2out by first adding this group's contributions,
+        # then adding contributions from systems above/below, then allgathering.
+        conn_list = list(global_abs_in2out.items())
+        conn_list.extend(abs_in2out.items())
+        global_abs_in2out.update(abs_in2out)
 
         # Recursion
         if recurse:
@@ -948,18 +963,10 @@ class Group(System):
                                                          conns=new_conns[subsys.name])
                     else:
                         subsys._setup_global_connections(recurse=recurse)
+                    global_abs_in2out.update(subsys._conn_global_abs_in2out)
+                    conn_list.extend(subsys._conn_global_abs_in2out.items())
                 elif subsys.options['distributed'] and subsys.comm.size > 1:
                     distcomps.append(subsys)
-
-        # Compute global_abs_in2out by first adding this group's contributions,
-        # then adding contributions from systems above/below, then allgathering.
-        conn_list = list(global_abs_in2out.items())
-        conn_list.extend(abs_in2out.items())
-        global_abs_in2out.update(abs_in2out)
-
-        for subsys in self._subgroups_myproc:
-            global_abs_in2out.update(subsys._conn_global_abs_in2out)
-            conn_list.extend(subsys._conn_global_abs_in2out.items())
 
         if len(conn_list) > len(global_abs_in2out):
             dupes = [n for n, val in Counter(tgt for tgt, src in conn_list).items() if val > 1]
@@ -989,6 +996,41 @@ class Group(System):
                 for comp in distcomps:
                     comp._update_dist_src_indices(global_abs_in2out)
 
+    def _mark_nocopy(self, my_conns):
+        allprocs_abs2meta = self._var_allprocs_abs2meta
+        allprocs_discrete_in = self._var_allprocs_discrete['input']
+        allprocs_discrete_out = self._var_allprocs_discrete['output']
+
+        for abs_in, abs_out in my_conns.items():
+            needs_input_scaling = False
+
+            # if connected output has scaling then we need input scaling
+            if not (abs_in in allprocs_discrete_in or abs_out in allprocs_discrete_out):
+                abs2meta = self._var_abs2meta
+                out_meta = allprocs_abs2meta[abs_out]
+                in_meta = allprocs_abs2meta[abs_in]
+
+                out_units = out_meta['units']
+                in_units = in_meta['units']
+
+                # if units are defined and different, we need input scaling.
+                needs_input_scaling = (in_units and out_units and in_units != out_units)
+
+                # we also need it if a connected output has any scaling.
+                if not needs_input_scaling:
+
+                    needs_input_scaling = (
+                        np.any(out_meta['ref'] != 1.0) or
+                        np.any(out_meta['ref0']) or
+                        np.any(out_meta['res_ref'] != 1.0)
+                    )
+
+                if (not needs_input_scaling and abs_in in abs2meta and abs_out in abs2meta and
+                        abs2meta[abs_in]['src_indices'] is None):
+                    self._nocopy_inputs[abs_in] = abs_out
+
+                in_meta['has_input_scaling'] = int(needs_input_scaling)
+
     def _setup_connections(self, recurse=True):
         """
         Compute dict of all connections owned by this Group.
@@ -1003,7 +1045,6 @@ class Group(System):
         pathname = self.pathname
         allprocs_discrete_in = self._var_allprocs_discrete['input']
         allprocs_discrete_out = self._var_allprocs_discrete['output']
-        self._nocopy_inputs = {}
 
         # Recursion
         if recurse:
@@ -1035,7 +1076,7 @@ class Group(System):
         # ref or ref0 are defined for the output.
         for abs_in, abs_out in global_abs_in2out.items():
 
-            needs_input_scaling = False
+            # needs_input_scaling = False
 
             # First, check that this system owns both the input and output.
             if abs_in[:path_len] == path_dot and abs_out[:path_len] == path_dot:
@@ -1062,29 +1103,30 @@ class Group(System):
                             if out_path not in self._local_system_set:
                                 self._vector_class = self._distributed_vector_class
 
-            # if connected output has scaling then we need input scaling
+            # # if connected output has scaling then we need input scaling
+            # if not (abs_in in allprocs_discrete_in or abs_out in allprocs_discrete_out):
+            #     out_units = allprocs_abs2meta[abs_out]['units']
+            #     in_units = allprocs_abs2meta[abs_in]['units']
+
+            #     # if units are defined and different, we need input scaling.
+            #     needs_input_scaling = (in_units and out_units and in_units != out_units)
+
+            #     # we also need it if a connected output has any scaling.
+            #     if not needs_input_scaling:
+            #         out_meta = allprocs_abs2meta[abs_out]
+
+            #         needs_input_scaling = (
+            #             np.any(out_meta['ref'] != 1.0) or
+            #             np.any(out_meta['ref0']) or
+            #             np.any(out_meta['res_ref'] != 1.0)
+            #         )
+
+            #     if (not needs_input_scaling and abs_in in abs2meta and abs_out in abs2meta and
+            #             abs2meta[abs_in]['src_indices'] is None):
+            #         self._nocopy_inputs[abs_in] = abs_out
+
             if not (abs_in in allprocs_discrete_in or abs_out in allprocs_discrete_out):
-                out_units = allprocs_abs2meta[abs_out]['units']
-                in_units = allprocs_abs2meta[abs_in]['units']
-
-                # if units are defined and different, we need input scaling.
-                needs_input_scaling = (in_units and out_units and in_units != out_units)
-
-                # we also need it if a connected output has any scaling.
-                if not needs_input_scaling:
-                    out_meta = allprocs_abs2meta[abs_out]
-
-                    needs_input_scaling = (
-                        np.any(out_meta['ref'] != 1.0) or
-                        np.any(out_meta['ref0']) or
-                        np.any(out_meta['res_ref'] != 1.0)
-                    )
-
-                if (not needs_input_scaling and abs_in in abs2meta and abs_out in abs2meta and
-                        abs2meta[abs_in]['src_indices'] is None):
-                    self._nocopy_inputs[abs_in] = abs_out
-
-            self._has_input_scaling |= needs_input_scaling
+                self._has_input_scaling |= allprocs_abs2meta[abs_in].get('has_input_scaling', 0)
 
         # check compatability for any discrete connections
         for abs_in, abs_out in self._conn_discrete_in2out.items():
