@@ -83,12 +83,8 @@ class DefaultVector(Vector):
         sizes = system._var_sizes[self._name][type_]
         ind1 = system._ext_sizes[self._name][type_][0]
         ind2 = ind1 + np.sum(sizes[iproc, :])
-        # if self._kind == 'input':
-        #     print(system.pathname, self._name, self._kind, "sizes", sizes[iproc,:], 'ind1', ind1, 'ind2', ind2)
 
         data = root_vec._data[ind1:ind2]
-        # if self._kind == 'input':
-        #     print("root_data", root_vec._data, "data", data)
 
         # Extract view for complex storage too.
         if self._alloc_complex:
@@ -97,8 +93,6 @@ class DefaultVector(Vector):
         if self._do_scaling:
             for typ in ('phys', 'norm'):
                 root_scale = root_vec._scaling[typ]
-                # if self._kind == 'input':
-                #     print("root_scale", typ, root_scale)
                 rs0 = root_scale[0]
                 if rs0 is None:
                     scaling[typ] = (rs0, root_scale[1][ind1:ind2])
@@ -333,7 +327,7 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        if self._kind == 'input' and self._name == 'nonlinear':
+        if self._ncol == 1 and self._kind == 'input' and self._name == 'nonlinear':
             if np.isscalar(val):
                 for arr, start, end, in_arr in self._sub_arr_iter(idxs):
                     arr[in_arr] = val
@@ -357,7 +351,7 @@ class DefaultVector(Vector):
         ndarray
             Array of values.
         """
-        if self._kind == 'input' and self._name == 'nonlinear':
+        if self._ncol == 1 and self._kind == 'input' and self._name == 'nonlinear':
             return np.concatenate(list(self._views_flat.values()))
         else:
             return self._data[idxs]
@@ -373,7 +367,7 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        if self._kind == 'input' and self._name == 'nonlinear':
+        if self._ncol == 1 and self._kind == 'input' and self._name == 'nonlinear':
             if np.isscalar(val):
                 for arr, start, end, in_arr in self._sub_arr_iter(idxs):
                     arr[in_arr] += val
@@ -394,7 +388,7 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        if self._kind == 'input' and self._name == 'nonlinear':
+        if self._ncol == 1 and self._kind == 'input' and self._name == 'nonlinear':
             if np.isscalar(val):
                 for arr, start, end, in_arr in self._sub_arr_iter(idxs):
                     arr[in_arr] -= val
@@ -415,7 +409,7 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        if self._kind == 'input' and self._name == 'nonlinear':
+        if self._ncol == 1 and self._kind == 'input' and self._name == 'nonlinear':
             if np.isscalar(val):
                 for arr, start, end, in_arr in self._sub_arr_iter(idxs):
                     arr[in_arr] *= val

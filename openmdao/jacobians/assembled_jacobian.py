@@ -415,16 +415,16 @@ class AssembledJacobian(Jacobian):
 
             if mode == 'fwd':
                 if d_outputs._names:
-                    d_residuals._data += int_mtx._prod(d_outputs._data, mode)
+                    d_residuals.iadd(int_mtx._prod(d_outputs.get_val(), mode))
                 if do_mask:
-                    d_residuals._data += ext_mtx._prod(d_inputs._data, mode, mask=mask)
+                    d_residuals.iadd(ext_mtx._prod(d_inputs.get_val(), mode, mask=mask))
 
             else:  # rev
                 dresids = d_residuals._data
                 if d_outputs._names:
                     d_outputs._data += int_mtx._prod(dresids, mode)
                 if do_mask:
-                    d_inputs._data += ext_mtx._prod(dresids, mode, mask=mask)
+                    d_inputs.iadd(ext_mtx._prod(dresids, mode, mask=mask))
 
     def set_complex_step_mode(self, active):
         """

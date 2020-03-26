@@ -1774,6 +1774,8 @@ class System(object):
                 rootvec = root_vectors[kind][vec_name]
                 if kind == 'input' and vec_name == 'nonlinear':
                     outvec = root_vectors['output'][vec_name]
+                    if outvec._ncol > 1:
+                        outvec = None
                 else:
                     outvec = None
                 vectors[kind][vec_name] = vector_class(
