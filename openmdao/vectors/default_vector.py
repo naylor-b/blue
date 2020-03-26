@@ -39,6 +39,11 @@ class DefaultVector(Vector):
     def _update_root_data(self, outvec):
         """
         Resize the root data if necesary (i.e., due to reconfiguration).
+
+        Parameters
+        ----------
+        outvec : Vector or None
+            If not None, the output vector used to share memory for nocopy inputs.
         """
         system = self._system()
         type_ = self._typ
@@ -142,13 +147,21 @@ class DefaultVector(Vector):
         Sets the following attributes:
         _views
         _views_flat
+
+        Parameters
+        ----------
+        outvec : Vector or None
+            If not None, the output vector used to share memory for nocopy inputs.
         """
         system = self._system()
         type_ = self._typ
         kind = self._kind
         iproc = self._iproc
         ncol = self._ncol
-        nocopy = self._root_vector._system()._nocopy_inputs if ncol == 1 and kind == 'input' and self._name == 'nonlinear' else {}
+        if ncol == 1 and kind == 'input' and self._name == 'nonlinear':
+            nocopy = self._root_vector._system()._nocopy_inputs
+        else:
+            nocopy = {}
 
         do_scaling = self._do_scaling
         if do_scaling:

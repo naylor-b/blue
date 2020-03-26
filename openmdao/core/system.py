@@ -160,6 +160,8 @@ class System(object):
         Storage for discrete input values.
     _discrete_outputs : dict-like or None
         Storage for discrete output values.
+    _nocopy_inputs : dict
+        Mapping of inputs that share memory with their connected output.
     _var_allprocs_abs2idx : dict
         Dictionary mapping absolute names to their indices among this system's allprocs variables.
         Therefore, the indices range from 0 to the total number of this system's variables.
@@ -1715,7 +1717,8 @@ class System(object):
             iproc = self.comm.rank
             abs2idx = self._var_allprocs_abs2idx['nonlinear']
             vsizes = self._var_sizes['nonlinear']['input']
-            for name in set(nocopy_inputs).intersection(self._var_relevant_names['nonlinear']['input']):
+            nocopy_set = set(nocopy_inputs)
+            for name in nocopy_set.intersection(self._var_relevant_names['nonlinear']['input']):
                 # get rid of any storage for this var in the input vector
                 vsizes[iproc, abs2idx[name]] = 0
 

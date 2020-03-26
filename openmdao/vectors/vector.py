@@ -371,6 +371,11 @@ class Vector(object):
 
         - _views
         - _views_flat
+
+        Parameters
+        ----------
+        outvec : Vector or None
+            If not None, the output vector used to share memory for nocopy inputs.
         """
         raise NotImplementedError('_initialize_views not defined for vector type %s' %
                                   type(self).__name__)
