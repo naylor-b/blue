@@ -184,7 +184,7 @@ class PETScVector(DefaultVector):
         values.
         """
         if self._ncol == 1:
-            self._petsc.array = self.get_val()
+            self._petsc.array = self._data
         else:
             # With Vectorized derivative solves, data contains multiple columns.
             icol = self._icol

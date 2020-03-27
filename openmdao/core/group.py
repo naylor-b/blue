@@ -1023,7 +1023,8 @@ class Group(System):
                     )
 
                 if (not needs_input_scaling and abs_in in abs2meta and abs_out in abs2meta and
-                        abs2meta[abs_in]['src_indices'] is None):
+                        abs2meta[abs_in]['src_indices'] is None and not in_meta['distributed'] and
+                        not out_meta['distributed']):
                     self._nocopy_inputs[abs_in] = abs_out
 
                 in_meta['has_input_scaling'] = int(needs_input_scaling)

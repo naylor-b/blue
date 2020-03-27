@@ -145,6 +145,8 @@ class TestPETScVector2Proc(unittest.TestCase):
         # Need a nonlinear solver since the model is coupled
         top_group.nonlinear_solver = om.NonlinearBlockGS(iprint=0, maxiter=20)
 
+        #import wingdbstub
+
         prob.setup()
         prob.run_model()
 
