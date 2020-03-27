@@ -701,6 +701,8 @@ class Group(System):
 
         Parameters
         ----------
+        nocopy_inputs : dict
+            Mapping of any inputs that share memory with their connected output.
         recurse : bool
             Whether to call this method in subsystems.
         """
@@ -866,8 +868,6 @@ class Group(System):
                     if out_subsys != in_subsys:
                         abs_in2out[abs_in] = abs_out
 
-        my_conns = {}
-
         # Add explicit connections (only ones declared by this group)
         for prom_in, (prom_out, src_indices, flat_src_indices) in \
                 self._manual_connections.items():
@@ -937,12 +937,6 @@ class Group(System):
                 # if connection is contained in a subgroup, add to conns to pass down to subsystems.
                 if inparts[:nparts + 1] == outparts[:nparts + 1]:
                     new_conns[inparts[nparts]][abs_in] = abs_out
-                else:
-                    my_conns[abs_in] = abs_out
-
-        my_conns.update(global_abs_in2out)
-
-        self._mark_nocopy(my_conns)
 
         # Compute global_abs_in2out by first adding this group's contributions,
         # then adding contributions from systems above/below, then allgathering.
@@ -992,6 +986,9 @@ class Group(System):
             if recurse:
                 for comp in distcomps:
                     comp._update_dist_src_indices(global_abs_in2out)
+
+        if self.pathname == '':  # only do at the top
+            self._mark_nocopy(global_abs_in2out)
 
     def _mark_nocopy(self, my_conns):
         allprocs_abs2meta = self._var_allprocs_abs2meta
@@ -1048,7 +1045,6 @@ class Group(System):
         if recurse:
             for subsys in self._subsystems_myproc:
                 subsys._setup_connections(recurse)
-                self._nocopy_inputs.update(subsys._nocopy_inputs)
 
         if MPI:
             # collect set of local (not remote, not distributed) subsystems so we can
@@ -1100,28 +1096,6 @@ class Group(System):
                             out_path = abs_out.rsplit('.', 1)[0]
                             if out_path not in self._local_system_set:
                                 self._vector_class = self._distributed_vector_class
-
-            # # if connected output has scaling then we need input scaling
-            # if not (abs_in in allprocs_discrete_in or abs_out in allprocs_discrete_out):
-            #     out_units = allprocs_abs2meta[abs_out]['units']
-            #     in_units = allprocs_abs2meta[abs_in]['units']
-
-            #     # if units are defined and different, we need input scaling.
-            #     needs_input_scaling = (in_units and out_units and in_units != out_units)
-
-            #     # we also need it if a connected output has any scaling.
-            #     if not needs_input_scaling:
-            #         out_meta = allprocs_abs2meta[abs_out]
-
-            #         needs_input_scaling = (
-            #             np.any(out_meta['ref'] != 1.0) or
-            #             np.any(out_meta['ref0']) or
-            #             np.any(out_meta['res_ref'] != 1.0)
-            #         )
-
-            #     if (not needs_input_scaling and abs_in in abs2meta and abs_out in abs2meta and
-            #             abs2meta[abs_in]['src_indices'] is None):
-            #         self._nocopy_inputs[abs_in] = abs_out
 
             if not (abs_in in allprocs_discrete_in or abs_out in allprocs_discrete_out):
                 self._has_input_scaling |= allprocs_abs2meta[abs_in].get('has_input_scaling', 0)

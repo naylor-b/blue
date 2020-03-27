@@ -841,7 +841,6 @@ class System(object):
         self._setup_var_index_ranges(recurse=recurse)
         self._setup_var_sizes(self._nocopy_inputs, recurse=recurse)
         self._setup_connections(recurse=recurse)
-        # self._setup_nocopy(self._nocopy_inputs, recurse=recurse)
 
     def _post_configure(self):
         """
@@ -1528,6 +1527,8 @@ class System(object):
 
         Parameters
         ----------
+        nocopy_inputs : dict
+            Mapping of any inputs that share memory with their connected output.
         recurse : bool
             Whether to call this method in subsystems.
         """

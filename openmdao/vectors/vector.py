@@ -159,6 +159,11 @@ class Vector(object):
         else:
             self._root_vector = root_vector
 
+        if name == 'nonlinear' and kind == 'input' and ncol == 1:
+            self._nocopy = self._root_vector._system()._nocopy_inputs
+        else:
+            self._nocopy = {}
+
         if resize:
             if root_vector is None:
                 raise RuntimeError(

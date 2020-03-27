@@ -305,6 +305,8 @@ class Component(System):
 
         Parameters
         ----------
+        nocopy_inputs : dict
+            Mapping of any inputs that share memory with their connected output.
         recurse : bool
             Whether to call this method in subsystems.
         """

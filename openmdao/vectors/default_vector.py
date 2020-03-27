@@ -158,10 +158,7 @@ class DefaultVector(Vector):
         kind = self._kind
         iproc = self._iproc
         ncol = self._ncol
-        if ncol == 1 and kind == 'input' and self._name == 'nonlinear':
-            nocopy = self._root_vector._system()._nocopy_inputs
-        else:
-            nocopy = {}
+        nocopy = self._nocopy
 
         do_scaling = self._do_scaling
         if do_scaling:
@@ -346,7 +343,7 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        if self._ncol == 1 and self._kind == 'input' and self._name == 'nonlinear':
+        if self._nocopy:
             if np.isscalar(val):
                 for arr, start, end, in_arr in self._sub_arr_iter(idxs):
                     arr[in_arr] = val
@@ -370,7 +367,7 @@ class DefaultVector(Vector):
         ndarray
             Array of values.
         """
-        if self._ncol == 1 and self._kind == 'input' and self._name == 'nonlinear':
+        if self._nocopy:
             return np.concatenate(list(self._views_flat.values()))
         else:
             return self._data[idxs]
@@ -386,7 +383,7 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        if self._ncol == 1 and self._kind == 'input' and self._name == 'nonlinear':
+        if self._nocopy:
             if np.isscalar(val):
                 for arr, start, end, in_arr in self._sub_arr_iter(idxs):
                     arr[in_arr] += val
@@ -407,7 +404,7 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        if self._ncol == 1 and self._kind == 'input' and self._name == 'nonlinear':
+        if self._nocopy:
             if np.isscalar(val):
                 for arr, start, end, in_arr in self._sub_arr_iter(idxs):
                     arr[in_arr] -= val
@@ -428,7 +425,7 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        if self._ncol == 1 and self._kind == 'input' and self._name == 'nonlinear':
+        if self._nocopy:
             if np.isscalar(val):
                 for arr, start, end, in_arr in self._sub_arr_iter(idxs):
                     arr[in_arr] *= val
@@ -484,6 +481,29 @@ class DefaultVector(Vector):
             self._slices = slices
 
         return self._slices
+
+    def _get_non_shared_slice_dict(self):
+        """
+        Return a dict of var names mapped to their slice in the local data array.
+
+        Inputs that share memory with connected outputs are excluded.
+
+        Returns
+        -------
+        dict
+            Mapping of var name to slice.
+        """
+        if self._non_shared_slices is None:
+            slices = {}
+            start = end = 0
+            for name in self._system()._var_relevant_names[self._name][self._typ]:
+                if name not in self._nocopy:
+                    end += self._views_flat[name].size
+                    slices[name] = slice(start, end)
+                    start = end
+            self._non_shared_slices = slices
+
+        return self._non_shared_slices
 
     def _enforce_bounds_vector(self, du, alpha, lower_bounds, upper_bounds):
         """
