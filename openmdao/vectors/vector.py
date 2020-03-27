@@ -125,6 +125,7 @@ class Vector(object):
         self._ncol = ncol
         self._icol = None
         self._relevant = relevant
+        self._len = 0
 
         self._system = weakref.ref(system)
 
@@ -193,7 +194,7 @@ class Vector(object):
         int
             Total flattened length of this vector.
         """
-        return self._data.size
+        return self._len
 
     def _copy_views(self):
         """

@@ -187,6 +187,8 @@ class DefaultVector(Vector):
             offs = offs[0].copy()
         offsets_t = offs
 
+        length = 0
+
         abs2meta = system._var_abs2meta
         for abs_name in system._var_relevant_names[self._name][type_]:
             idx = allprocs_abs2idx_t[abs_name]
@@ -203,6 +205,9 @@ class DefaultVector(Vector):
                 views_flat[abs_name] = v = outvec._views_flat[nocopy[abs_name]]
             else:
                 views_flat[abs_name] = v = self._data[ind1:ind2]
+
+            length += v.size
+
             if shape != v.shape:
                 v = v.view()
                 v.shape = shape
@@ -229,6 +234,7 @@ class DefaultVector(Vector):
                     vec[1][ind1:ind2] = scale1
 
         self._names = frozenset(views)
+        self._len = length
 
     def __iadd__(self, vec):
         """
