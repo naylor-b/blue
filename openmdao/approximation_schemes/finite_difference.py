@@ -299,7 +299,6 @@ class FiniteDifference(ApproximationScheme):
         if total:
             system.run_solve_nonlinear()
             self._results_tmp[:] = system._outputs.get_val()
-            # system._outputs.set_val(self._starting_outs)
         else:
             system.run_apply_nonlinear()
             self._results_tmp[:] = system._residuals.get_val()
@@ -309,12 +308,5 @@ class FiniteDifference(ApproximationScheme):
         # save results and restore starting inputs/outputs
         system._inputs.set_val(self._starting_ins)
         system._outputs.set_val(self._starting_outs)
-
-        # if results_vec are the residuals then we need to remove the delta's we added earlier
-        # to the outputs
-        if not total:
-            for vec, idxs in idx_info:
-                if vec is system._outputs:
-                    vec.isub(delta, idxs)
 
         return self._results_tmp
