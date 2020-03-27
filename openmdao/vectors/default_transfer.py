@@ -51,13 +51,10 @@ class DefaultTransfer(Transfer):
         vectors = group._vectors
         offsets = _global2local_offsets(group._get_var_offsets())
 
-        # vec_names = group._lin_rel_vec_name_list if group._use_derivatives else group._vec_names
-        vec_names = group._vec_names
-
         mypathlen = len(group.pathname + '.' if group.pathname else '')
         sub_inds = group._subsystems_inds
 
-        for vec_name in vec_names:
+        for vec_name in group._get_all_relevant_vec_names():
             relvars, _ = group._relevant[vec_name]['@all']
             relvars_in = relvars['input']
             relvars_out = relvars['output']

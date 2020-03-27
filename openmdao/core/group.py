@@ -512,10 +512,8 @@ class Group(System):
 
         subsystems_var_range = self._subsystems_var_range = {}
 
-        vec_names = self._vec_names
-
         # First compute these on one processor for each subsystem
-        for vec_name in vec_names:
+        for vec_name in self._get_all_relevant_vec_names():
 
             # Here, we count the number of variables in each subsystem.
             # We do this so that we can compute the offset when we recurse into each subsystem.
@@ -723,8 +721,7 @@ class Group(System):
         sizes = self._var_sizes
         relnames = self._var_allprocs_relevant_names
 
-        # vec_names = self._lin_rel_vec_name_list if self._use_derivatives else self._vec_names
-        vec_names = self._vec_names
+        vec_names = self._get_all_relevant_vec_names()
 
         n_distrib_vars = 0
 
@@ -764,7 +761,7 @@ class Group(System):
 
         # If parallel, all gather
         if self.comm.size > 1:
-            for vec_name in self._lin_rel_vec_name_list:
+            for vec_name in vec_names:
                 sizes = self._var_sizes[vec_name]
                 for type_ in ['input', 'output']:
                     sizes_in = sizes[type_][iproc, :].copy()
@@ -1376,12 +1373,7 @@ class Group(System):
             sub_ext_num_vars = {}
             sub_ext_sizes = {}
 
-            if subsys._use_derivatives:
-                vec_names = ['nonlinear'] + subsys._lin_rel_vec_name_list
-            else:
-                vec_names = subsys._vec_names
-
-            for vec_name in vec_names:
+            for vec_name in subsys._get_all_relevant_vec_names():
                 subsystems_var_range = self._subsystems_var_range[vec_name]
                 sizes = self._var_sizes[vec_name]
 

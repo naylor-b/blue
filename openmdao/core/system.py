@@ -586,9 +586,7 @@ class System(object):
             ext_num_vars = {}
             ext_sizes = {}
 
-            vec_names = self._vec_names
-
-            for vec_name in vec_names:
+            for vec_name in self._get_all_relevant_vec_names():
                 ext_num_vars[vec_name] = {}
                 ext_sizes[vec_name] = {}
                 for type_ in ['input', 'output']:
@@ -627,7 +625,7 @@ class System(object):
 
         if initial:
             relevant = self._relevant
-            vec_names = self._rel_vec_name_list if self._use_derivatives else self._vec_names
+            vec_names = self._get_all_relevant_vec_names()
             vois = self._vois
             abs2idx = self._var_allprocs_abs2idx
 
@@ -1510,16 +1508,14 @@ class System(object):
         """
         self._var_allprocs_abs2idx = abs2idx = {}
 
-        vec_names = self._lin_rel_vec_name_list if self._use_derivatives else self._vec_names
-
-        for vec_name in vec_names:
+        for vec_name in self._get_all_relevant_vec_names():
             abs2idx[vec_name] = abs2idx_t = {}
             for type_ in ['input', 'output']:
                 for i, abs_name in enumerate(self._var_allprocs_relevant_names[vec_name][type_]):
                     abs2idx_t[abs_name] = i
 
-        if self._use_derivatives:
-            abs2idx['nonlinear'] = abs2idx['linear']
+        # if self._use_derivatives:
+        #     abs2idx['nonlinear'] = abs2idx['linear']
 
         # Recursion
         if recurse:
@@ -2315,6 +2311,20 @@ class System(object):
                 self._vectors['output'][vec_name],
                 self._vectors['residual'][vec_name])
 
+    def _get_all_relevant_vec_names(self):
+        """
+        Return all (linear and nonlinear) relevant vector names.
+
+        Returns
+        -------
+        list
+            List of relevant vector names.
+        """
+        if self._use_derivatives:
+            return ['nonlinear'] + self._lin_rel_vec_name_list
+        else:
+            return self._vec_names
+
     def _get_var_offsets(self):
         """
         Compute global offsets for variables.
@@ -2328,7 +2338,7 @@ class System(object):
             offsets = self._var_offsets = {}
             vec_names = self._vec_names
 
-            for vec_name in vec_names:
+            for vec_name in self._get_all_relevant_vec_names():
                 offsets[vec_name] = off_vn = {}
                 for type_ in ['input', 'output']:
                     vsizes = self._var_sizes[vec_name][type_]
