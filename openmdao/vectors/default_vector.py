@@ -488,11 +488,6 @@ class DefaultVector(Vector):
         Return a dict of var names mapped to their slice in the local data array.
 
         Inputs that share memory with connected outputs are excluded.
-
-        Returns
-        -------
-        dict
-            Mapping of var name to slice.
         """
         if self._nocopy:
             slices = {}

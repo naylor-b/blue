@@ -87,6 +87,10 @@ class Vector(object):
         When True, values in the vector cannot be changed via the user __setitem__ API.
     _under_complex_step : bool
         When True, self._data is replaced with self._cplx_data.
+    _nocopy : dict
+        Mapping of inputs that share memory with connected output.  (nonlinear input vec only)
+    _len : int
+        Total length of data vector (including shared memory parts).
     """
 
     # Listing of relevant citations that should be referenced when
@@ -212,7 +216,7 @@ class Vector(object):
         dict
             Dictionary containing the _views.
         """
-        return deepcopy(self._views)
+        return deepcopy(sorted(self._views.items()))
 
     def keys(self):
         """
@@ -614,6 +618,6 @@ class Vector(object):
         self._views, self._cplx_views = self._cplx_views, self._views
         self._views_flat, self._cplx_views_flat = self._cplx_views_flat, self._views_flat
         self._under_complex_step = active
-        
+
         if arr is not None:
             self.set_val(arr)
