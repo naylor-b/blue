@@ -18,7 +18,7 @@ from openmdao.core.system import System, _supported_methods, _DEFAULT_COLORING_M
 from openmdao.approximation_schemes.complex_step import ComplexStep
 from openmdao.approximation_schemes.finite_difference import FiniteDifference
 from openmdao.jacobians.dictionary_jacobian import DictionaryJacobian
-from openmdao.vectors.vector import INT_DTYPE
+from openmdao.vectors.vector import INT_DTYPE, _full_slice
 from openmdao.utils.units import valid_units
 from openmdao.utils.name_maps import rel_key2abs_key, abs_key2rel_key, rel_name2abs_name
 from openmdao.utils.mpi import MPI
@@ -34,7 +34,6 @@ global_meta_names = {
                'ref', 'ref0', 'res_ref', 'distributed', 'lower', 'upper', 'tags'),
 }
 
-_full_slice = slice(None)
 _forbidden_chars = ['.', '*', '?', '!', '[', ']']
 _whitespace = set([' ', '\t', '\r', '\n'])
 

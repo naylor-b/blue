@@ -415,9 +415,9 @@ class AssembledJacobian(Jacobian):
 
             if mode == 'fwd':
                 if d_outputs._names:
-                    d_residuals.iadd(int_mtx._prod(d_outputs.get_val(), mode))
+                    d_residuals.iadd(int_mtx._prod(d_outputs.asarray(), mode))
                 if do_mask:
-                    d_residuals.iadd(ext_mtx._prod(d_inputs.get_val(), mode, mask=mask))
+                    d_residuals.iadd(ext_mtx._prod(d_inputs.asarray(), mode, mask=mask))
 
             else:  # rev
                 dresids = d_residuals._data

@@ -3,7 +3,7 @@ import sys
 import numpy as np
 from petsc4py import PETSc
 
-from openmdao.vectors.default_vector import DefaultVector, INT_DTYPE
+from openmdao.vectors.default_vector import DefaultVector, INT_DTYPE, _full_slice
 from openmdao.vectors.petsc_transfer import PETScTransfer
 from openmdao.utils.mpi import MPI
 
@@ -17,9 +17,6 @@ CITATION = '''@InProceedings{petsc-efficient,
     Publisher = "Birkh{\"{a}}user Press",
     Year = "1997"
 }'''
-
-
-_full_slice = slice(None)
 
 
 class PETScVector(DefaultVector):
@@ -131,7 +128,7 @@ class PETScVector(DefaultVector):
                 # temporarilly zero them out for the norm calculation.
                 dup_inds = []
                 abs2meta = system._var_allprocs_abs2meta
-                for name, idx_slice in self.get_slice_dict().items():
+                for name, idx_slice in self._non_shared_slices.items():
                     owning_rank = system._owning_rank[name]
                     if not abs2meta[name]['distributed'] and owning_rank != system.comm.rank:
                         dup_inds.extend(range(idx_slice.start, idx_slice.stop))

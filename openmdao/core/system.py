@@ -24,7 +24,7 @@ import openmdao
 from openmdao.jacobians.assembled_jacobian import DenseJacobian, CSCJacobian
 from openmdao.jacobians.dictionary_jacobian import DictionaryJacobian
 from openmdao.recorders.recording_manager import RecordingManager
-from openmdao.vectors.vector import INT_DTYPE
+from openmdao.vectors.vector import INT_DTYPE, _full_slice
 from openmdao.utils.mpi import MPI
 from openmdao.utils.options_dictionary import OptionsDictionary
 from openmdao.utils.record_util import create_local_meta, check_path
@@ -71,8 +71,6 @@ _DEFAULT_COLORING_META = {
 }
 
 _DEFAULT_COLORING_META.update(_DEF_COMP_SPARSITY_ARGS)
-
-_full_slice = slice(None)
 
 _recordable_funcs = frozenset(['_apply_linear', '_apply_nonlinear', '_solve_linear',
                                '_solve_nonlinear'])
@@ -1129,17 +1127,17 @@ class System(object):
         is_total = isinstance(self, Group)
 
         # compute perturbations
-        starting_inputs = self._inputs.get_val().copy()
+        starting_inputs = self._inputs.asarray().copy()
         in_offsets = starting_inputs.copy()
         in_offsets[in_offsets == 0.0] = 1.0
         in_offsets *= info['perturb_size']
 
-        starting_outputs = self._outputs.get_val().copy()
+        starting_outputs = self._outputs.asarray().copy()
         out_offsets = starting_outputs.copy()
         out_offsets[out_offsets == 0.0] = 1.0
         out_offsets *= info['perturb_size']
 
-        starting_resids = self._residuals.get_val().copy()
+        starting_resids = self._residuals.asarray().copy()
 
         # for groups, this does some setup of approximations
         self._setup_approx_coloring()
@@ -1772,10 +1770,8 @@ class System(object):
 
             for kind in ['output', 'residual', 'input']:
                 rootvec = root_vectors[kind][vec_name]
-                if kind == 'input' and vec_name == 'nonlinear':
+                if rootvec._nocopy:
                     outvec = root_vectors['output'][vec_name]
-                    if outvec._ncol > 1:
-                        outvec = None
                 else:
                     outvec = None
                 vectors[kind][vec_name] = vector_class(

@@ -5,13 +5,10 @@ from collections import defaultdict
 import numpy as np
 
 from openmdao.approximation_schemes.approximation_scheme import ApproximationScheme, \
-    _gather_jac_results, _get_wrt_subjacs
+    _gather_jac_results, _get_wrt_subjacs, _full_slice
 from openmdao.utils.general_utils import simple_warning
 from openmdao.utils.array_utils import sub2full_indices
 from openmdao.utils.coloring import Coloring
-
-
-_full_slice = slice(None)
 
 
 class ComplexStep(ApproximationScheme):
@@ -184,18 +181,18 @@ class ComplexStep(ApproximationScheme):
         for vec, idxs in idx_info:
             if vec is not None:
                 vec.iadd(delta, idxs)
+                # print("PRE '%s'" % system.pathname, vec.asarray())
 
         if total:
             system.run_solve_nonlinear()
-            results_vec = system._outputs
+            result_array[:] = system._outputs.asarray()
         else:
             system.run_apply_nonlinear()
-            results_vec = system._residuals
-
-        result_array[:] = results_vec.get_val()
+            result_array[:] = system._residuals.asarray()
 
         for vec, idxs in idx_info:
             if vec is not None:
                 vec.isub(delta, idxs)
+                # print("POST '%s'" % system.pathname, vec.asarray())
 
         return result_array

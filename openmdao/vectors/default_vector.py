@@ -6,11 +6,9 @@ from collections import OrderedDict
 import numpy as np
 from numpy import logical_and
 
-from openmdao.vectors.vector import Vector, INT_DTYPE
+from openmdao.vectors.vector import Vector, INT_DTYPE, _full_slice
 from openmdao.vectors.default_transfer import DefaultTransfer
 from openmdao.utils.mpi import MPI, multi_proc_exception_check
-
-_full_slice = slice(None)
 
 
 class DefaultVector(Vector):
@@ -75,8 +73,6 @@ class DefaultVector(Vector):
             zeros array of correct size.
         """
         system = self._system()
-        type_ = self._typ
-        iproc = self._iproc
         root_vec = self._root_vector
 
         cplx_data = None
@@ -85,9 +81,9 @@ class DefaultVector(Vector):
             scaling['phys'] = {}
             scaling['norm'] = {}
 
-        sizes = system._var_sizes[self._name][type_]
-        ind1 = system._ext_sizes[self._name][type_][0]
-        ind2 = ind1 + np.sum(sizes[iproc, :])
+        sizes = system._var_sizes[self._name][self._typ]
+        ind1 = system._ext_sizes[self._name][self._typ][0]
+        ind2 = ind1 + np.sum(sizes[self._iproc, :])
 
         data = root_vec._data[ind1:ind2]
 
@@ -248,7 +244,7 @@ class DefaultVector(Vector):
             self + vec
         """
         if isinstance(vec, Vector):
-            self.iadd(vec.get_val())
+            self.iadd(vec.asarray())
         else:
             self.iadd(vec)
         return self
@@ -268,7 +264,7 @@ class DefaultVector(Vector):
             self - vec
         """
         if isinstance(vec, Vector):
-            self.isub(vec.get_val())
+            self.isub(vec.asarray())
         else:
             self.isub(vec)
         return self
@@ -288,7 +284,7 @@ class DefaultVector(Vector):
             self * vec
         """
         if isinstance(vec, Vector):
-            self.imul(vec.get_val())
+            self.imul(vec.asarray())
         else:
             self.imul(vec)
         return self
@@ -300,6 +296,7 @@ class DefaultVector(Vector):
                 end += arr.size
                 yield arr, start, end, idxs
                 start = end
+        # TODO: allow other slices besides _full_slice
         else:
             idxs = np.asarray(idxs)
             for arr in self._views_flat.values():
@@ -319,7 +316,7 @@ class DefaultVector(Vector):
         vec : <Vector>
             this vector times val is added to self.
         """
-        self.iadd(val * vec.get_val())
+        self.iadd(val * vec.asarray())
 
     def set_vec(self, vec):
         """
@@ -330,7 +327,7 @@ class DefaultVector(Vector):
         vec : <Vector>
             the vector whose values self is set to.
         """
-        self.set_val(vec.get_val())
+        self.set_val(vec.asarray())
 
     def set_val(self, val, idxs=_full_slice):
         """
@@ -353,7 +350,7 @@ class DefaultVector(Vector):
         else:
             self._data[idxs] = val
 
-    def get_val(self, idxs=_full_slice):
+    def asarray(self, idxs=_full_slice):
         """
         Return parts of the data array at the specified indices or slice(s).
 
@@ -368,7 +365,11 @@ class DefaultVector(Vector):
             Array of values.
         """
         if self._nocopy:
-            return np.concatenate(list(self._views_flat.values()))
+            lst = [v for v in self._views_flat.values() if v.size > 0]
+            if lst:
+                return np.concatenate(lst)
+            else:
+                return np.zeros(0)
         else:
             return self._data[idxs]
 
@@ -449,7 +450,7 @@ class DefaultVector(Vector):
         float
             The computed dot product value.
         """
-        return np.dot(self.get_val(), vec.get_val())
+        return np.dot(self.asarray(), vec.asarray())
 
     def get_norm(self):
         """
@@ -460,7 +461,7 @@ class DefaultVector(Vector):
         float
             norm of this vector.
         """
-        return np.linalg.norm(self.get_val())
+        return np.linalg.norm(self.asarray())
 
     def get_slice_dict(self):
         """
@@ -482,7 +483,7 @@ class DefaultVector(Vector):
 
         return self._slices
 
-    def _get_non_shared_slice_dict(self):
+    def _setup_non_shared_slice_dict(self):
         """
         Return a dict of var names mapped to their slice in the local data array.
 
@@ -493,7 +494,7 @@ class DefaultVector(Vector):
         dict
             Mapping of var name to slice.
         """
-        if self._non_shared_slices is None:
+        if self._nocopy:
             slices = {}
             start = end = 0
             for name in self._system()._var_relevant_names[self._name][self._typ]:
@@ -502,8 +503,8 @@ class DefaultVector(Vector):
                     slices[name] = slice(start, end)
                     start = end
             self._non_shared_slices = slices
-
-        return self._non_shared_slices
+        else:
+            self._non_shared_slices = self.get_slice_dict()
 
     def _enforce_bounds_vector(self, du, alpha, lower_bounds, upper_bounds):
         """

@@ -4,7 +4,7 @@ from collections import namedtuple, defaultdict
 import numpy as np
 
 from openmdao.approximation_schemes.approximation_scheme import ApproximationScheme, \
-    _gather_jac_results
+    _gather_jac_results, _full_slice
 from openmdao.utils.array_utils import sub2full_indices
 from openmdao.utils.coloring import Coloring
 
@@ -27,8 +27,6 @@ FD_COEFFS = {
                            coeffs=np.array([0.5, -0.5]),
                            current_coeff=0.),
 }
-
-_full_slice = slice(None)
 
 
 def _generate_fd_coeff(form, order, system):
@@ -185,9 +183,9 @@ class FiniteDifference(ApproximationScheme):
         if jac is None:
             jac = system._jacobian
 
-        self._starting_outs = system._outputs.get_val().copy()
-        self._starting_resids = system._residuals.get_val().copy()
-        self._starting_ins = system._inputs.get_val().copy()
+        self._starting_outs = system._outputs.asarray().copy()
+        self._starting_resids = system._residuals.asarray().copy()
+        self._starting_ins = system._inputs.asarray().copy()
         if total:
             self._results_tmp = self._starting_outs.copy()
         else:
@@ -259,7 +257,7 @@ class FiniteDifference(ApproximationScheme):
         if current_coeff:
             current_vec = system._outputs if total else system._residuals
             # copy data from outputs (if doing total derivs) or residuals (if doing partials)
-            results_array[:] = current_vec.get_val()
+            results_array[:] = current_vec.asarray()
             results_array *= current_coeff
         else:
             results_array[:] = 0.
@@ -298,10 +296,10 @@ class FiniteDifference(ApproximationScheme):
 
         if total:
             system.run_solve_nonlinear()
-            self._results_tmp[:] = system._outputs.get_val()
+            self._results_tmp[:] = system._outputs.asarray()
         else:
             system.run_apply_nonlinear()
-            self._results_tmp[:] = system._residuals.get_val()
+            self._results_tmp[:] = system._residuals.asarray()
 
         system._residuals.set_val(self._starting_resids)
 

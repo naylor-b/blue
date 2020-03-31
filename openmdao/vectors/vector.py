@@ -174,6 +174,8 @@ class Vector(object):
         self._initialize_data(root_vector)
         self._initialize_views(outvec)
 
+        self._setup_non_shared_slice_dict()
+
         self.read_only = False
 
     def __str__(self):
@@ -602,12 +604,16 @@ class Vector(object):
             need to do this when temporarily disabling complex step for guess_nonlinear.
         """
         if active:
-            self._cplx_data[:] = self._data
-
+            arr = self.asarray()
         elif keep_real:
-            self._cplx_data[:] = self._data.real
+            arr = self.asarray().real
+        else:
+            arr = None
 
         self._data, self._cplx_data = self._cplx_data, self._data
         self._views, self._cplx_views = self._cplx_views, self._views
         self._views_flat, self._cplx_views_flat = self._cplx_views_flat, self._views_flat
         self._under_complex_step = active
+        
+        if arr is not None:
+            self.set_val(arr)

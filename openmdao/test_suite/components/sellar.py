@@ -61,6 +61,8 @@ class SellarDis1(om.ExplicitComponent):
         y1 = z1**2 + z2 + x1 - 0.2*y2
         """
 
+        # print("COMPUTE '%s'" % self.pathname, inputs._data, outputs._data)
+        
         z1 = inputs['z'][0]
         z2 = inputs['z'][1]
         x1 = inputs['x']
@@ -141,6 +143,7 @@ class SellarDis2(om.ExplicitComponent):
         Evaluates the equation
         y2 = y1**(.5) + z1 + z2
         """
+        # print("COMPUTE '%s'" % self.pathname, inputs._data, outputs._data)
 
         z1 = inputs['z'][0]
         z2 = inputs['z'][1]
