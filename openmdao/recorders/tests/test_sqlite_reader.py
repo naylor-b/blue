@@ -125,7 +125,7 @@ class TestSqliteCaseReader(unittest.TestCase):
         self.assertTrue(isinstance(case.outputs, PromAbsDict))
         self.assertEqual(case.inputs, None)
         self.assertEqual(case.residuals, None)
-        self.assertEqual(case.jacobian, None)
+        self.assertEqual(case.derivatives, None)
         self.assertEqual(case.parent, None)
         self.assertEqual(case.abs_err, None)
         self.assertEqual(case.rel_err, None)
@@ -213,11 +213,11 @@ class TestSqliteCaseReader(unittest.TestCase):
                                        [1.97846296, -2.21388305e-13], decimal=2)
 
         deriv_case = cr.get_case('rank0:ScipyOptimize_SLSQP|4')
-        np.testing.assert_almost_equal(deriv_case.jacobian['obj', 'pz.z'],
+        np.testing.assert_almost_equal(deriv_case.derivatives['obj', 'pz.z'],
                                        [[3.8178954, 1.73971323]], decimal=2)
 
         # While thinking about derivatives, let's get them all.
-        derivs = deriv_case.jacobian
+        derivs = deriv_case.derivatives
 
         self.assertEqual(set(derivs.keys()), set([
             ('obj', 'z'), ('con2', 'z'), ('con1', 'x'),
@@ -240,7 +240,6 @@ class TestSqliteCaseReader(unittest.TestCase):
         model.recording_options['record_inputs'] = True
         model.recording_options['record_outputs'] = True
         model.recording_options['record_residuals'] = True
-        model.recording_options['record_metadata'] = False
 
         model.add_recorder(self.recorder)
 
@@ -1421,7 +1420,7 @@ class TestSqliteCaseReader(unittest.TestCase):
 
         prob.run_driver()
 
-        prob.record_iteration('final')
+        prob.record_state('final')
         prob.cleanup()
 
         # expected input and output values after run_once
@@ -1944,7 +1943,7 @@ class TestSqliteCaseReader(unittest.TestCase):
 
         prob.cleanup()
         cr = om.CaseReader(self.filename)
-        subs_options = cr.system_metadata['subs']['component_options']
+        subs_options = cr.system_options['subs']['component_options']
 
         # no options should have been recorded for d1
         self.assertEqual(len(subs_options._dict), 0)
@@ -1961,8 +1960,8 @@ class TestSqliteCaseReader(unittest.TestCase):
         prob.model.nonlinear_solver.add_recorder(recorder)
 
         prob.run_driver()
-        prob.record_iteration('c_1')
-        prob.record_iteration('c_2')
+        prob.record_state('c_1')
+        prob.record_state('c_2')
         prob.cleanup()
 
         # without pre_load, we should get format_version and metadata but no cases
@@ -1980,7 +1979,7 @@ class TestSqliteCaseReader(unittest.TestCase):
 
         self.assertEqual(cr._format_version, format_version)
 
-        self.assertEqual(set(cr.system_metadata.keys()),
+        self.assertEqual(set(cr.system_options.keys()),
                          set(['root'] + [sys.name for sys in prob.model._subsystems_allprocs]))
 
         self.assertEqual(set(cr.problem_metadata.keys()), {
@@ -2008,7 +2007,7 @@ class TestSqliteCaseReader(unittest.TestCase):
 
         self.assertEqual(cr._format_version, format_version)
 
-        self.assertEqual(set(cr.system_metadata.keys()),
+        self.assertEqual(set(cr.system_options.keys()),
                          set(['root'] + [sys.name for sys in prob.model._subsystems_allprocs]))
 
         self.assertEqual(set(cr.problem_metadata.keys()), {
@@ -2037,8 +2036,8 @@ class TestSqliteCaseReader(unittest.TestCase):
         prob.model.nonlinear_solver.add_recorder(self.recorder)
 
         prob.run_driver()
-        prob.record_iteration('c_1')
-        prob.record_iteration('c_2')
+        prob.record_state('c_1')
+        prob.record_state('c_2')
         prob.cleanup()
 
         cr = om.CaseReader(self.filename, pre_load=False)
@@ -2287,7 +2286,6 @@ class TestSqliteCaseReader(unittest.TestCase):
 
         # root solver
         nl = prob.model.nonlinear_solver
-        nl.recording_options['record_metadata'] = True
         nl.recording_options['record_abs_error'] = True
         nl.recording_options['record_rel_error'] = True
         nl.recording_options['record_solver_residuals'] = True
@@ -2295,7 +2293,6 @@ class TestSqliteCaseReader(unittest.TestCase):
 
         # system
         pz = prob.model.pz  # IndepVarComp which is an ExplicitComponent
-        pz.recording_options['record_metadata'] = True
         pz.recording_options['record_inputs'] = True
         pz.recording_options['record_outputs'] = True
         pz.recording_options['record_residuals'] = True
@@ -2303,7 +2300,6 @@ class TestSqliteCaseReader(unittest.TestCase):
 
         # mda solver
         nl = prob.model.mda.nonlinear_solver = om.NonlinearBlockGS()
-        nl.recording_options['record_metadata'] = True
         nl.recording_options['record_abs_error'] = True
         nl.recording_options['record_rel_error'] = True
         nl.recording_options['record_solver_residuals'] = True
@@ -2318,7 +2314,7 @@ class TestSqliteCaseReader(unittest.TestCase):
 
         fail = prob.run_driver()
 
-        prob.record_iteration('final')
+        prob.record_state('final')
         prob.cleanup()
 
         self.assertFalse(fail, 'Problem optimization failed.')
@@ -2788,6 +2784,19 @@ class TestSqliteCaseReader(unittest.TestCase):
             num_non_empty_lines = sum([1 for s in text.splitlines() if s.strip()])
             self.assertEqual(num_non_empty_lines, 49)
 
+    def test_system_metadata_attribute_deprecated(self):
+        model = om.Group()
+        model.add_recorder(self.recorder)
+        prob = om.Problem(model)
+        prob.setup()
+        prob.run_model()
+        prob.cleanup()
+
+        cr = om.CaseReader(self.filename)
+        msg = "The BaseCaseReader.system_metadata attribute is deprecated. " \
+        "Use the BaseCaseReader.system_option attribute instead."
+        with assert_warning(DeprecationWarning, msg):
+            options = cr.system_metadata
 
 @use_tempdirs
 class TestFeatureSqliteReader(unittest.TestCase):
@@ -2988,7 +2997,7 @@ class TestFeatureSqliteReader(unittest.TestCase):
         cr = om.CaseReader('cases.sql')
 
         # Get derivatives associated with the last iteration.
-        derivs = cr.get_case(-1).jacobian
+        derivs = cr.get_case(-1).derivatives
 
         # check that derivatives have been recorded.
         self.assertEqual(set(derivs.keys()), set([
@@ -3323,7 +3332,7 @@ class TestPromAbsDict(unittest.TestCase):
         driver_case = cr.get_case(driver_cases[-1])
 
         dvs = driver_case.get_design_vars()
-        derivs = driver_case.jacobian
+        derivs = driver_case.derivatives
 
         # verify that map looks and acts like a regular dict
         self.assertTrue(isinstance(dvs, dict))
@@ -3428,6 +3437,59 @@ class TestSqliteCaseReaderLegacy(unittest.TestCase):
             # If directory already deleted, keep going
             if e.errno not in (errno.ENOENT, errno.EACCES, errno.EPERM):
                 raise e
+
+    def test_driver_v5(self):
+        """ Not a big change to v6 but make sure reading of driver data from v5 works. """
+
+        # Case file created using this code
+
+        # import openmdao.api as om
+        # from openmdao.test_suite.components.paraboloid import Paraboloid
+        #
+        # prob = om.Problem()
+        #
+        # model = prob.model
+        # model.add_subsystem('p1', om.IndepVarComp('x', 50.0), promotes=['*'])
+        # model.add_subsystem('p2', om.IndepVarComp('y', 50.0), promotes=['*'])
+        # model.add_subsystem('comp', Paraboloid(), promotes=['*'])
+        # model.add_subsystem('con', om.ExecComp('c = - x + y'), promotes=['*'])
+        #
+        # model.add_design_var('x', lower=-50.0, upper=50.0)
+        # model.add_design_var('y', lower=-50.0, upper=50.0)
+        # model.add_objective('f_xy')
+        # model.add_constraint('c', upper=-15.0)
+        #
+        # driver = prob.driver = om.ScipyOptimizeDriver()
+        # driver.options['optimizer'] = 'SLSQP'
+        # driver.options['tol'] = 1e-9
+        #
+        # driver.recording_options['record_desvars'] = True
+        # driver.recording_options['record_objectives'] = True
+        # driver.recording_options['record_constraints'] = True
+        #
+        # case_recorder_filename = 'case_driver_v5.sql'
+        #
+        # recorder = om.SqliteRecorder(case_recorder_filename)
+        # prob.driver.add_recorder(recorder)
+        #
+        # prob.setup()
+        # prob.run_driver()
+        # prob.cleanup()
+
+        filename = os.path.join(self.legacy_dir, 'case_driver_v5.sql')
+        cr = om.CaseReader(filename)
+
+        # recorded data from driver only
+        self.assertEqual(cr.list_sources(), ['driver'])
+
+        # check that we got the correct number of cases
+        driver_cases = cr.list_cases('driver')
+        self.assertEqual(len(driver_cases), 5)
+
+        case = cr.get_case('rank0:ScipyOptimize_SLSQP|4')
+
+        assert_near_equal(case.outputs['x'], 7.16666667, 1e-6)
+        assert_near_equal(case.outputs['y'], -7.83333333, 1e-6)
 
     def test_database_v4(self):
         # the change between v4 and v5 was the addition of the 'source' information

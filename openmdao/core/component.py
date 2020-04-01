@@ -15,8 +15,6 @@ from numpy import ndarray, isscalar, atleast_1d, atleast_2d, promote_types
 from scipy.sparse import issparse
 
 from openmdao.core.system import System, _supported_methods, _DEFAULT_COLORING_META
-from openmdao.approximation_schemes.complex_step import ComplexStep
-from openmdao.approximation_schemes.finite_difference import FiniteDifference
 from openmdao.jacobians.dictionary_jacobian import DictionaryJacobian
 from openmdao.vectors.vector import INT_DTYPE, _full_slice
 from openmdao.utils.units import valid_units
