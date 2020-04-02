@@ -298,7 +298,7 @@ class Group(System):
 
         self.configure()
 
-    def _setup_procs(self, pathname, comm, mode, prob_options):
+    def _setup_procs(self, pathname, comm, mode, prob_meta):
         """
         Execute first phase of the setup process.
 
@@ -314,11 +314,11 @@ class Group(System):
         mode : string
             Derivatives calculation mode, 'fwd' for forward, and 'rev' for
             reverse (adjoint). Default is 'rev'.
-        prob_options : OptionsDictionary
-            Problem level options.
+        prob_meta : dict
+            Problem level metadata.
         """
         self.pathname = pathname
-        self._problem_options = prob_options
+        self._problem_meta = prob_meta
 
         self.options._parent_name = self.msginfo
         self.recording_options._parent_name = self.msginfo
@@ -416,7 +416,7 @@ class Group(System):
             subsys._use_derivatives = self._use_derivatives
             subsys._solver_info = self._solver_info
             subsys._recording_iter = self._recording_iter
-            subsys._setup_procs(subsys.pathname, sub_comm, mode, prob_options)
+            subsys._setup_procs(subsys.pathname, sub_comm, mode, prob_meta)
 
         # build a list of local subgroups to speed up later loops
         self._subgroups_myproc = [s for s in self._subsystems_myproc if isinstance(s, Group)]
@@ -772,24 +772,52 @@ class Group(System):
                     sizes_in = sizes[type_][iproc, :].copy()
                     self.comm.Allgather(sizes_in, sizes[type_])
 
+        if self.pathname == '':  # only do at the top
+            self._problem_meta['top_sizes'] = self._var_sizes
+
+        if self.comm.size > 1:
             self._has_distrib_vars = self.comm.allreduce(n_distrib_vars) > 0
-            if (self._has_distrib_vars or not np.all(self._var_sizes[vec_names[0]]['output']) or
-                    not np.all(self._var_sizes[vec_names[0]]['input'])):
+            if (self._has_distrib_vars or not np.all(self._var_sizes['nonlinear']['output']) or
+                    not np.all(self._var_sizes['nonlinear']['input'])):
                 if self._distributed_vector_class is not None:
                     self._vector_class = self._distributed_vector_class
                 else:
                     raise RuntimeError("{}: Distributed vectors are required but no distributed "
                                        "vector type has been set.".format(self.msginfo))
+        else:
+            self._owned_sizes = self._var_sizes[vec_names[0]]['output']
+            self._vector_class = self._local_vector_class
 
+        if self.comm.size > 1:
+            self._setup_global_shapes()
+
+    def _setup_ownership(self, recurse=True):
+        """
+        Determine the owning rank for non-distributed variables in this system.
+
+        Parameters
+        ----------
+        recurse : bool
+            Whether to call this method in subsystems.
+        """
+        if self.comm.size > 1:
             # compute owning ranks and owned sizes
             abs2meta = self._var_allprocs_abs2meta
             owns = self._owning_rank
-            self._owned_sizes = self._var_sizes[vec_names[0]]['output'].copy()
+            self._owned_sizes = self._var_sizes['nonlinear']['output'].copy()
+            out_sizes = self._problem_meta['top_sizes']['nonlinear']['output']
+            raw = self.comm.allgather(self._problem_meta['nocopy_inputs'])
+            nocopy_inputs = raw[0]
+            for i in range(1, self.comm.size):
+                nocopy_inputs.update(raw[i])
+            abs2idx = self._problem_meta['abs2idx']['nonlinear']
             for type_ in ('input', 'output'):
-                sizes = self._var_sizes[vec_names[0]][type_]
+                sizes = self._var_sizes['nonlinear'][type_]
                 for i, name in enumerate(self._var_allprocs_abs_names[type_]):
                     for rank in range(self.comm.size):
-                        if sizes[rank, i] > 0:
+                        if sizes[rank, i] > 0 or (
+                                name in nocopy_inputs and
+                                out_sizes[rank, abs2idx[nocopy_inputs[name]]] > 0):
                             owns[name] = rank
                             if type_ == 'output' and not abs2meta[name]['distributed']:
                                 self._owned_sizes[rank + 1:, i] = 0  # zero out all dups
@@ -801,15 +829,10 @@ class Group(System):
                         for n in names:
                             if n not in owns:
                                 owns[n] = i
-        else:
-            self._owned_sizes = self._var_sizes[vec_names[0]]['output']
-            self._vector_class = self._local_vector_class
 
-        # if self._use_derivatives:
-        #     self._var_sizes['nonlinear'] = self._var_sizes['linear']
-
-        if self.comm.size > 1:
-            self._setup_global_shapes()
+        if recurse:
+            for subsys in self._subsystems_myproc:
+                subsys._setup_ownership(recurse)
 
     def _setup_global_connections(self, recurse=True, conns=None):
         """
@@ -1025,6 +1048,7 @@ class Group(System):
 
         if self.pathname == '':  # only do at the top
             self._mark_nocopy(global_abs_in2out)
+            self._problem_meta['nocopy_inputs'] = self._nocopy_inputs
 
     def _mark_nocopy(self, my_conns):
         allprocs_abs2meta = self._var_allprocs_abs2meta

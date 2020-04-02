@@ -528,7 +528,7 @@ class SellarImplicitDis1(om.ImplicitComponent):
         y2 = inputs['y2']
 
         y1 = outputs['y1']
-
+        
         resids['y1'] = -(z1**2 + z2 + x1 - 0.2*y2 - y1)
 
     def linearize(self, inputs, outputs, J):
@@ -583,7 +583,7 @@ class SellarImplicitDis2(om.ImplicitComponent):
 
         z1 = inputs['z'][0]
         z2 = inputs['z'][1]
-        y1 = inputs['y1']
+        y1 = inputs['y1'].copy()
 
         y2 = outputs['y2']
 

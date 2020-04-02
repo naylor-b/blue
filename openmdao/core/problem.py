@@ -746,8 +746,11 @@ class Problem(object):
 
         model_comm = self.driver._setup_comm(comm)
 
+        meta = {
+            'coloring_dir': self.options['coloring_dir'],
+        }
         model._setup(model_comm, 'full', mode, distributed_vector_class, local_vector_class,
-                     derivatives, self.options)
+                     derivatives, meta)
 
         # Cache all args for final setup.
         self._check = check

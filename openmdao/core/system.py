@@ -102,8 +102,8 @@ class System(object):
         options dictionary
     recording_options : OptionsDictionary
         Recording options dictionary
-    _problem_options : OptionsDictionary
-        Problem level options.
+    _problem_meta : dict
+        Problem level metadata.
     under_complex_step : bool
         When True, this system is undergoing complex step.
     force_alloc_complex : bool
@@ -362,7 +362,7 @@ class System(object):
         self.recording_options.declare('options_excludes', types=list, default=[],
                                        desc='User-defined metadata to exclude in recording')
 
-        self._problem_options = None
+        self._problem_meta = None
 
         # Case recording related
         self.iter_count = 0
@@ -764,12 +764,12 @@ class System(object):
                     distributed_vector_class=self._distributed_vector_class,
                     local_vector_class=self._local_vector_class,
                     use_derivatives=self._use_derivatives,
-                    prob_options=self._problem_options)
+                    prob_meta=self._problem_meta)
         self._final_setup(self.comm, setup_mode=setup_mode,
                           force_alloc_complex=self._outputs._alloc_complex)
 
     def _setup(self, comm, setup_mode, mode, distributed_vector_class, local_vector_class,
-               use_derivatives, prob_options=None):
+               use_derivatives, prob_meta=None):
         """
         Perform setup for this system and its descendant systems.
 
@@ -794,11 +794,11 @@ class System(object):
             and associated transfers involved in intraprocess communication.
         use_derivatives : bool
             If True, perform any memory allocations necessary for derivative computation.
-        prob_options : OptionsDictionary
-            Problem level options dictionary.
+        prob_meta : dict
+            Problem level metadata dictionary.
         """
         # save a ref to the problem level options.
-        self._problem_options = prob_options
+        self._problem_meta = prob_meta
 
         # reset any coloring if a Coloring object was not set explicitly
         if self._coloring_info['dynamic'] or self._coloring_info['static'] is not None:
@@ -826,7 +826,7 @@ class System(object):
         # If we're only updating and not recursing, processors don't need to be redistributed.
         if recurse:
             # Besides setting up the processors, this method also builds the model hierarchy.
-            self._setup_procs(self.pathname, comm, mode, self._problem_options)
+            self._setup_procs(self.pathname, comm, mode, self._problem_meta)
 
         # Recurse model from the bottom to the top for configuring.
         # Set static_mode to False in all subsystems because inputs & outputs may be created.
@@ -845,6 +845,7 @@ class System(object):
         self._setup_relevance(mode, self._relevant)
         self._setup_var_index_ranges(recurse=recurse)
         self._setup_var_sizes(self._nocopy_inputs, recurse=recurse)
+        self._setup_ownership(recurse=recurse)
         self._setup_connections(recurse=recurse)
 
     def _post_configure(self):
@@ -1295,7 +1296,7 @@ class System(object):
         str
             Full pathname of the coloring file.
         """
-        directory = self._problem_options['coloring_dir']
+        directory = self._problem_meta['coloring_dir']
         if not self.pathname:
             # total coloring
             return os.path.join(directory, 'total_coloring.pkl')
@@ -1517,6 +1518,9 @@ class System(object):
         # if self._use_derivatives:
         #     abs2idx['nonlinear'] = abs2idx['linear']
 
+        if self.pathname == '':
+            self._problem_meta['abs2idx'] = self._var_allprocs_abs2idx
+
         # Recursion
         if recurse:
             for subsys in self._subsystems_myproc:
@@ -1536,6 +1540,17 @@ class System(object):
         self._var_sizes = {}
         self._owned_sizes = None
         self._owning_rank = defaultdict(int)
+
+    def _setup_ownership(self, recurse=True):
+        """
+        Determine the owning rank for non-distributed variables in this system.
+
+        Parameters
+        ----------
+        recurse : bool
+            Whether to call this method in subsystems.
+        """
+        pass
 
     def _setup_global_shapes(self):
         """

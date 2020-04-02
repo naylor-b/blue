@@ -466,6 +466,8 @@ class ProcTestCase1(unittest.TestCase):
 
         model.nonlinear_solver = om.NonlinearBlockGS()
 
+        #import wingdbstub
+
         prob.setup()
         prob.set_solver_print(level=2)
         model.nonlinear_solver.options['use_aitken'] = True

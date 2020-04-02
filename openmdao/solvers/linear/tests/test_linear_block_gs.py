@@ -82,7 +82,7 @@ class TestBGSSolver(LinearSolverTests.LinearSolverTestCase):
         model.linear_solver = self.linear_solver_class()
 
         prob.setup()
-        prob.set_solver_print(level=0)
+        prob.set_solver_print(level=4)
 
         prob.run_model()
         res = model._residuals.get_norm()
