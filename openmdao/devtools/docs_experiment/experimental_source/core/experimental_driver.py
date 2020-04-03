@@ -231,7 +231,7 @@ class ExperimentalDriver(object):
             Format to return the derivatives. Default is a 'flat_dict', which
             returns them in a dictionary whose keys are tuples of form (of, wrt). For
             the scipy optimizer, 'array' is also supported.
-        global_names : bool
+        use_abs_names : bool
             Set to True when passing in global names to skip some translation steps.
 
         Returns

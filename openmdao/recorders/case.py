@@ -14,7 +14,7 @@ from openmdao.recorders.sqlite_recorder import blob_to_array
 from openmdao.utils.record_util import deserialize, get_source_system
 from openmdao.utils.variable_table import write_var_table
 from openmdao.utils.general_utils import make_set, match_includes_excludes
-from openmdao.utils.units import get_conversion
+from openmdao.utils.units import unit_conversion
 
 _DEFAULT_OUT_STREAM = object()
 _AMBIGOUS_PROM_NAME = object()
@@ -46,7 +46,7 @@ class Case(object):
         Map of inputs to values recorded, None if not recorded.
     residuals : PromAbsDict or None
         Map of outputs to residuals recorded, None if not recorded.
-    jacobian : PromAbsDict or None
+    derivatives : PromAbsDict or None
         Map of (output, input) to derivatives recorded, None if not recorded.
     parent : str
         The full unique identifier for the parent this iteration.
@@ -125,7 +125,7 @@ class Case(object):
         self.inputs = None
         self.outputs = None
         self.residuals = None
-        self.jacobian = None
+        self.derivatives = None
 
         if 'inputs' in data.keys():
             if data_format >= 3:
@@ -171,7 +171,7 @@ class Case(object):
             else:
                 jacobian = data['jacobian']
             if jacobian is not None:
-                self.jacobian = PromAbsDict(jacobian, prom2abs['output'], abs2prom['output'])
+                self.derivatives = PromAbsDict(jacobian, prom2abs['output'], abs2prom['output'])
 
         # save var name & meta dict references for use by self._get_variables_of_type()
         self._prom2abs = prom2abs
@@ -250,7 +250,7 @@ class Case(object):
                 raise TypeError(msg.format(name, units))
 
             try:
-                scale, offset = get_conversion(base_units, units)
+                scale, offset = unit_conversion(base_units, units)
             except TypeError:
                 msg = "Can't express variable '{}' with units of '{}' in units of '{}'."
                 raise TypeError(msg.format(name, base_units, units))
@@ -694,10 +694,10 @@ class Case(object):
                     if use_indices and meta['indices'] is not None:
                         val = val[meta['indices']]
                     if scaled:
-                        if meta['adder'] is not None:
-                            val += meta['adder']
-                        if meta['scaler'] is not None:
-                            val *= meta['scaler']
+                        if meta['total_adder'] is not None:
+                            val += meta['total_adder']
+                        if meta['total_scaler'] is not None:
+                            val *= meta['total_scaler']
                     ret_vars[name] = val
 
         return PromAbsDict(ret_vars, self._prom2abs['output'], self._abs2prom['output'])

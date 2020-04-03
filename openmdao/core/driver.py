@@ -11,7 +11,7 @@ from openmdao.core.total_jac import _TotalJacInfo
 from openmdao.recorders.recording_manager import RecordingManager
 from openmdao.recorders.recording_iteration_stack import Recording
 from openmdao.utils.record_util import create_local_meta, check_path
-from openmdao.utils.general_utils import simple_warning
+from openmdao.utils.general_utils import simple_warning, warn_deprecation
 from openmdao.utils.mpi import MPI
 from openmdao.utils.options_dictionary import OptionsDictionary
 import openmdao.utils.coloring as coloring_mod
@@ -121,7 +121,13 @@ class Driver(object):
         self.recording_options = OptionsDictionary(parent_name=type(self).__name__)
 
         self.recording_options.declare('record_model_metadata', types=bool, default=True,
-                                       desc='Record metadata for all Systems in the model')
+                                       desc='Deprecated. Recording of model metadata will always '
+                                       'be done',
+                                       deprecation="The recording option, record_model_metadata, "
+                                       "on Driver is "
+                                       "deprecated. Recording of model metadata will always "
+                                       "be done",
+                                       )
         self.recording_options.declare('record_desvars', types=bool, default=True,
                                        desc='Set to True to record design variables at the '
                                             'driver level')
@@ -135,8 +141,8 @@ class Driver(object):
                                        desc='Set to True to record constraints at the '
                                             'driver level')
         self.recording_options.declare('includes', types=list, default=[],
-                                       desc='Patterns for variables to include in recording. \
-                                       Uses fnmatch wildcards')
+                                       desc='Patterns for variables to include in recording. '
+                                       'Uses fnmatch wildcards')
         self.recording_options.declare('excludes', types=list, default=[],
                                        desc='Patterns for vars to exclude in recording '
                                             '(processed post-includes). Uses fnmatch wildcards')
@@ -245,8 +251,8 @@ class Driver(object):
         self._total_jac = None
 
         self._has_scaling = (
-            np.any([r['scaler'] is not None for r in self._responses.values()]) or
-            np.any([dv['scaler'] is not None for dv in self._designvars.values()])
+            np.any([r['total_scaler'] is not None for r in self._responses.values()]) or
+            np.any([dv['total_scaler'] is not None for dv in self._designvars.values()])
         )
 
         # Determine if any design variables are discrete.
@@ -396,9 +402,8 @@ class Driver(object):
         self._rec_mgr.startup(self)
 
         # record the system metadata to the recorders attached to this Driver
-        if self.recording_options['record_model_metadata']:
-            for sub in self._problem().model.system_iter(recurse=True, include_self=True):
-                self._rec_mgr.record_metadata(sub)
+        for sub in self._problem().model.system_iter(recurse=True, include_self=True):
+            self._rec_mgr.record_metadata(sub)
 
     def _get_voi_val(self, name, meta, remote_vois, driver_scaling=True, rank=None):
         """
@@ -473,11 +478,11 @@ class Driver(object):
 
         if self._has_scaling and driver_scaling:
             # Scale design variable values
-            adder = meta['adder']
+            adder = meta['total_adder']
             if adder is not None:
                 val += adder
 
-            scaler = meta['scaler']
+            scaler = meta['total_scaler']
             if scaler is not None:
                 val *= scaler
 
@@ -526,11 +531,11 @@ class Driver(object):
 
             # Undo driver scaling when setting design var values into model.
             if self._has_scaling:
-                scaler = meta['scaler']
+                scaler = meta['total_scaler']
                 if scaler is not None:
                     desvar[indices] *= 1.0 / scaler
 
-                adder = meta['adder']
+                adder = meta['total_adder']
                 if adder is not None:
                     desvar[indices] -= adder
 
@@ -630,6 +635,8 @@ class Driver(object):
         self._objs = objs = OrderedDict()
         self._cons = cons = OrderedDict()
 
+        model._setup_driver_units()
+
         self._responses = resps = model.get_responses(recurse=True)
         for name, data in resps.items():
             if data['type'] == 'con':
@@ -663,7 +670,8 @@ class Driver(object):
         self.iter_count += 1
         return False
 
-    def _compute_totals(self, of=None, wrt=None, return_format='flat_dict', global_names=True):
+    def _compute_totals(self, of=None, wrt=None, return_format='flat_dict', global_names=None,
+                        use_abs_names=True):
         """
         Compute derivatives of desired quantities with respect to desired inputs.
 
@@ -682,7 +690,9 @@ class Driver(object):
             returns them in a dictionary whose keys are tuples of form (of, wrt). For
             the scipy optimizer, 'array' is also supported.
         global_names : bool
-            Set to True when passing in global names to skip some translation steps.
+            Deprecated.  Use 'use_abs_names' instead.
+        use_abs_names : bool
+            Set to True when passing in absolute names to skip some translation steps.
 
         Returns
         -------
@@ -699,12 +709,17 @@ class Driver(object):
             print(header)
             print(len(header) * '-' + '\n')
 
+        if global_names is not None:
+            warn_deprecation("'global_names' is deprecated in calls to _compute_totals. "
+                             "Use 'use_abs_names' instead.")
+            use_abs_names = global_names
+
         if problem.model._owns_approx_jac:
             self._recording_iter.push(('_compute_totals_approx', 0))
 
             try:
                 if total_jac is None:
-                    total_jac = _TotalJacInfo(problem, of, wrt, global_names,
+                    total_jac = _TotalJacInfo(problem, of, wrt, use_abs_names,
                                               return_format, approx=True, debug_print=debug_print)
 
                     # Don't cache linear constraint jacobian
@@ -719,7 +734,7 @@ class Driver(object):
 
         else:
             if total_jac is None:
-                total_jac = _TotalJacInfo(problem, of, wrt, global_names, return_format,
+                total_jac = _TotalJacInfo(problem, of, wrt, use_abs_names, return_format,
                                           debug_print=debug_print)
 
                 # don't cache linear constraint jacobian
@@ -1042,6 +1057,11 @@ def record_iteration(requester, prob, case_name):
         'output': outs,
         'input': ins
     }
+    from openmdao.core.problem import Problem
+    if isinstance(requester, Problem) and requester.recording_options['record_derivatives'] and \
+            prob.driver._designvars and prob.driver._responses:
+        totals = requester.compute_totals(return_format='flat_dict_structured_key')
+        data['totals'] = totals
 
     requester._rec_mgr.record_iteration(requester, data,
                                         requester._get_recorder_metadata(case_name))

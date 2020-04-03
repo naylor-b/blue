@@ -14,7 +14,7 @@ except ImportError:
 
 import openmdao.api as om
 from openmdao.test_suite.components.sellar import SellarDis2
-from openmdao.utils.assert_utils import assert_rel_error, assert_warning
+from openmdao.utils.assert_utils import assert_near_equal, assert_warning
 from openmdao.utils.logger_utils import TestLogger
 from openmdao.error_checking.check_config import _check_hanging_inputs
 
@@ -452,11 +452,18 @@ class TestGroup(unittest.TestCase):
         g.add_subsystem('ivc', om.IndepVarComp('x', 2.), promotes_outputs=['x'])
         g.add_subsystem('c0', om.ExecComp('y = 2*x'), promotes_inputs=['x'])
 
+        expected = "Group (gouter): The following inputs have multiple connections: " \
+                   "gouter.g.c0.x from ['gouter.couter.xx', 'gouter.g.ivc.x']"
+
         with self.assertRaises(RuntimeError) as cm:
             p.setup()
 
-        self.assertEqual(str(cm.exception),
-                         "Group (gouter): The following inputs have multiple connections: gouter.g.c0.x from ['gouter.couter.xx', 'gouter.g.ivc.x']")
+        self.assertEqual(str(cm.exception), expected)
+
+        p.model._raise_connection_errors = False
+
+        with assert_warning(UserWarning, expected):
+            p.setup()
 
     def test_double_promote_one_conn(self):
         p = om.Problem()
@@ -810,9 +817,9 @@ class TestGroup(unittest.TestCase):
         p.setup()
         p.run_model()
 
-        assert_rel_error(self, p['indep.x'], np.ones(5))
-        assert_rel_error(self, p['comp1.x'], np.ones(5)*12.)
-        assert_rel_error(self, p['comp1.y'], 60.)
+        assert_near_equal(p['indep.x'], np.ones(5))
+        assert_near_equal(p['comp1.x'], np.ones(5)*12.)
+        assert_near_equal(p['comp1.y'], 60.)
 
     def test_unconnected_input_units_no_mismatch(self):
         p = om.Problem()
@@ -877,9 +884,9 @@ class TestGroup(unittest.TestCase):
         p.setup()
         p.run_model()
 
-        assert_rel_error(self, p['C1.y'], 10.)
-        assert_rel_error(self, p['C2.y'], 20.)
-        assert_rel_error(self, p['C3.y'], 30.)
+        assert_near_equal(p['C1.y'], 10.)
+        assert_near_equal(p['C2.y'], 20.)
+        assert_near_equal(p['C3.y'], 30.)
 
     def test_double_src_indices(self):
         class MyComp1(om.ExplicitComponent):
@@ -923,10 +930,10 @@ class TestGroup(unittest.TestCase):
         p.setup()
         p.run_model()
 
-        assert_rel_error(self, p['C1.x'], np.ones(3))
-        assert_rel_error(self, p['C1.y'], 6.)
-        assert_rel_error(self, p['C2.x'], np.ones(2))
-        assert_rel_error(self, p['C2.y'], 8.)
+        assert_near_equal(p['C1.x'], np.ones(3))
+        assert_near_equal(p['C1.y'], 6.)
+        assert_near_equal(p['C2.x'], np.ones(2))
+        assert_near_equal(p['C2.y'], 8.)
 
     def test_connect_src_indices_noflat(self):
         import numpy as np
@@ -946,9 +953,9 @@ class TestGroup(unittest.TestCase):
         p.setup()
         p.run_model()
 
-        assert_rel_error(self, p['C1.x'], np.array([[0., 10.],
+        assert_near_equal(p['C1.x'], np.array([[0., 10.],
                                                     [7., 4.]]))
-        assert_rel_error(self, p['C1.y'], 42.)
+        assert_near_equal(p['C1.y'], 42.)
 
     def test_promote_not_found1(self):
         p = om.Problem()
@@ -1064,10 +1071,10 @@ class TestGroup(unittest.TestCase):
         p.setup()
         p.run_model()
 
-        assert_rel_error(self, p['C1.x'], np.ones(3))
-        assert_rel_error(self, p['C1.y'], 6.)
-        assert_rel_error(self, p['C2.x'], np.ones(2))
-        assert_rel_error(self, p['C2.y'], 8.)
+        assert_near_equal(p['C1.x'], np.ones(3))
+        assert_near_equal(p['C1.y'], 6.)
+        assert_near_equal(p['C2.x'], np.ones(2))
+        assert_near_equal(p['C2.y'], 8.)
 
     def test_promote_src_indices_nonflat(self):
         import numpy as np
@@ -1105,10 +1112,10 @@ class TestGroup(unittest.TestCase):
         p.setup()
         p.run_model()
 
-        assert_rel_error(self, p['C1.x'],
+        assert_near_equal(p['C1.x'],
                          np.array([[0., 10.],
                                    [7., 4.]]))
-        assert_rel_error(self, p['C1.y'], 21.)
+        assert_near_equal(p['C1.y'], 21.)
 
     def test_promote_src_indices_nonflat_to_scalars(self):
         class MyComp(om.ExplicitComponent):
@@ -1129,8 +1136,8 @@ class TestGroup(unittest.TestCase):
         p.set_solver_print(level=0)
         p.setup()
         p.run_model()
-        assert_rel_error(self, p['C1.x'], 10.)
-        assert_rel_error(self, p['C1.y'], 20.)
+        assert_near_equal(p['C1.x'], 10.)
+        assert_near_equal(p['C1.y'], 20.)
 
     def test_promote_src_indices_nonflat_error(self):
         class MyComp(om.ExplicitComponent):
@@ -1198,9 +1205,9 @@ class TestGroup(unittest.TestCase):
         p.set_solver_print(level=0)
         p.setup()
         p.run_model()
-        assert_rel_error(self, p['C1.x'],
+        assert_near_equal(p['C1.x'],
                          np.array([0., 10., 7., 4.]).reshape(tgt_shape))
-        assert_rel_error(self, p['C1.y'], 21.)
+        assert_near_equal(p['C1.y'], 21.)
 
     def test_set_order_feature(self):
         import openmdao.api as om
@@ -1358,7 +1365,7 @@ class TestGroup(unittest.TestCase):
 
         self.assertEqual(p.model.nonlinear_solver._iter_count, 0)
 
-        assert_rel_error(self, p['discipline.x'], 1.41421356, 1e-6)
+        assert_near_equal(p['discipline.x'], 1.41421356, 1e-6)
 
     def test_guess_nonlinear_complex_step(self):
 
@@ -1406,12 +1413,12 @@ class TestGroup(unittest.TestCase):
 
         self.assertEqual(p.model.nonlinear_solver._iter_count, 0)
 
-        assert_rel_error(self, p['discipline.x'], 1.41421356, 1e-6)
+        assert_near_equal(p['discipline.x'], 1.41421356, 1e-6)
 
         totals = p.check_totals(of=['discipline.comp1.z'], wrt=['parameters.input_value'], method='cs', out_stream=None)
 
         for key, val in totals.items():
-            assert_rel_error(self, val['rel error'][0], 0.0, 1e-15)
+            assert_near_equal(val['rel error'][0], 0.0, 1e-15)
 
 
 class MyComp(om.ExplicitComponent):
@@ -1431,7 +1438,7 @@ class MyComp(om.ExplicitComponent):
 
 
 def src_indices_model(src_shape, tgt_shape, src_indices=None, flat_src_indices=False,
-                      promotes=None):
+                      promotes=None, raise_connection_errors=True):
     prob = om.Problem()
     prob.model.add_subsystem('indeps', om.IndepVarComp('x', shape=src_shape),
                              promotes=promotes)
@@ -1442,6 +1449,10 @@ def src_indices_model(src_shape, tgt_shape, src_indices=None, flat_src_indices=F
     if promotes is None:
         prob.model.connect('indeps.x', 'C1.x', src_indices=src_indices,
                            flat_src_indices=flat_src_indices)
+
+    if not raise_connection_errors:
+        prob.model._raise_connection_errors = False
+
     prob.setup()
     return prob
 
@@ -1499,39 +1510,75 @@ class TestConnect(unittest.TestCase):
             self.sub.connect('cmp.x', 'tgt.x', src_indices=[1])
 
     def test_invalid_source(self):
-        msg = "Attempted to connect from 'src.z' to 'tgt.x', but 'src.z' doesn't exist."
+        msg = "Group (sub): Attempted to connect from 'src.z' to 'tgt.x', but 'src.z' doesn't exist."
 
         # source and target names can't be checked until setup
         # because setup is not called until then
         self.sub.connect('src.z', 'tgt.x', src_indices=[1])
-        with self.assertRaisesRegex(NameError, msg):
+
+        with self.assertRaises(NameError) as context:
+            self.prob.setup()
+
+        self.assertEqual(str(context.exception), msg)
+
+        self.prob.model._raise_connection_errors = False
+
+        with assert_warning(UserWarning, msg):
             self.prob.setup()
 
     def test_connect_to_output(self):
-        msg = "Attempted to connect from 'tgt.y' to 'cmp.z', but 'cmp.z' is an output. All connections must be from an output to an input."
+        msg = "Group (sub): Attempted to connect from 'tgt.y' to 'cmp.z', " + \
+              "but 'cmp.z' is an output. " + \
+              "All connections must be from an output to an input."
 
         # source and target names can't be checked until setup
         # because setup is not called until then
         self.sub.connect('tgt.y', 'cmp.z')
-        with self.assertRaisesRegex(NameError, msg):
+
+        with self.assertRaises(NameError) as context:
+            self.prob.setup()
+
+        self.assertEqual(str(context.exception), msg)
+
+        self.prob.model._raise_connection_errors = False
+
+        with assert_warning(UserWarning, msg):
             self.prob.setup()
 
     def test_connect_from_input(self):
-        msg = "Attempted to connect from 'tgt.x' to 'cmp.x', but 'tgt.x' is an input. All connections must be from an output to an input."
+        msg = "Group (sub): Attempted to connect from 'tgt.x' to 'cmp.x', " + \
+              "but 'tgt.x' is an input. " + \
+              "All connections must be from an output to an input."
 
         # source and target names can't be checked until setup
         # because setup is not called until then
         self.sub.connect('tgt.x', 'cmp.x')
-        with self.assertRaisesRegex(NameError, msg):
+
+        with self.assertRaises(NameError) as context:
+            self.prob.setup()
+
+        self.assertEqual(str(context.exception), msg)
+
+        self.prob.model._raise_connection_errors = False
+
+        with assert_warning(UserWarning, msg):
             self.prob.setup()
 
     def test_invalid_target(self):
-        msg = "Attempted to connect from 'src.x' to 'tgt.z', but 'tgt.z' doesn't exist."
+        msg = "Group (sub): Attempted to connect from 'src.x' to 'tgt.z', but 'tgt.z' doesn't exist."
 
         # source and target names can't be checked until setup
         # because setup is not called until then
         self.sub.connect('src.x', 'tgt.z', src_indices=[1])
-        with self.assertRaisesRegex(NameError, msg):
+        
+        with self.assertRaises(NameError) as context:
+            self.prob.setup()
+
+        self.assertEqual(str(context.exception), msg)
+
+        self.prob.model._raise_connection_errors = False
+
+        with assert_warning(UserWarning, msg):
             self.prob.setup()
 
     def test_connect_within_system(self):
@@ -1548,12 +1595,18 @@ class TestConnect(unittest.TestCase):
         sub.add_subsystem('tgt', om.ExecComp('y = x'), promotes_outputs=['y'])
         sub.connect('y', 'tgt.x', src_indices=[1])
 
-        msg = "Group (sub): Output and input are in the same System for connection from 'y' to 'tgt.x'."
+        msg = "Group (sub): Output and input are in the same System for " + \
+              "connection from 'y' to 'tgt.x'."
 
         with self.assertRaises(RuntimeError) as ctx:
             prob.setup()
 
         self.assertEqual(str(ctx.exception), msg)
+
+        prob.model._raise_connection_errors = False
+        
+        with assert_warning(UserWarning, msg):
+            prob.setup()
 
     def test_connect_units_with_unitless(self):
         prob = om.Problem()
@@ -1570,8 +1623,13 @@ class TestConnect(unittest.TestCase):
         with assert_warning(UserWarning, msg):
             prob.setup()
 
+        self.prob.model._raise_connection_errors = False
+        
+        with assert_warning(UserWarning, msg):
+            prob.setup()
+
     def test_connect_incompatible_units(self):
-        msg = "Output units of 'degC' for 'src.x2' are incompatible " \
+        msg = "Group (<model>): Output units of 'degC' for 'src.x2' are incompatible " + \
               "with input units of 'm' for 'tgt.x'."
 
         prob = om.Problem()
@@ -1582,7 +1640,14 @@ class TestConnect(unittest.TestCase):
         prob.model.connect('px1.x1', 'src.x1')
         prob.model.connect('src.x2', 'tgt.x')
 
-        with self.assertRaisesRegex(RuntimeError, msg):
+        with self.assertRaises(RuntimeError) as context:
+            prob.setup()
+
+        self.assertEqual(str(context.exception), msg)
+
+        prob.model._raise_connection_errors = False
+        
+        with assert_warning(UserWarning, msg):
             prob.setup()
 
     def test_connect_units_with_nounits(self):
@@ -1604,7 +1669,7 @@ class TestConnect(unittest.TestCase):
 
         prob.run_model()
 
-        assert_rel_error(self, prob['tgt.y'], 600.)
+        assert_near_equal(prob['tgt.y'], 600.)
 
     def test_connect_units_with_nounits_prom(self):
         prob = om.Problem()
@@ -1622,7 +1687,7 @@ class TestConnect(unittest.TestCase):
 
         prob.run_model()
 
-        assert_rel_error(self, prob['tgt.z'], 600.)
+        assert_near_equal(prob['tgt.z'], 600.)
 
     def test_mix_promotes_types(self):
         prob = om.Problem()
@@ -1668,15 +1733,23 @@ class TestConnect(unittest.TestCase):
         prob.setup()
         prob.run_driver()
 
-        assert_rel_error(self, prob['G1.par1.c4.y'], 8.0)
+        assert_near_equal(prob['G1.par1.c4.y'], 8.0)
 
     def test_bad_shapes(self):
         self.sub.connect('src.s', 'arr.x')
 
-        msg = ("The source and target shapes do not match or are ambiguous for the connection "
-               "'sub.src.s' to 'sub.arr.x'.")
+        msg = "Group (sub): The source and target shapes do not match or are ambiguous " + \
+              "for the connection 'sub.src.s' to 'sub.arr.x'. The source shape is (1,) " + \
+              "but the target shape is (2,)."
 
-        with self.assertRaisesRegex(ValueError, msg):
+        with self.assertRaises(ValueError) as context:
+            self.prob.setup()
+
+        self.assertEqual(str(context.exception), msg)
+
+        self.prob.model._raise_connection_errors = False
+        
+        with assert_warning(UserWarning, msg):
             self.prob.setup()
 
     def test_bad_indices_shape(self):
@@ -1686,11 +1759,18 @@ class TestConnect(unittest.TestCase):
 
         p.model.connect('IV.x', 'C1.x', src_indices=[(1, 1)])
 
-        msg = (r"The source indices \[\[1 1\]\] do not specify a valid shape for "
-               r"the connection 'IV.x' to 'C1.x'. The target "
-               r"shape is \(2.*, 2.*\) but indices are \(1.*, 2.*\).")
+        msg = "Group (<model>): The source indices [[1 1]] do not specify a valid shape " + \
+              "for the connection 'IV.x' to 'C1.x'. The target shape is (2, 2) but " + \
+              "indices are (1, 2)."
 
-        with self.assertRaisesRegex(ValueError, msg):
+        with self.assertRaises(ValueError) as context:
+            p.setup()
+
+        self.assertEqual(str(context.exception), msg)
+
+        p.model._raise_connection_errors = False
+        
+        with assert_warning(UserWarning, msg):
             p.setup()
 
     def test_bad_indices_dimensions(self):
@@ -1708,6 +1788,11 @@ class TestConnect(unittest.TestCase):
         else:
             self.fail('Exception expected.')
 
+        self.prob.model._raise_connection_errors = False
+        
+        with assert_warning(UserWarning, msg):
+            self.prob.setup()
+
     def test_bad_indices_index(self):
         # the index value within src_indices is outside the valid range for the source
         self.sub.connect('src.x', 'arr.x', src_indices=[(2, -1), (4, 4)],
@@ -1724,46 +1809,73 @@ class TestConnect(unittest.TestCase):
         else:
             self.fail('Exception expected.')
 
+        self.prob.model._raise_connection_errors = False
+        
+        with assert_warning(UserWarning, msg):
+            self.prob.setup()
+
     def test_src_indices_shape(self):
         src_indices_model(src_shape=(3, 3), tgt_shape=(2, 2),
                           src_indices=[[4, 5], [7, 8]],
                           flat_src_indices=True)
 
     def test_src_indices_shape_bad_idx_flat(self):
+        msg = "Group (<model>): The source indices do not specify a valid index " + \
+              "for the connection 'indeps.x' to 'C1.x'. " + \
+              "Index '9' is out of range for a flat source of size 9."
+
         try:
             src_indices_model(src_shape=(3, 3), tgt_shape=(2, 2),
                               src_indices=[[4, 5], [7, 9]],
                               flat_src_indices=True)
         except Exception as err:
-            self.assertEqual(str(err), "Group (<model>): The source indices do not specify a valid index "
-                                       "for the connection 'indeps.x' to 'C1.x'. "
-                                       "Index '9' is out of range for a flat source of size 9.")
+            self.assertEqual(str(err), msg)
         else:
             self.fail("Exception expected.")
 
+        with assert_warning(UserWarning, msg):
+            src_indices_model(src_shape=(3, 3), tgt_shape=(2, 2),
+                              src_indices=[[4, 5], [7, 9]],
+                              flat_src_indices=True,
+                              raise_connection_errors=False)
+
     def test_src_indices_shape_bad_idx_flat_promotes(self):
+        msg = "Group (<model>): The source indices do not specify a valid index " + \
+              "for the connection 'indeps.x' to 'C1.x'. " + \
+              "Index '9' is out of range for a flat source of size 9."
         try:
             src_indices_model(src_shape=(3, 3), tgt_shape=(2, 2),
                               src_indices=[[4, 5], [7, 9]],
                               flat_src_indices=True, promotes=['x'])
         except Exception as err:
-            self.assertEqual(str(err), "Group (<model>): The source indices do not specify a valid index "
-                                       "for the connection 'indeps.x' to 'C1.x'. "
-                                       "Index '9' is out of range for a flat source of size 9.")
+            self.assertEqual(str(err), msg)
         else:
             self.fail("Exception expected.")
 
+        with assert_warning(UserWarning, msg):
+            src_indices_model(src_shape=(3, 3), tgt_shape=(2, 2),
+                              src_indices=[[4, 5], [7, 9]],
+                              flat_src_indices=True,
+                              raise_connection_errors=False)
+
     def test_src_indices_shape_bad_idx_flat_neg(self):
+        msg = "Group (<model>): The source indices do not specify a valid index " + \
+              "for the connection 'indeps.x' to 'C1.x'. " + \
+              "Index '-10' is out of range for a flat source of size 9."
         try:
             src_indices_model(src_shape=(3, 3), tgt_shape=(2, 2),
                               src_indices=[[-10, 5], [7, 8]],
                               flat_src_indices=True)
         except Exception as err:
-            self.assertEqual(str(err), "Group (<model>): The source indices do not specify a valid index "
-                                       "for the connection 'indeps.x' to 'C1.x'. "
-                                       "Index '-10' is out of range for a flat source of size 9.")
+            self.assertEqual(str(err), msg)
         else:
             self.fail("Exception expected.")
+
+        with assert_warning(UserWarning, msg):
+            src_indices_model(src_shape=(3, 3), tgt_shape=(2, 2),
+                              src_indices=[[-10, 5], [7, 8]],
+                              flat_src_indices=True,
+                              raise_connection_errors=False)
 
 
 if __name__ == "__main__":
