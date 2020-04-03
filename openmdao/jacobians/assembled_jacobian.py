@@ -84,13 +84,11 @@ class AssembledJacobian(Jacobian):
         OrderedDict
             Tuples of the form (start, end) keyed on variable name.
         """
-        iproc = system.comm.rank
-        abs2idx = system._var_allprocs_abs2idx['linear']
-        sizes = system._var_sizes['linear'][vtype]
-        start = end = 0
+        abs2meta = system._var_abs2meta
         ranges = OrderedDict()
+        start = end = 0
         for name in system._var_abs_names[vtype]:
-            end += sizes[iproc, abs2idx[name]]
+            end += abs2meta[name]['size']
             ranges[name] = (start, end)
             start = end
         return ranges
@@ -115,7 +113,6 @@ class AssembledJacobian(Jacobian):
 
         iproc = system.comm.rank
         abs2idx = system._var_allprocs_abs2idx['linear']
-        in_sizes = system._var_sizes['linear']['input']
         out_ranges = self._out_ranges
         in_ranges = self._in_ranges
 
@@ -189,8 +186,7 @@ class AssembledJacobian(Jacobian):
         int_mtx._build(out_size, out_size, system)
 
         if ext_mtx._submats:
-            in_size = np.sum(in_sizes[iproc, :])
-            ext_mtx._build(out_size, in_size)
+            ext_mtx._build(out_size, len(system._vectors['input']['linear']))
         else:
             ext_mtx = None
 
@@ -235,9 +231,8 @@ class AssembledJacobian(Jacobian):
         conns = {} if isinstance(system, Component) else system._conn_global_abs_in2out
 
         iproc = system.comm.rank
-        sizes = system._var_sizes['linear']['input']
         abs2idx = system._var_allprocs_abs2idx['linear']
-        in_offset = {n: np.sum(sizes[iproc, :abs2idx[n]]) for n in
+        in_offset = {n: abs2meta[n]['size'] for n in
                      system._var_abs_names['input'] if n not in conns}
 
         subjacs_info = self._subjacs_info
@@ -260,11 +255,8 @@ class AssembledJacobian(Jacobian):
                                             in_offset[in_abs_name] - ranges[2], None, info['shape'])
 
         if ext_mtx._submats:
-            sizes = system._var_sizes
-            iproc = system.comm.rank
-            out_size = np.sum(sizes['linear']['output'][iproc, :])
-            in_size = np.sum(sizes['linear']['input'][iproc, :])
-            ext_mtx._build(out_size, in_size)
+            ext_mtx._build(len(system._vectors['output']['linear']),
+                           len(system._vectors['input']['linear']))
         else:
             ext_mtx = None
 

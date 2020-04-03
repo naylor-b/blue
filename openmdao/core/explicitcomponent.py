@@ -76,9 +76,9 @@ class ExplicitComponent(Component):
         tuple(ndarray, ndarray)
             'of' and 'wrt' variable sizes.
         """
-        iproc = self.comm.rank
-        out_sizes = self._var_sizes['linear']['output'][iproc]
-        in_sizes = self._var_sizes['linear']['input'][iproc]
+        out_sizes = self._var_sizes['linear']['output'][self.comm.rank]
+        in_sizes = np.array([m['size'] for n, m in self._var_allprocs_abs2meta.items()],
+                            dtype=INT_DTYPE)
         return out_sizes, in_sizes
 
     def _jacobian_wrt_iter(self, wrt_matches=None):

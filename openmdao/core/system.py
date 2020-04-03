@@ -680,7 +680,7 @@ class System(object):
                         rel = rdct['output']
 
                 for key in ['output', 'residual', 'input']:
-                    if key == 'input' and vec_name == 'nonlinear':
+                    if key == 'input':
                         outvec = root_vectors['output'][vec_name]
                     else:
                         outvec = None
@@ -1791,22 +1791,6 @@ class System(object):
             Whether to call this method in subsystems.
         """
         pass
-
-    # def _setup_nocopy(self, nocopy_inputs, recurse=True):
-    #     # Recursion
-
-    #     if nocopy_inputs:
-    #         if recurse:
-    #             for subsys in self._subsystems_myproc:
-    #                 subsys._setup_nocopy(nocopy_inputs, recurse)
-
-    #         iproc = self.comm.rank
-    #         abs2idx = self._var_allprocs_abs2idx['nonlinear']
-    #         vsizes = self._var_sizes['nonlinear']['input']
-    #         nocopy_set = set(nocopy_inputs)
-    #         for name in nocopy_set.intersection(self._var_relevant_names['nonlinear']['input']):
-    #             # get rid of any storage for this var in the input vector
-    #             vsizes[iproc, abs2idx[name]] = 0
 
     def _setup_global(self, ext_num_vars, ext_sizes):
         """
@@ -4064,9 +4048,9 @@ class System(object):
         tuple(ndarray, ndarray, is_implicit)
             'of' and 'wrt' variable sizes.
         """
-        iproc = self.comm.rank
-        out_sizes = self._var_sizes['linear']['output'][iproc]
-        in_sizes = self._var_sizes['linear']['input'][iproc]
+        out_sizes = self._var_sizes['linear']['output'][self.comm.rank]
+        in_sizes = np.array([m['size'] for n, m in self._var_allprocs_abs2meta.items()],
+                            dtype=INT_DTYPE)
         return out_sizes, np.hstack((out_sizes, in_sizes))
 
     def _get_gradient_nl_solver_systems(self):
@@ -4299,18 +4283,16 @@ class System(object):
                 else:
                     vdict = {n: views[n] for n in variables}
             elif parallel:
-                sizes = self._var_sizes[vec_name][kind]
-                abs2idx = self._var_allprocs_abs2idx[vec_name]
                 if discrete_vec:
                     vdict = {}
                     for n in variables:
                         if n in views:
-                            if sizes[rank, abs2idx[n]] > 0:
+                            if views[n].size > 0:
                                 vdict[n] = views[n]
                         elif n[offset:] in discrete_vec and self._owning_rank[n] == rank:
                             vdict[n] = discrete_vec[n[offset:]]['value']
                 else:
-                    vdict = {n: views[n] for n in variables if sizes[rank, abs2idx[n]] > 0}
+                    vdict = {n: views[n] for n in variables if views[n].size > 0}
             else:
                 meta = self._var_allprocs_abs2meta
                 for name in variables:
