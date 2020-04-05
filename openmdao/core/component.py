@@ -672,20 +672,9 @@ class Component(System):
                                                                           shape,
                                                                           it.shape, item_name))
 
-        if isscalar(ref):
-            self._has_output_scaling |= ref != 1.0
-        else:
-            self._has_output_scaling |= np.any(ref != 1.0)
-
-        if isscalar(ref0):
-            self._has_output_scaling |= ref0 != 0.0
-        else:
-            self._has_output_scaling |= np.any(ref0)
-
-        if isscalar(res_ref):
-            self._has_resid_scaling |= res_ref != 1.0
-        else:
-            self._has_resid_scaling |= np.any(res_ref != 1.0)
+        self._has_output_scaling |= np.any(ref != 1.0)
+        self._has_output_scaling |= np.any(ref0)
+        self._has_resid_scaling |= np.any(res_ref != 1.0)
 
         ref = format_as_float_or_array('ref', ref, flatten=True)
         ref0 = format_as_float_or_array('ref0', ref0, flatten=True)
