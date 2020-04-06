@@ -209,7 +209,7 @@ class Vector(object):
         list
             the variable values.
         """
-        return [v for n, v in self.abs_item_iter()]
+        return [v for _, v in self.abs_item_iter()]
 
     def name2abs_name(self, name):
         """

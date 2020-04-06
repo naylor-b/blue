@@ -588,10 +588,7 @@ class Group(System):
         allprocs_discrete = self._var_allprocs_discrete
 
         abs2meta = self._var_abs2meta
-        abs2prom = self._var_abs2prom
-
         allprocs_abs2meta = self._var_allprocs_abs2meta
-        allprocs_abs2prom = self._var_allprocs_abs2prom
 
         allprocs_prom2abs_list = self._var_allprocs_prom2abs_list
 
@@ -623,16 +620,6 @@ class Group(System):
                 var_discrete[type_].update({sub_prefix + k: v for k, v in
                                             subsys._var_discrete[type_].items()})
 
-                # Assemble abs2prom
-                sub_loc_proms = subsys._var_abs2prom[type_]
-                sub_proms = subsys._var_allprocs_abs2prom[type_]
-                for abs_name in chain(subsys._var_allprocs_abs_names[type_],
-                                      subsys._var_allprocs_abs_names_discrete[type_]):
-                    if abs_name in sub_loc_proms:
-                        abs2prom[type_][abs_name] = var_maps[type_][sub_loc_proms[abs_name]]
-
-                    allprocs_abs2prom[type_][abs_name] = var_maps[type_][sub_proms[abs_name]]
-
                 # Assemble allprocs_prom2abs_list
                 for sub_prom, sub_abs in subsys._var_allprocs_prom2abs_list[type_].items():
                     prom_name = var_maps[type_][sub_prom]
@@ -652,12 +639,11 @@ class Group(System):
             if (mysub and mysub.comm.rank == 0 and (mysub._full_comm is None or
                                                     mysub._full_comm.rank == 0)):
                 raw = (allprocs_abs_names, allprocs_discrete, allprocs_prom2abs_list,
-                       allprocs_abs2prom, allprocs_abs2meta, self._has_output_scaling,
+                       allprocs_abs2meta, self._has_output_scaling,
                        self._has_resid_scaling)
             else:
                 raw = (
                     {'input': [], 'output': []},
-                    {'input': {}, 'output': {}},
                     {'input': {}, 'output': {}},
                     {'input': {}, 'output': {}},
                     {},
@@ -668,10 +654,9 @@ class Group(System):
 
             for type_ in ['input', 'output']:
                 allprocs_abs_names[type_] = []
-                allprocs_abs2prom[type_] = {}
                 allprocs_prom2abs_list[type_] = OrderedDict()
 
-            for (myproc_abs_names, myproc_discrete, myproc_prom2abs_list, all_abs2prom,
+            for (myproc_abs_names, myproc_discrete, myproc_prom2abs_list,
                  myproc_abs2meta, oscale, rscale) in gathered:
                 self._has_output_scaling |= oscale
                 self._has_resid_scaling |= rscale
@@ -686,13 +671,27 @@ class Group(System):
                     # Assemble in parallel allprocs_abs_names
                     allprocs_abs_names[type_].extend(myproc_abs_names[type_])
                     allprocs_discrete[type_].update(myproc_discrete[type_])
-                    allprocs_abs2prom[type_].update(all_abs2prom[type_])
+                    # allprocs_abs2prom[type_].update(all_abs2prom[type_])
 
                     # Assemble in parallel allprocs_prom2abs_list
                     for prom_name, abs_names_list in myproc_prom2abs_list[type_].items():
                         if prom_name not in allprocs_prom2abs_list[type_]:
                             allprocs_prom2abs_list[type_][prom_name] = []
                         allprocs_prom2abs_list[type_][prom_name].extend(abs_names_list)
+
+        abs2prom = self._var_abs2prom
+        allprocs_abs2prom = self._var_allprocs_abs2prom
+        for type_ in ['input', 'output']:
+            if self.pathname:
+                prefix = self.pathname + '.'
+                discrete = {prefix + n for n in self._var_discrete[type_]}
+            else:
+                discrete = self._var_discrete[type_]
+            for prom, abs_names in self._var_allprocs_prom2abs_list[type_].items():
+                for abs_name in abs_names:
+                    allprocs_abs2prom[type_][abs_name] = prom
+                    if abs_name in abs2meta or abs_name in discrete:
+                        abs2prom[type_][abs_name] = prom
 
         if self._var_discrete['input'] or self._var_discrete['output']:
             self._discrete_inputs = _DictValues(self._var_discrete['input'])
