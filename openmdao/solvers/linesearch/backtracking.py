@@ -170,6 +170,7 @@ def _enforce_bounds_vector(u, du, alpha, lower_bounds, upper_bounds):
         # amount that the du vector has to be reduced, then apply the reduction.
         du *= 1 - d_alpha / alpha
 
+
 def _enforce_bounds_scalar(u, du, alpha, lower_bounds, upper_bounds):
     """
     Enforce lower/upper bounds on each scalar separately, then backtrack as a vector.
@@ -213,6 +214,7 @@ def _enforce_bounds_scalar(u, du, alpha, lower_bounds, upper_bounds):
 
     u_data += change
     du._data += change / alpha
+
 
 def _enforce_bounds_wall(u, du, alpha, lower_bounds, upper_bounds):
     """
