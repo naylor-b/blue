@@ -1993,14 +1993,9 @@ class System(object):
         for abs_name in self._var_abs_names['output']:
             self._outputs.set_val_abs(abs_name, abs2meta[abs_name]['value'])
 
-    def _get_maps(self, prom_names):
+    def _get_promote_maps(self):
         """
         Define variable maps based on promotes lists.
-
-        Parameters
-        ----------
-        prom_names : {'input': [], 'output': []}
-            Lists of promoted input and output names.
 
         Returns
         -------
@@ -2009,6 +2004,7 @@ class System(object):
             to promoted variable names.
         """
         gname = self.name + '.' if self.name else ''
+        prom_names = self._var_allprocs_prom2abs_list
 
         def split_list(lst):
             """

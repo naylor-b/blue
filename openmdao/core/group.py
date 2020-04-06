@@ -601,7 +601,7 @@ class Group(System):
                 self._has_output_scaling |= subsys._has_output_scaling
                 self._has_resid_scaling |= subsys._has_resid_scaling
 
-            var_maps = subsys._get_maps(subsys._var_allprocs_prom2abs_list)
+            var_maps = subsys._get_promote_maps()
 
             # Assemble allprocs_abs2meta and abs2meta
             allprocs_abs2meta.update(subsys._var_allprocs_abs2meta)
@@ -611,8 +611,7 @@ class Group(System):
 
             for type_ in ['input', 'output']:
                 # Assemble abs_names and allprocs_abs_names
-                allprocs_abs_names[type_].extend(
-                    subsys._var_allprocs_abs_names[type_])
+                allprocs_abs_names[type_].extend(subsys._var_allprocs_abs_names[type_])
                 allprocs_abs_names_discrete[type_].extend(
                     subsys._var_allprocs_abs_names_discrete[type_])
 
