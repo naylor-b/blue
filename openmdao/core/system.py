@@ -680,7 +680,7 @@ class System(object):
                         rel = rdct['output']
 
                 for key in ['output', 'residual', 'input']:
-                    if key == 'input':
+                    if key == 'input' and vec_name == 'nonlinear':
                         outvec = root_vectors['output'][vec_name]
                     else:
                         outvec = None
@@ -4268,6 +4268,7 @@ class System(object):
         variables = filtered_vars.get(kind)
         if variables:
             views = self._vectors[kind][vec_name]._views
+            views_flat = self._vectors[kind][vec_name]._views_flat
             rank = self.comm.rank
             discrete_vec = None if kind == 'residual' else self._var_discrete[kind]
             offset = len(self.pathname) + 1 if self.pathname else 0
@@ -4287,12 +4288,12 @@ class System(object):
                     vdict = {}
                     for n in variables:
                         if n in views:
-                            if views[n].size > 0:
+                            if views_flat[n].size > 0:
                                 vdict[n] = views[n]
                         elif n[offset:] in discrete_vec and self._owning_rank[n] == rank:
                             vdict[n] = discrete_vec[n[offset:]]['value']
                 else:
-                    vdict = {n: views[n] for n in variables if views[n].size > 0}
+                    vdict = {n: views[n] for n in variables if views_flat[n].size > 0}
             else:
                 meta = self._var_allprocs_abs2meta
                 for name in variables:

@@ -329,9 +329,10 @@ class Component(System):
 
             sizes[vec_name] = {}
             sizes[vec_name]['input'] = sz = np.zeros((nproc, len(relnames['input'])), int)
+            nonlin = vec_name == 'nonlinear'
             # Compute _var_sizes
             for idx, abs_name in enumerate(relnames['input']):
-                if abs_name not in nocopy_inputs:
+                if not nonlin or abs_name not in nocopy_inputs:
                     sz[iproc, idx] = abs2meta[abs_name]['size']
             sizes[vec_name]['output'] = sz = np.zeros((nproc, len(relnames['output'])), int)
             # Compute _var_sizes
