@@ -912,7 +912,7 @@ class System(object):
         self._setup_recording(recurse=recurse)
 
         # If full or reconf setup, reset this system's variables to initial values.
-        if setup_mode in ('full', 'reconf'):
+        if initial:
             self.set_initial_values()
 
         # Tell all subsystems to record their metadata if they have recorders attached
@@ -1039,6 +1039,29 @@ class System(object):
             options['step'] = step
 
         self._coloring_info = options
+
+    def _get_wrt_skips(self):
+        wrts = []
+        seen = set()
+        for approx in self._approx_schemes.values():
+            for key in approx._exec_dict:
+                wrt = key[0]
+                if wrt not in seen:
+                    wrts.append(wrt)
+
+        seen = set()
+        skips = set()
+        nocopy = self._inputs._nocopy
+        for wrt in wrts:
+            # if we have multiple inputs that connect to the same output (and share its memory),
+            # we'll only perturb the first one.
+            if wrt in nocopy:
+                of = nocopy[wrt]
+                if of in seen:
+                    skips.add(wrt)
+                else:
+                    seen.add(of)
+        return skips
 
     def _compute_approx_coloring(self, recurse=False, **overrides):
         """
@@ -1171,6 +1194,7 @@ class System(object):
 
         sparsity_time = time.time() - sparsity_start_time
 
+        info['wrt_skips'] = self._get_wrt_skips()
         self._update_wrt_matches(info)
 
         ordered_of_info = list(self._jacobian_of_iter())
@@ -1266,18 +1290,16 @@ class System(object):
             the actual offsets are, i.e. the offsets will be into a reduced jacobian
             containing only the matching columns.
         """
-        if wrt_matches is None:
-            wrt_matches = ContainsAll()
-        abs2meta = self._var_allprocs_abs2meta
         offset = end = 0
         for of, _offset, _end, sub_of_idx in self._jacobian_of_iter():
-            if of in wrt_matches:
+            if wrt_matches is None or of in wrt_matches:
                 end += (_end - _offset)
                 yield of, offset, end, sub_of_idx
                 offset = end
 
+        abs2meta = self._var_allprocs_abs2meta
         for wrt in self._var_allprocs_abs_names['input']:
-            if wrt in wrt_matches:
+            if wrt_matches is None or wrt in wrt_matches:
                 end += abs2meta[wrt]['size']
                 yield wrt, offset, end, _full_slice
                 offset = end

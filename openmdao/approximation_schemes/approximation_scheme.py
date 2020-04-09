@@ -44,6 +44,17 @@ class ApproximationScheme(object):
         self._approx_groups_cached_under_cs = False
         self._exec_dict = defaultdict(list)
 
+    def __repr__(self):
+        """
+        Return a simple string representation.
+
+        Returns
+        -------
+        str
+            String containing class name and added approximation keys.
+        """
+        return f"{self.__class__.__name__}: {list(self._exec_dict.keys())}"
+
     def _reset(self):
         """
         Get rid of any existing approx groups.
@@ -235,14 +246,19 @@ class ApproximationScheme(object):
         coloring = system._get_static_coloring()
 
         self._approx_groups = []
+        skips = system._get_wrt_skips()
 
         # must sort _exec_dict keys here or have ordering issues when using MPI
         for key in sorted(self._exec_dict):
+            wrt = key[0]
+            if wrt in skips:
+                continue
+
             approx = self._exec_dict[key]
             meta = approx[0][1]
             if coloring is not None and 'coloring' in meta:
                 continue
-            wrt = key[0]
+
             directional = key[-1]
             data = self._get_approx_data(system, key)
             if wrt in inputs._views_flat:

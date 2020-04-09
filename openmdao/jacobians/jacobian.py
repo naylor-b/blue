@@ -359,7 +359,7 @@ class Jacobian(object):
                     else:
                         J[roffset:rend, coffset:cend] = summ[key]
 
-        J *= (1.0 / num_full_jacs)
+        J *= (1.0 / np.max(J))
 
         tol_info = _tol_sweep(J, tol, orders)
 

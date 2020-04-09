@@ -1394,7 +1394,7 @@ class _TotalJacInfo(object):
             model._approx_subjac_keys = None
 
             if model._approx_schemes:
-                method = list(model._approx_schemes)[0]
+                method = list(model._approx_schemes)[-1]
                 kwargs = model._owns_approx_jac_meta
                 model.approx_totals(method=method, **kwargs)
             else:

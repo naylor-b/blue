@@ -386,6 +386,7 @@ class Component(System):
         """
         ofs, allwrt = self._get_partials_varlists()
         wrt_patterns = info['wrt_patterns']
+        skips = info.get('wrt_skips', set())
         matches_prom = set()
         for w in wrt_patterns:
             matches_prom.update(find_matches(w, allwrt))
@@ -395,8 +396,13 @@ class Component(System):
             raise ValueError("{}: Invalid 'wrt' variable(s) specified for colored approx partial "
                              "options: {}.".format(self.msginfo, wrt_patterns))
 
-        info['wrt_matches_prom'] = matches_prom
-        info['wrt_matches'] = [rel_name2abs_name(self, n) for n in matches_prom]
+        if skips:
+            a2p = {rel_name2abs_name(self, p): p for p in matches_prom}
+            info['wrt_matches'] = matches = {n for n in a2p if n not in skips}
+            info['wrt_matches_prom'] = {a2p[n] for n in matches}
+        else:
+            info['wrt_matches_prom'] = matches_prom
+            info['wrt_matches'] = {rel_name2abs_name(self, n) for n in matches_prom}
 
     def _update_subjac_sparsity(self, sparsity):
         """
@@ -1322,6 +1328,10 @@ class Component(System):
         """
         Add approximations for those partials registered with method=fd or method=cs.
         """
+        for a in self._approx_schemes.values():
+            a._reset()
+            a._exec_dict = defaultdict(list)
+
         self._get_static_wrt_matches()
         subjacs = self._subjacs_info
         for key in self._approx_subjac_keys_iter():

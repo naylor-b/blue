@@ -200,10 +200,10 @@ class SerialDiamondFDTestCase(TestCase):
             self.assertEquals(str(err), "Value (0) of option 'num_par_fd' is less than minimum allowed value of 1.")
 
 
-@unittest.skipUnless(MPI and PETScVector, "MPI and PETSc are required.")
+# @unittest.skipUnless(MPI and PETScVector, "MPI and PETSc are required.")
 class ParallelDiamondFDTestCase(TestCase):
 
-    N_PROCS = 4
+    #N_PROCS = 4
 
     def test_diamond_fd_totals(self):
         size = 15
@@ -239,7 +239,7 @@ class ParallelDiamondFDTestCase(TestCase):
 
     def test_diamond_cs_totals_nested_par_cs(self):
         size = 15
-        prob = setup_diamond_model(4, size, 'cs', 'par')
+        prob = setup_diamond_model(1, size, 'cs', 'par')
         assert_near_equal(prob['C3.y'], np.ones(size)*24.0, 1e-6)
 
         J = prob.compute_totals(['C3.y'], ['P1.x'], return_format='dict')

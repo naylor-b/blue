@@ -92,12 +92,10 @@ class ExplicitComponent(Component):
             the actual offsets are, i.e. the offsets will be into a reduced jacobian
             containing only the matching columns.
         """
-        if wrt_matches is None:
-            wrt_matches = ContainsAll()
         abs2meta = self._var_allprocs_abs2meta
         offset = end = 0
         for wrt in self._var_allprocs_abs_names['input']:
-            if wrt in wrt_matches:
+            if wrt_matches is None or wrt in wrt_matches:
                 end += abs2meta[wrt]['size']
                 yield wrt, offset, end, _full_slice
                 offset = end

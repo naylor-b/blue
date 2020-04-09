@@ -177,7 +177,7 @@ def run_opt(driver_class, mode, assemble_type=None, color_info=None, derivs=True
 
         p.model.add_objective('circle.area', ref=-1)
 
-    # # setup coloring
+    # setup coloring
     if color_info is not None:
         p.driver.use_fixed_coloring(color_info)
 
@@ -1183,6 +1183,46 @@ class SimulColoringConfigCheckTestCase(unittest.TestCase):
             p.run_driver()
 
         self.assertEqual(str(ctx.exception), "DumbComp (comp): Current coloring configuration does not match the configuration of the current model.\n   The following variables have changed sizes: ['y', 'y_in'].\nMake sure you don't have different problems that have the same coloring directory. Set the coloring directory by setting the value of problem.options['coloring_dir'].")
+
+
+def setup_diamond_model(size, method):
+
+    prob = om.Problem()
+    root = prob.model
+
+    root.add_subsystem('P1', om.IndepVarComp('x', np.ones(size)))
+
+    par = root.add_subsystem("par", om.Group())
+    par.approx_totals(method=method)
+
+    par.add_subsystem('C1', om.ExecComp('y=2.0*x+1.0', has_diag_partials=True, x=np.zeros(size), y=np.zeros(size)))
+    par.add_subsystem('C2', om.ExecComp('y=3.0*x+5.0', has_diag_partials=True, x=np.zeros(size), y=np.zeros(size)))
+    par.declare_coloring(method=method)
+    root.add_subsystem('C3', om.ExecComp('y=-3.0*x1+4.0*x2+1.0', has_diag_partials=True, x1=np.zeros(size), x2=np.zeros(size), y=np.zeros(size)))
+
+    root.connect("P1.x", "par.C1.x")
+    root.connect("P1.x", "par.C2.x")
+
+    root.connect("par.C1.y", "C3.x1")
+    root.connect("par.C2.y", "C3.x2")
+
+    root.add_design_var('P1.x')
+    root.add_objective('C3.y')
+
+    prob.setup(mode='fwd')
+    prob.run_model()
+
+    return prob
+
+
+class NocopyFDTestCase(unittest.TestCase):
+    def test_nocopy_cs(self):
+        size = 15
+        prob = setup_diamond_model(size, 'cs')
+        assert_near_equal(prob['C3.y'], np.ones(size)*24.0, 1e-6)
+
+        J = prob.compute_totals(['C3.y'], ['P1.x'], return_format='dict')
+        assert_near_equal(J['C3.y']['P1.x'], np.eye(size)*6.0, 1e-6)
 
 
 if __name__ == '__main__':

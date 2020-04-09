@@ -1055,7 +1055,8 @@ class Group(System):
         allprocs_discrete_in = self._var_allprocs_discrete['input']
         allprocs_discrete_out = self._var_allprocs_discrete['output']
 
-        src_connects = Counter(my_conns.values())
+        # keep track of multiply connected sources for special handling later
+        self._multi_conn_srcs = {n for n, v in Counter(my_conns.values()).items() if v > 1}
 
         for abs_in, abs_out in my_conns.items():
             needs_input_scaling = False
@@ -1083,7 +1084,7 @@ class Group(System):
 
                 if (not needs_input_scaling and abs_in in abs2meta and abs_out in abs2meta and
                         abs2meta[abs_in]['src_indices'] is None and not in_meta['distributed'] and
-                        not out_meta['distributed'] and src_connects[abs_out] == 1):
+                        not out_meta['distributed']):
                     self._nocopy_inputs[abs_in] = abs_out
 
                 in_meta['has_input_scaling'] = int(needs_input_scaling)
@@ -2001,10 +2002,7 @@ class Group(System):
             provides its default value.
         """
         self._has_approx = True
-        self._approx_schemes = OrderedDict()
-        approx_scheme = self._get_approx_scheme(method)
-
-        default_opts = approx_scheme.DEFAULT_OPTIONS
+        default_opts = self._get_approx_scheme(method).DEFAULT_OPTIONS
 
         kwargs = {}
         for name, attr in (('step', step), ('form', form), ('step_calc', step_calc)):
@@ -2137,22 +2135,18 @@ class Group(System):
             containing only the matching columns.
         """
         if self._owns_approx_wrt:
-            if wrt_matches is None:
-                wrt_matches = ContainsAll()
-            abs2meta = self._var_allprocs_abs2meta
-            approx_of_idx = self._owns_approx_of_idx
-            approx_wrt_idx = self._owns_approx_wrt_idx
-
             offset = end = 0
             if self.pathname:  # doing semitotals, so include output columns
                 for of, _offset, _end, sub_of_idx in self._jacobian_of_iter():
-                    if of in wrt_matches:
+                    if wrt_matches is None or of in wrt_matches:
                         end += (_end - _offset)
                         yield of, offset, end, sub_of_idx
                         offset = end
 
+            abs2meta = self._var_allprocs_abs2meta
+            approx_wrt_idx = self._owns_approx_wrt_idx
             for wrt in self._owns_approx_wrt:
-                if wrt in wrt_matches:
+                if wrt_matches is None or wrt in wrt_matches:
                     if wrt in approx_wrt_idx:
                         sub_wrt_idx = approx_wrt_idx[wrt]
                         size = len(sub_wrt_idx)
@@ -2163,8 +2157,7 @@ class Group(System):
                     yield wrt, offset, end, sub_wrt_idx
                     offset = end
         else:
-            for tup in super(Group, self)._jacobian_wrt_iter(wrt_matches):
-                yield tup
+            yield from super(Group, self)._jacobian_wrt_iter(wrt_matches)
 
     def _update_wrt_matches(self, info):
         """
@@ -2181,6 +2174,7 @@ class Group(System):
         abs2prom = self._var_allprocs_abs2prom
         abs_outs = self._var_allprocs_abs_names['output']
         abs_ins = self._var_allprocs_abs_names['input']
+        skips = info.get('wrt_skips', set())
 
         info['wrt_matches'] = wrt_colors_matched = set()
 
@@ -2190,6 +2184,8 @@ class Group(System):
             if wrt_color_patterns:
                 if key[1] in abs2prom['output']:
                     wrtprom = abs2prom['output'][key[1]]
+                elif key[1] in skips:
+                    continue
                 else:
                     wrtprom = abs2prom['input'][key[1]]
 
