@@ -28,6 +28,7 @@ from openmdao.recorders.recording_iteration_stack import Recording
 from openmdao.solvers.nonlinear.nonlinear_runonce import NonlinearRunOnce
 from openmdao.solvers.linear.linear_runonce import LinearRunOnce
 from openmdao.solvers.nonlinear.nonlinear_block_jac import NonlinearBlockJac
+from openmdao.solvers.linear.linear_block_jac import LinearBlockJac
 from openmdao.utils.array_utils import convert_neg, array_connection_compatible, \
     _flatten_src_indices
 from openmdao.utils.general_utils import ContainsAll, all_ancestors, simple_warning
@@ -1133,7 +1134,8 @@ class Group(System):
         abs2meta = self._var_abs2meta
 
         nproc = self.comm.size
-        has_jacobi = isinstance(self.nonlinear_solver, NonlinearBlockJac)
+        has_jacobi = (isinstance(self.nonlinear_solver, NonlinearBlockJac) or
+                      isinstance(self.linear_solver, LinearBlockJac))
         nocopy = self._problem_meta['nocopy_inputs']
 
         # Check input/output units here, and set _has_input_scaling
