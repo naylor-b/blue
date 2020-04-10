@@ -306,6 +306,8 @@ class System(object):
         used if this System does no partial or semi-total coloring.
     _first_call_to_linearize : bool
         If True, this is the first call to _linearize.
+    _in_resetup : bool
+        If True, resetup is currently being called on this system.
     """
 
     _undefined = object()
@@ -324,6 +326,7 @@ class System(object):
         self.name = ''
         self.pathname = None
         self.comm = None
+        self._in_resetup = False
 
         # System options
         self.options = OptionsDictionary(parent_name=type(self).__name__)
@@ -760,13 +763,17 @@ class System(object):
         setup_mode : str
             Must be one of 'full', 'reconf', or 'update'.
         """
-        self._setup(self.comm, setup_mode=setup_mode, mode=self._mode,
-                    distributed_vector_class=self._distributed_vector_class,
-                    local_vector_class=self._local_vector_class,
-                    use_derivatives=self._use_derivatives,
-                    prob_meta=self._problem_meta)
-        self._final_setup(self.comm, setup_mode=setup_mode,
-                          force_alloc_complex=self._outputs._alloc_complex)
+        self._in_resetup = True
+        try:
+            self._setup(self.comm, setup_mode=setup_mode, mode=self._mode,
+                        distributed_vector_class=self._distributed_vector_class,
+                        local_vector_class=self._local_vector_class,
+                        use_derivatives=self._use_derivatives,
+                        prob_meta=self._problem_meta)
+            self._final_setup(self.comm, setup_mode=setup_mode,
+                              force_alloc_complex=self._outputs._alloc_complex)
+        finally:
+            self._in_resetup = False
 
     def _setup(self, comm, setup_mode, mode, distributed_vector_class, local_vector_class,
                use_derivatives, prob_meta=None):

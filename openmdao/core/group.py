@@ -863,7 +863,6 @@ class Group(System):
         pathname = self.pathname
 
         abs_in2out = {}
-        self._nocopy_inputs = {}
 
         if pathname == '':
             path_len = 0
@@ -1047,16 +1046,21 @@ class Group(System):
                     comp._update_dist_src_indices(global_abs_in2out)
 
         if self.pathname == '':  # only do at the top
-            self._mark_nocopy(global_abs_in2out)
-            self._problem_meta['nocopy_inputs'] = self._nocopy_inputs
+            nocopy = self._mark_nocopy(global_abs_in2out)
+            self._problem_meta['nocopy_inputs'] = nocopy
+        elif self._in_resetup:
+            nocopy = self._mark_nocopy(global_abs_in2out)
+            self._problem_meta['nocopy_inputs'].update(nocopy)
 
     def _mark_nocopy(self, my_conns):
         allprocs_abs2meta = self._var_allprocs_abs2meta
         allprocs_discrete_in = self._var_allprocs_discrete['input']
         allprocs_discrete_out = self._var_allprocs_discrete['output']
 
-        # keep track of multiply connected sources for special handling later
-        self._multi_conn_srcs = {n for n, v in Counter(my_conns.values()).items() if v > 1}
+        # # keep track of multiply connected sources for special handling later
+        # self._multi_conn_srcs = {n for n, v in Counter(my_conns.values()).items() if v > 1}
+
+        nocopy = {}
 
         for abs_in, abs_out in my_conns.items():
             needs_input_scaling = False
@@ -1085,9 +1089,11 @@ class Group(System):
                 if (not needs_input_scaling and abs_in in abs2meta and abs_out in abs2meta and
                         abs2meta[abs_in]['src_indices'] is None and not in_meta['distributed'] and
                         not out_meta['distributed']):
-                    self._nocopy_inputs[abs_in] = abs_out
+                    nocopy[abs_in] = abs_out
 
                 in_meta['has_input_scaling'] = int(needs_input_scaling)
+
+        return nocopy
 
     def _setup_connections(self, recurse=True):
         """

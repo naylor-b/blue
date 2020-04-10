@@ -751,6 +751,7 @@ class Problem(object):
 
         meta = {
             'coloring_dir': self.options['coloring_dir'],
+            'nocopy_inputs': {},
         }
         model._setup(model_comm, 'full', mode, distributed_vector_class, local_vector_class,
                      derivatives, meta)
