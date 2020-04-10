@@ -3449,7 +3449,8 @@ class System(object):
         """
         if self._outputs is None:
             # final setup has not been performed
-            if hasattr(self, '_local_system_set'):  # i.e. is a Group
+            from openmdao.core.group import Group
+            if isinstance(self, Group):
                 raise RuntimeError("{}: Unable to list outputs on a Group until model has "
                                    "been run.".format(self.msginfo))
 

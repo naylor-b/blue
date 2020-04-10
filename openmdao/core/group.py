@@ -1045,6 +1045,16 @@ class Group(System):
                 for comp in distcomps:
                     comp._update_dist_src_indices(global_abs_in2out)
 
+            # collect set of local (not remote, not distributed) subsystems so we can
+            # identify cross-process connections, which require the use of distributed
+            # instead of purely local vector and transfer objects.
+            self._local_system_set = set()
+            for s in self._subsystems_myproc:
+                if isinstance(s, Group):
+                    self._local_system_set.update(s._local_system_set)
+                elif not s.options['distributed']:
+                    self._local_system_set.add(s.pathname)
+
         if self.pathname == '':  # only do at the top
             nocopy = self._mark_nocopy(global_abs_in2out)
             self._problem_meta['nocopy_inputs'] = nocopy
@@ -1114,17 +1124,6 @@ class Group(System):
         if recurse:
             for subsys in self._subsystems_myproc:
                 subsys._setup_connections(recurse)
-
-        if MPI:
-            # collect set of local (not remote, not distributed) subsystems so we can
-            # identify cross-process connections, which require the use of distributed
-            # instead of purely local vector and transfer objects.
-            self._local_system_set = set()
-            for s in self._subsystems_myproc:
-                if isinstance(s, Group):
-                    self._local_system_set.update(s._local_system_set)
-                elif not s.options['distributed']:
-                    self._local_system_set.add(s.pathname)
 
         path_dot = pathname + '.' if pathname else ''
         path_len = len(path_dot)
