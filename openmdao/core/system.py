@@ -918,7 +918,7 @@ class System(object):
 
         self._setup_recording(recurse=recurse)
 
-        # If full or reconf setup, reset this system's variables to initial values.
+        # If full setup, reset this system's variables to initial values.
         if initial:
             self.set_initial_values()
 
@@ -1538,14 +1538,16 @@ class System(object):
         """
         self._var_allprocs_abs2idx = abs2idx = {}
 
-        for vec_name in self._get_all_relevant_vec_names():
+        vec_names = self._lin_rel_vec_name_list if self._use_derivatives else self._vec_names
+
+        for vec_name in vec_names:
             abs2idx[vec_name] = abs2idx_t = {}
             for type_ in ['input', 'output']:
                 for i, abs_name in enumerate(self._var_allprocs_relevant_names[vec_name][type_]):
                     abs2idx_t[abs_name] = i
 
-        # if self._use_derivatives:
-        #     abs2idx['nonlinear'] = abs2idx['linear']
+        if self._use_derivatives:
+            abs2idx['nonlinear'] = abs2idx['linear']
 
         if self.pathname == '':
             self._problem_meta['abs2idx'] = self._var_allprocs_abs2idx

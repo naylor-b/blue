@@ -217,11 +217,9 @@ class DefaultVector(Vector):
                 cplx_views[abs_name] = v
 
             if do_scaling:
-                # print(system.pathname, abs_name, ind1, ind2)
                 for scaleto in ('phys', 'norm'):
                     scale0, scale1 = factors[abs_name][kind, scaleto]
                     vec = scaling[scaleto]
-                    # print(scaleto, "factors", scale0, scale1, 'scale vec', vec)
                     if vec[0] is not None:
                         vec[0][ind1:ind2] = scale0
                     vec[1][ind1:ind2] = scale1
@@ -482,24 +480,6 @@ class DefaultVector(Vector):
             self._slices = slices
 
         return self._slices
-
-    def _setup_non_shared_slice_dict(self):
-        """
-        Return a dict of var names mapped to their slice in the local data array.
-
-        Inputs that share memory with connected outputs are excluded.
-        """
-        if self._nocopy:
-            slices = {}
-            start = end = 0
-            for name in self._system()._var_relevant_names[self._name][self._typ]:
-                if name not in self._nocopy:
-                    end += self._views_flat[name].size
-                    slices[name] = slice(start, end)
-                    start = end
-            self._non_shared_slices = slices
-        else:
-            self._non_shared_slices = self.get_slice_dict()
 
     def _enforce_bounds_vector(self, du, alpha, lower_bounds, upper_bounds):
         """

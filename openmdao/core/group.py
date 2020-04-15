@@ -518,8 +518,10 @@ class Group(System):
 
         subsystems_var_range = self._subsystems_var_range = {}
 
+        vec_names = self._lin_rel_vec_name_list if self._use_derivatives else self._vec_names
+
         # First compute these on one processor for each subsystem
-        for vec_name in self._get_all_relevant_vec_names():
+        for vec_name in vec_names:
 
             # Here, we count the number of variables in each subsystem.
             # We do this so that we can compute the offset when we recurse into each subsystem.
@@ -558,8 +560,8 @@ class Group(System):
                         start, start + allprocs_counters[type_][isub]
                     )
 
-        # if self._use_derivatives:
-        #     subsystems_var_range['nonlinear'] = subsystems_var_range['linear']
+        if self._use_derivatives:
+            subsystems_var_range['nonlinear'] = subsystems_var_range['linear']
 
         self._setup_var_index_maps(recurse=recurse)
 
@@ -1138,8 +1140,7 @@ class Group(System):
         abs2meta = self._var_abs2meta
 
         nproc = self.comm.size
-        has_jacobi = (isinstance(self.nonlinear_solver, NonlinearBlockJac) or
-                      isinstance(self.linear_solver, LinearBlockJac))
+        has_jacobi = isinstance(self.nonlinear_solver, NonlinearBlockJac)
         nocopy = self._problem_meta['nocopy_inputs']
 
         # Check input/output units here, and set _has_input_scaling

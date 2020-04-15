@@ -178,8 +178,6 @@ class Vector(object):
         self._initialize_data(root_vector)
         self._initialize_views(outvec)
 
-        self._setup_non_shared_slice_dict()
-
         self.read_only = False
 
     def __str__(self):
@@ -461,12 +459,9 @@ class Vector(object):
         """
         adder, scaler = self._scaling[scale_to]
         if self._ncol == 1:
-            # print(self._system().pathname, self._name, 'scale_to', scale_to, 'before', self._data)
-            # print("adder", adder, 'scaler', scaler)
             self._data *= scaler
             if adder is not None:  # nonlinear only
                 self._data += adder
-            # print('after', self._data)
         else:
             self._data *= scaler[:, np.newaxis]
             if adder is not None:  # nonlinear only

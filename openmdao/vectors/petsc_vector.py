@@ -32,6 +32,9 @@ class PETScVector(DefaultVector):
         variables that are 'owned' by a different process. Used by certain distributed
         calculations, e.g., get_norm(), where including duplicate values would result in
         the wrong answer.
+    _non_shared_slices : dict
+        Mapping of names of variables that don't share memory with a connected source to their
+        location within their local data array (which doesn't include any shared memory variables).
     """
 
     TRANSFER = PETScTransfer
@@ -69,6 +72,30 @@ class PETScVector(DefaultVector):
                                           relevant=relevant, outvec=outvec)
 
         self._dup_inds = None
+        self._non_shared_slices = self._get_non_shared_slice_dict()
+
+    def _get_non_shared_slice_dict(self):
+        """
+        Return a dict of var names mapped to their slice in the local data array.
+
+        Inputs that share memory with connected outputs are excluded.
+
+        Returns
+        -------
+        dict
+            Mapping of var names to slices.
+        """
+        if self._nocopy:
+            slices = {}
+            start = end = 0
+            for name in self._system()._var_relevant_names[self._name][self._typ]:
+                if name not in self._nocopy:
+                    end += self._views_flat[name].size
+                    slices[name] = slice(start, end)
+                    start = end
+            return slices
+        else:
+            return self.get_slice_dict()
 
     def _initialize_data(self, root_vector):
         """
