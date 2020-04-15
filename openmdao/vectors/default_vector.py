@@ -1,7 +1,6 @@
 """Define the default Vector class."""
 from copy import deepcopy
 import numbers
-from collections import OrderedDict
 
 import numpy as np
 from numpy import logical_and
@@ -120,11 +119,11 @@ class DefaultVector(Vector):
                 if self._name == 'nonlinear':
                     self._scaling['phys'] = (np.zeros(data.size), np.ones(data.size))
                     self._scaling['norm'] = (np.zeros(data.size), np.ones(data.size))
-                # elif self._name == 'linear':
-                    # # reuse the nonlinear scaling vecs since they're the same as ours
-                    # nlvec = self._system()._root_vecs[self._kind]['nonlinear']
-                    # self._scaling['phys'] = (None, nlvec._scaling['phys'][1])
-                    # self._scaling['norm'] = (None, nlvec._scaling['norm'][1])
+                elif self._name == 'linear' and self._typ == 'output':
+                    # reuse the nonlinear scaling vecs since they're the same as ours
+                    nlvec = self._system()._root_vecs[self._kind]['nonlinear']
+                    self._scaling['phys'] = (None, nlvec._scaling['phys'][1])
+                    self._scaling['norm'] = (None, nlvec._scaling['norm'][1])
                 else:
                     self._scaling['phys'] = (None, np.ones(data.size))
                     self._scaling['norm'] = (None, np.ones(data.size))
@@ -161,12 +160,12 @@ class DefaultVector(Vector):
             factors = system._scale_factors
             scaling = self._scaling
 
-        self._views = views = OrderedDict()
-        self._views_flat = views_flat = OrderedDict()
+        self._views = views = {}
+        self._views_flat = views_flat = {}
 
         alloc_complex = self._alloc_complex
-        self._cplx_views = cplx_views = OrderedDict()
-        self._cplx_views_flat = cplx_views_flat = OrderedDict()
+        self._cplx_views = cplx_views = {}
+        self._cplx_views_flat = cplx_views_flat = {}
 
         allprocs_abs2idx_t = system._var_allprocs_abs2idx[self._name]
         sizes_t = system._var_sizes[self._name][type_]
