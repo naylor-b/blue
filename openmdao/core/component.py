@@ -296,18 +296,16 @@ class Component(System):
         else:
             self._discrete_inputs = self._discrete_outputs = ()
 
-    def _setup_var_sizes(self, nocopy_inputs, recurse=True):
+    def _setup_var_sizes(self, recurse=True):
         """
         Compute the arrays of local variable sizes for all variables/procs on this system.
 
         Parameters
         ----------
-        nocopy_inputs : dict
-            Mapping of any inputs that share memory with their connected output.
         recurse : bool
             Whether to call this method in subsystems.
         """
-        super(Component, self)._setup_var_sizes(nocopy_inputs)
+        super(Component, self)._setup_var_sizes()
 
         iproc = self.comm.rank
         nproc = self.comm.size
@@ -316,6 +314,8 @@ class Component(System):
         abs2meta = self._var_abs2meta
 
         vec_names = self._get_all_relevant_vec_names()
+
+        nocopy_inputs = self._problem_meta['nocopy_inputs']
 
         # Initialize empty arrays
         for vec_name in vec_names:

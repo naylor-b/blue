@@ -409,8 +409,6 @@ class System(object):
         self._discrete_inputs = None
         self._discrete_outputs = None
 
-        self._nocopy_inputs = {}
-
         self._lower_bounds = None
         self._upper_bounds = None
 
@@ -851,7 +849,7 @@ class System(object):
         self._setup_global_connections(recurse=recurse)
         self._setup_relevance(mode, self._relevant)
         self._setup_var_index_ranges(recurse=recurse)
-        self._setup_var_sizes(self._nocopy_inputs, recurse=recurse)
+        self._setup_var_sizes(recurse=recurse)
         self._setup_ownership(recurse=recurse)
         self._setup_connections(recurse=recurse)
 
@@ -1557,14 +1555,12 @@ class System(object):
             for subsys in self._subsystems_myproc:
                 subsys._setup_var_index_maps(recurse)
 
-    def _setup_var_sizes(self, nocopy_inputs, recurse=True):
+    def _setup_var_sizes(self, recurse=True):
         """
         Compute the arrays of local variable sizes for all variables/procs on this system.
 
         Parameters
         ----------
-        nocopy_inputs : dict
-            Mapping of any inputs that share memory with their connected output.
         recurse : bool
             Whether to call this method in subsystems.
         """

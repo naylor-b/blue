@@ -703,18 +703,16 @@ class Group(System):
         else:
             self._discrete_inputs = self._discrete_outputs = ()
 
-    def _setup_var_sizes(self, nocopy_inputs, recurse=True):
+    def _setup_var_sizes(self, recurse=True):
         """
         Compute the arrays of local variable sizes for all variables/procs on this system.
 
         Parameters
         ----------
-        nocopy_inputs : dict
-            Mapping of any inputs that share memory with their connected output.
         recurse : bool
             Whether to call this method in subsystems.
         """
-        super(Group, self)._setup_var_sizes(nocopy_inputs)
+        super(Group, self)._setup_var_sizes()
 
         self._var_offsets = None
 
@@ -723,10 +721,12 @@ class Group(System):
 
         subsystems_proc_range = self._subsystems_proc_range
 
+        nocopy_inputs = self._problem_meta['nocopy_inputs']
+
         # Recursion
         if recurse:
             for subsys in self._subsystems_myproc:
-                subsys._setup_var_sizes(nocopy_inputs, recurse)
+                subsys._setup_var_sizes(recurse)
 
         sizes = self._var_sizes
         relnames = self._var_allprocs_relevant_names
