@@ -10,6 +10,7 @@ from openmdao.utils.name_maps import prom_name2abs_name, rel_name2abs_name
 
 
 _full_slice = slice(None)
+_empty_dict = {}
 _type_map = {
     'input': 'input',
     'output': 'output',
@@ -163,10 +164,8 @@ class Vector(object):
         else:
             self._root_vector = root_vector
 
-        if name == 'nonlinear' and kind == 'input' and ncol == 1:
-            self._nocopy = self._root_vector._system()._problem_meta['nocopy_inputs']
-        else:
-            self._nocopy = {}
+        if kind == 'input' and name == 'nonlinear' and ncol == 1:
+            self._init_nocopy()
 
         if resize:
             if root_vector is None:
@@ -204,6 +203,40 @@ class Vector(object):
             Total flattened length of this vector.
         """
         return self._len
+
+    def _init_nocopy(self):
+        """
+        Switch over some methods to nocopy versions in order to avoid overhead for other versions.
+        """
+        self.get_nocopy = self._get_nl_input_nocopy
+        self.set_val = self._nocopy_set_val
+        self.asarray = self._nocopy_asarray
+        self.iadd = self._nocopy_iadd
+        self.isub = self._nocopy_isub
+        self.imul = self._nocopy_imul
+
+    def get_nocopy(self):
+        """
+        Return the mapping of nocopy inputs to their connected output, if applicable to this vector.
+
+        Returns
+        -------
+        dict
+            Input to output mapping for nocopy connections.
+        """
+        global _empty_dict
+        return _empty_dict
+
+    def _get_nl_input_nocopy(self):
+        """
+        Return the mapping of nocopy inputs to their connected output, if applicable to this vector.
+
+        Returns
+        -------
+        dict
+            Input to output mapping for nocopy connections.
+        """
+        return self._root_vector._system()._problem_meta['nocopy_inputs']
 
     def _copy_views(self):
         """

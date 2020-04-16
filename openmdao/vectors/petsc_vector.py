@@ -72,30 +72,36 @@ class PETScVector(DefaultVector):
                                           relevant=relevant, outvec=outvec)
 
         self._dup_inds = None
-        self._non_shared_slices = self._get_non_shared_slice_dict()
+        nocopy = self.get_nocopy()
+        if nocopy:
+            self._non_shared_slices = self._get_non_shared_slice_dict(nocopy)
+        else:
+            self._non_shared_slices = self.get_slice_dict()
 
-    def _get_non_shared_slice_dict(self):
+    def _get_non_shared_slice_dict(self, nocopy):
         """
         Return a dict of var names mapped to their slice in the local data array.
 
         Inputs that share memory with connected outputs are excluded.
+
+        Parameters
+        ----------
+        nocopy : dict
+            Mapping of targets to connected sources that share memory.
 
         Returns
         -------
         dict
             Mapping of var names to slices.
         """
-        if self._nocopy:
-            slices = {}
-            start = end = 0
-            for name in self._system()._var_relevant_names[self._name][self._typ]:
-                if name not in self._nocopy:
-                    end += self._views_flat[name].size
-                    slices[name] = slice(start, end)
-                    start = end
-            return slices
-        else:
-            return self.get_slice_dict()
+        slices = {}
+        start = end = 0
+        for name in self._system()._var_relevant_names[self._name][self._typ]:
+            if name not in nocopy:
+                end += self._views_flat[name].size
+                slices[name] = slice(start, end)
+                start = end
+        return slices
 
     def _initialize_data(self, root_vector):
         """

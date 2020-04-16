@@ -491,8 +491,11 @@ class Coloring(object):
             direction = 'fwd'
         else:
             direction = 'rev'
-        return 'Coloring (direction: %s, ncolors: %d, shape: %s' % (direction, self.total_solves(),
-                                                                    shape)
+
+        return (
+            f"Coloring (direction: {direction}, ncolors: {self.total_solves()}, shape: {shape}"
+            f", pct nonzero: {self._pct_nonzero:.2f}, tol: {self._meta.get('good_tol')}"
+        )
 
     def summary(self):
         """

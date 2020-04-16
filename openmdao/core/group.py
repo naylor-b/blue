@@ -1066,9 +1066,11 @@ class Group(System):
         if self.pathname == '':  # only do at the top
             nocopy = self._mark_nocopy(global_abs_in2out)
             self._problem_meta['nocopy_inputs'] = nocopy
+            self._remove_nocopy_jacobi(global_abs_in2out)
         elif self._in_resetup:
             nocopy = self._mark_nocopy(global_abs_in2out)
             self._problem_meta['nocopy_inputs'].update(nocopy)
+            self._remove_nocopy_jacobi(global_abs_in2out)
 
     def _mark_nocopy(self, my_conns):
         allprocs_abs2meta = self._var_allprocs_abs2meta
@@ -1113,6 +1115,19 @@ class Group(System):
 
         return nocopy
 
+    def _remove_nocopy_jacobi(self, conns):
+        jac_grps = [g.pathname for g in self.system_iter(include_self=True, typ=Group)
+                    if isinstance(g.nonlinear_solver, NonlinearBlockJac)]
+        nocopy = self._problem_meta['nocopy_inputs']
+        for grp in jac_grps:
+            nparts = len(grp.split('.')) if grp else 0
+            for abs_in, abs_out in conns.items():
+                if abs_in in nocopy:
+                    out_subsys = abs_out.split('.')[nparts]
+                    in_subsys = abs_in.split('.')[nparts]
+                    if out_subsys != in_subsys:
+                        del nocopy[abs_in]
+
     def _setup_connections(self, recurse=True):
         """
         Compute dict of all connections owned by this Group.
@@ -1133,51 +1148,44 @@ class Group(System):
             for subsys in self._subsystems_myproc:
                 subsys._setup_connections(recurse)
 
-        path_dot = pathname + '.' if pathname else ''
-        path_len = len(path_dot)
+        path_len = len(pathname + '.' if pathname else '')
 
         allprocs_abs2meta = self._var_allprocs_abs2meta
         abs2meta = self._var_abs2meta
 
         nproc = self.comm.size
-        has_jacobi = isinstance(self.nonlinear_solver, NonlinearBlockJac)
-        nocopy = self._problem_meta['nocopy_inputs']
 
         # Check input/output units here, and set _has_input_scaling
         # to True for this Group if units are defined and different, or if
         # ref or ref0 are defined for the output.
         for abs_in, abs_out in global_abs_in2out.items():
 
-            # First, check that this system owns both the input and output.
-            if abs_in[:path_len] == path_dot and abs_out[:path_len] == path_dot:
-                # Second, check that they are in different subsystems of this system.
-                out_subsys = abs_out[path_len:].split('.', 1)[0]
-                in_subsys = abs_in[path_len:].split('.', 1)[0]
-                if out_subsys != in_subsys:
-                    if abs_in in allprocs_discrete_in:
-                        self._conn_discrete_in2out[abs_in] = abs_out
-                    elif abs_out in allprocs_discrete_out:
-                        msg = f"{self.msginfo}: Can't connect discrete output '{abs_out}' " + \
-                              f"to continuous input '{abs_in}'."
-                        if self._raise_connection_errors:
-                            raise RuntimeError(msg)
-                        else:
-                            simple_warning(msg)
+            # Check that they are in different subsystems of this system.
+            out_subsys = abs_out[path_len:].split('.', 1)[0]
+            in_subsys = abs_in[path_len:].split('.', 1)[0]
+            if out_subsys != in_subsys:
+                if abs_in in allprocs_discrete_in:
+                    self._conn_discrete_in2out[abs_in] = abs_out
+                elif abs_out in allprocs_discrete_out:
+                    msg = f"{self.msginfo}: Can't connect discrete output '{abs_out}' " + \
+                          f"to continuous input '{abs_in}'."
+                    if self._raise_connection_errors:
+                        raise RuntimeError(msg)
                     else:
-                        abs_in2out[abs_in] = abs_out
-                        if has_jacobi and abs_in in nocopy:
-                            del nocopy[abs_in]
+                        simple_warning(msg)
+                else:
+                    abs_in2out[abs_in] = abs_out
 
-                    if nproc > 1 and self._vector_class is None:
-                        # check for any cross-process data transfer.  If found, use
-                        # self._distributed_vector_class as our vector class.
-                        in_path = abs_in.rsplit('.', 1)[0]
-                        if in_path not in self._local_system_set:
+                if nproc > 1 and self._vector_class is None:
+                    # check for any cross-process data transfer.  If found, use
+                    # self._distributed_vector_class as our vector class.
+                    in_path = abs_in.rsplit('.', 1)[0]
+                    if in_path not in self._local_system_set:
+                        self._vector_class = self._distributed_vector_class
+                    else:
+                        out_path = abs_out.rsplit('.', 1)[0]
+                        if out_path not in self._local_system_set:
                             self._vector_class = self._distributed_vector_class
-                        else:
-                            out_path = abs_out.rsplit('.', 1)[0]
-                            if out_path not in self._local_system_set:
-                                self._vector_class = self._distributed_vector_class
 
             if not (abs_in in allprocs_discrete_in or abs_out in allprocs_discrete_out):
                 self._has_input_scaling |= allprocs_abs2meta[abs_in].get('has_input_scaling', 0)

@@ -1,5 +1,5 @@
 """Define the default Vector class."""
-from copy import deepcopy
+from collections import OrderedDict
 import numbers
 
 import numpy as np
@@ -153,19 +153,19 @@ class DefaultVector(Vector):
         kind = self._kind
         iproc = self._iproc
         ncol = self._ncol
-        nocopy = self._nocopy
+        nocopy = self.get_nocopy()
 
         do_scaling = self._do_scaling
         if do_scaling:
             factors = system._scale_factors
             scaling = self._scaling
 
-        self._views = views = {}
-        self._views_flat = views_flat = {}
+        self._views = views = OrderedDict()
+        self._views_flat = views_flat = OrderedDict()
 
         alloc_complex = self._alloc_complex
-        self._cplx_views = cplx_views = {}
-        self._cplx_views_flat = cplx_views_flat = {}
+        self._cplx_views = cplx_views = OrderedDict()
+        self._cplx_views_flat = cplx_views_flat = OrderedDict()
 
         allprocs_abs2idx_t = system._var_allprocs_abs2idx[self._name]
         sizes_t = system._var_sizes[self._name][type_]
@@ -337,15 +337,25 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        if self._nocopy:
-            if np.isscalar(val):
-                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
-                    arr[in_arr] = val
-            else:
-                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
-                    arr[in_arr] = val[start:end]
+        self._data[idxs] = val
+
+    def _nocopy_set_val(self, val, idxs=_full_slice):
+        """
+        Fill the data array with the value at the specified indices or slice(s).
+
+        Parameters
+        ----------
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
+        """
+        if np.isscalar(val):
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] = val
         else:
-            self._data[idxs] = val
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] = val[start:end]
 
     def asarray(self, idxs=_full_slice):
         """
@@ -361,14 +371,27 @@ class DefaultVector(Vector):
         ndarray
             Array of values.
         """
-        if self._nocopy:
-            lst = [v for v in self._views_flat.values() if v.size > 0]
-            if lst:
-                return np.concatenate(lst)
-            else:
-                return np.zeros(0)
+        return self._data[idxs]
+
+    def _nocopy_asarray(self, idxs=_full_slice):
+        """
+        Return parts of the data array at the specified indices or slice(s).
+
+        Parameters
+        ----------
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations to pull from the data array.
+
+        Returns
+        -------
+        ndarray
+            Array of values.
+        """
+        lst = [v for v in self._views_flat.values() if v.size > 0]
+        if lst:
+            return np.concatenate(lst)
         else:
-            return self._data[idxs]
+            return np.zeros(0)
 
     def iadd(self, val, idxs=_full_slice):
         """
@@ -381,15 +404,25 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        if self._nocopy:
-            if np.isscalar(val):
-                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
-                    arr[in_arr] += val
-            else:
-                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
-                    arr[in_arr] += val[start:end]
+        self._data[idxs] += val
+
+    def _nocopy_iadd(self, val, idxs=_full_slice):
+        """
+        Add the value to the data array at the specified indices or slice(s).
+
+        Parameters
+        ----------
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
+        """
+        if np.isscalar(val):
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] += val
         else:
-            self._data[idxs] += val
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] += val[start:end]
 
     def isub(self, val, idxs=_full_slice):
         """
@@ -402,15 +435,25 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        if self._nocopy:
-            if np.isscalar(val):
-                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
-                    arr[in_arr] -= val
-            else:
-                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
-                    arr[in_arr] -= val[start:end]
+        self._data[idxs] -= val
+
+    def _nocopy_isub(self, val, idxs=_full_slice):
+        """
+        Subtract the value from the data array at the specified indices or slice(s).
+
+        Parameters
+        ----------
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
+        """
+        if np.isscalar(val):
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] -= val
         else:
-            self._data[idxs] -= val
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] -= val[start:end]
 
     def imul(self, val, idxs=_full_slice):
         """
@@ -423,15 +466,25 @@ class DefaultVector(Vector):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        if self._nocopy:
-            if np.isscalar(val):
-                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
-                    arr[in_arr] *= val
-            else:
-                for arr, start, end, in_arr in self._sub_arr_iter(idxs):
-                    arr[in_arr] *= val[start:end]
+        self._data[idxs] *= val
+
+    def _nocopy_imul(self, val, idxs=_full_slice):
+        """
+        Multiply the value to the data array at the specified indices or slice(s).
+
+        Parameters
+        ----------
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
+        """
+        if np.isscalar(val):
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] *= val
         else:
-            self._data[idxs] *= val
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] *= val[start:end]
 
     def dot(self, vec):
         """

@@ -916,7 +916,7 @@ class System(object):
 
         self._setup_recording(recurse=recurse)
 
-        # If full setup, reset this system's variables to initial values.
+        # If full or reconf setup, reset this system's variables to initial values.
         if initial:
             self.set_initial_values()
 
@@ -1056,7 +1056,7 @@ class System(object):
 
         seen = set()
         skips = set()
-        nocopy = self._inputs._nocopy
+        nocopy = self._problem_meta['nocopy_inputs']
         for wrt in wrts:
             # if we have multiple inputs that connect to the same output (and share its memory),
             # we'll only perturb the first one.
@@ -1872,7 +1872,7 @@ class System(object):
 
             for kind in ['output', 'residual', 'input']:
                 rootvec = root_vectors[kind][vec_name]
-                if rootvec._nocopy:
+                if rootvec.get_nocopy():
                     outvec = root_vectors['output'][vec_name]
                 else:
                     outvec = None
