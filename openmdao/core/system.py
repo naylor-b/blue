@@ -1533,14 +1533,15 @@ class System(object):
 
         self._rel_vec_name_list = []
         for vec_name in self._vec_names:
-            rel, relsys = relevant[vec_name]['@all']
+            relio, relsys = relevant[vec_name]['@all']
             if self.pathname in relsys:
                 self._rel_vec_name_list.append(vec_name)
             for type_ in ('input', 'output'):
+                rel = relio[type_]
                 self._var_allprocs_relevant_names[vec_name][type_].extend(
-                    v for v in self._var_allprocs_abs_names[type_] if v in rel[type_])
+                    v for v in self._var_allprocs_abs_names[type_] if v in rel)
                 self._var_relevant_names[vec_name][type_].extend(
-                    v for v in self._var_abs_names[type_] if v in rel[type_])
+                    v for v in self._var_abs_names[type_] if v in rel)
 
         self._rel_vec_names = frozenset(self._rel_vec_name_list)
         self._lin_rel_vec_name_list = self._rel_vec_name_list[1:]
