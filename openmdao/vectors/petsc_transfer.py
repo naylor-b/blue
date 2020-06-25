@@ -62,7 +62,7 @@ class PETScTransfer(DefaultTransfer):
         group : <Group>
             Parent group.
         """
-        rev = group._mode != 'fwd'
+        rev = group._problem_meta['mode'] != 'fwd'
 
         for subsys in group._subgroups_myproc:
             subsys._setup_transfers()

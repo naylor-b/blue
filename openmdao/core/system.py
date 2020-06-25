@@ -15,6 +15,7 @@ import numpy as np
 import networkx as nx
 
 import openmdao
+from openmdao.core.varcollection import UnorderedVarCollection
 from openmdao.jacobians.assembled_jacobian import DenseJacobian, CSCJacobian
 from openmdao.recorders.recording_manager import RecordingManager
 from openmdao.vectors.vector import INT_DTYPE, _full_slice
@@ -241,8 +242,6 @@ class System(object):
     _vois : dict
         Either design vars or responses metadata, depending on the direction of
         derivatives.
-    _mode : str
-        Indicates derivative direction for the model, either 'fwd' or 'rev'.
     _scope_cache : dict
         Cache for variables in the scope of various mat-vec products.
     _has_guess : bool
@@ -372,8 +371,8 @@ class System(object):
 
         self._vectors = {'input': {}, 'output': {}, 'residual': {}}
 
-        self._inputs = None
-        self._outputs = None
+        self._inputs = UnorderedVarCollection()
+        self._outputs = UnorderedVarCollection()
         self._residuals = None
         self._discrete_inputs = None
         self._discrete_outputs = None
@@ -409,7 +408,6 @@ class System(object):
         self.supports_multivecs = False
 
         self._relevant = None
-        self._mode = None
 
         self._scope_cache = {}
 
@@ -570,7 +568,7 @@ class System(object):
             self._approx_schemes[method] = _supported_methods[method]()
         return self._approx_schemes[method]
 
-    def _setup(self, comm, mode, prob_meta):
+    def _setup(self, comm, prob_meta):
         """
         Perform setup for this system and its descendant systems.
 
@@ -578,8 +576,6 @@ class System(object):
         ----------
         comm : MPI.Comm or <FakeComm> or None
             The global communicator.
-        mode : str
-            Derivative direction, either 'fwd', or 'rev', or 'auto'
         prob_meta : dict
             Problem level metadata dictionary.
         """
@@ -593,10 +589,9 @@ class System(object):
         self.pathname = ''
         self.comm = comm
         self._relevant = None
-        self._mode = mode
 
         # Besides setting up the processors, this method also builds the model hierarchy.
-        self._setup_procs(self.pathname, comm, mode, self._problem_meta)
+        self._setup_procs(self.pathname, comm, self._problem_meta)
 
         # Recurse model from the bottom to the top for configuring.
         # Set static_mode to False in all subsystems because inputs & outputs may be created.
@@ -604,6 +599,8 @@ class System(object):
             self._configure()
 
         self._configure_check()
+
+        mode = prob_meta['mode']
 
         self._setup_var_data()
         self._setup_vec_names(mode)
@@ -1213,7 +1210,7 @@ class System(object):
         for subsys in self._subsystems_myproc:
             subsys._setup_recording()
 
-    def _setup_procs(self, pathname, comm, mode, prob_meta):
+    def _setup_procs(self, pathname, comm, prob_meta):
         """
         Execute first phase of the setup process.
 
@@ -1225,20 +1222,39 @@ class System(object):
             Global name of the system, including the path.
         comm : MPI.Comm or <FakeComm>
             MPI communicator object.
-        mode : string
-            Derivatives calculation mode, 'fwd' for forward, and 'rev' for
-            reverse (adjoint). Default is 'rev'.
         prob_meta : dict
-            Problem level options.
+            Problem/model level metadata.
         """
         self.pathname = pathname
         self._problem_meta = prob_meta
         self._first_call_to_linearize = True
         self._is_local = True
 
+        if not isinstance(self._inputs, UnorderedVarCollection):
+            # must be re-calling setup, so reinitialize inputs/outputs
+            # TODO: later, will need to recreate UVC using vars, metadata from vectors
+            #       For now, just re-init using system metadata
+            self._inputs = UnorderedVarCollection()
+            self._outputs = UnorderedVarCollection()
+            for absname, meta in self._var_abs2meta.items():
+                rname = absname.rsplit('.', 1)[-1]
+                if absname in self._var_abs2prom['input']:
+                    self._inputs.add_var(rname, **meta)
+                else:
+                    self._outputs.add_var(rname, **meta)
+
+        # initialize nonlinear input/output var collections
+        if pathname:  # we're a subsystem
+            self._inputs.pathname = pathname
+            self._inputs._root = prob_meta['root_inputs']
+            self._outputs.pathname = pathname
+            self._outputs._root = prob_meta['root_outputs']
+        else:   # we're the top level system
+            prob_meta['root_inputs'] = self._inputs
+            prob_meta['root_outputs'] = self._outputs
+
         self.options._parent_name = self.msginfo
         self.recording_options._parent_name = self.msginfo
-        self._mode = mode
         self._design_vars = OrderedDict()
         self._responses = OrderedDict()
         self._design_vars.update(self._static_design_vars)
@@ -2084,7 +2100,7 @@ class System(object):
         (inputs, outputs, residuals) : tuple of <Vector> instances
             Yields the inputs, outputs, and residuals nonlinear vectors.
         """
-        if self._inputs is None:
+        if isinstance(self._inputs, UnorderedVarCollection):
             raise RuntimeError("{}: Cannot get vectors because setup has not yet been "
                                "called.".format(self.msginfo))
 
@@ -2104,7 +2120,7 @@ class System(object):
         (inputs, outputs, residuals) : tuple of <Vector> instances
             Yields the inputs, outputs, and residuals linear vectors for vec_name.
         """
-        if self._inputs is None:
+        if isinstance(self._inputs, UnorderedVarCollection):
             raise RuntimeError("{}: Cannot get vectors because setup has not yet been "
                                "called.".format(self.msginfo))
 
@@ -3037,7 +3053,8 @@ class System(object):
         list
             list of input names and other optional information about those inputs
         """
-        if self._inputs is None:
+        after_setup = not isinstance(self._inputs, UnorderedVarCollection)
+        if not after_setup:
             # final setup has not been performed
             from openmdao.core.group import Group
             if isinstance(self, Group):
@@ -3073,10 +3090,10 @@ class System(object):
             if not match_includes_excludes(var_name, var_name_prom, includes, excludes):
                 continue
 
-            if self._inputs:
+            if after_setup:
                 val = self._inputs._abs_get_val(var_name, False)
             else:
-                val = meta[var_name]['value']
+                val = self._inputs[var_name]
 
             var_meta = {}
             if values:
@@ -3097,7 +3114,7 @@ class System(object):
 
             inputs.append((var_name, var_meta))
 
-        if self._inputs is not None and self._discrete_inputs:
+        if after_setup and self._discrete_inputs:
             disc_meta = self._discrete_inputs._dict
 
             for var_name, val in self._discrete_inputs.items():
@@ -3221,7 +3238,8 @@ class System(object):
         list
             list of output names and other optional information about those outputs
         """
-        if self._outputs is None:
+        after_setup = not isinstance(self._outputs, UnorderedVarCollection)
+        if not after_setup:
             # final setup has not been performed
             from openmdao.core.group import Group
             if isinstance(self, Group):
@@ -3266,10 +3284,10 @@ class System(object):
                np.linalg.norm(self._residuals._abs_get_val(var_name)) < residuals_tol:
                 continue
 
-            if self._outputs:
+            if after_setup:
                 val = self._outputs._abs_get_val(var_name, False)
             else:
-                val = meta[var_name]['value']
+                val = self._outputs[var_name_prom]
 
             var_meta = {}
             if values:
@@ -3296,12 +3314,13 @@ class System(object):
                 var_meta['res_ref'] = meta[var_name]['res_ref']
             if desc:
                 var_meta['desc'] = meta[var_name]['desc']
+
             if var_name in states:
                 impl_outputs.append((var_name, var_meta))
             else:
                 expl_outputs.append((var_name, var_meta))
 
-        if self._outputs is not None and self._discrete_outputs and not residuals_tol:
+        if after_setup and self._discrete_outputs and not residuals_tol:
             disc_meta = self._discrete_outputs._dict
 
             for var_name, val in self._discrete_outputs.items():
@@ -3391,10 +3410,7 @@ class System(object):
             return
 
         # determine whether setup has been performed
-        if self._outputs is not None:
-            after_final_setup = True
-        else:
-            after_final_setup = False
+        after_final_setup = not isinstance(self._outputs, UnorderedVarCollection)
 
         # Make a dict of variables. Makes it easier to work with in this method
         var_dict = OrderedDict()

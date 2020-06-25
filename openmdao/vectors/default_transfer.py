@@ -36,7 +36,7 @@ class DefaultTransfer(Transfer):
             Parent group.
         """
         iproc = group.comm.rank
-        rev = group._mode == 'rev' or group._mode == 'auto'
+        rev = group._problem_meta['mode'] != 'fwd'
 
         for subsys in group._subgroups_myproc:
             subsys._setup_transfers()

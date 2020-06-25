@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from openmdao.core.varcollection import UnorderedVarCollection
 from openmdao.core.component import Component
 from openmdao.recorders.recording_iteration_stack import Recording
 from openmdao.utils.class_util import overrides_method
@@ -435,9 +436,9 @@ class ImplicitComponent(Component):
         list
             List of all states.
         """
-        if self._outputs is not None:
+        if not isinstance(self._outputs, UnorderedVarCollection):
             # final setup has been performed, return absolute names
-            return [name for name in self._outputs._names] + \
+            return [name for name in self._outputs._abs_iter()] + \
                    [name for name in self._var_allprocs_discrete['output']]
         else:
             # final setup has not been performed, return relative names for this system only

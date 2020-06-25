@@ -824,6 +824,8 @@ class Problem(object):
 
         # this metadata will be shared by all Systems/Solvers in the system tree
         self._metadata = {
+            'mode': mode,
+            'orig_mode': mode,
             'coloring_dir': self.options['coloring_dir'],
             'recording_iter': _RecIteration(),
             'local_vector_class': local_vector_class,
@@ -836,7 +838,7 @@ class Problem(object):
             'remote_vars': {},  # does not include distrib vars
             'prom2abs': {'input': {}, 'output': {}}  # includes ALL promotes including buried ones
         }
-        model._setup(model_comm, mode, self._metadata)
+        model._setup(model_comm, self._metadata)
 
         # Cache all args for final setup.
         self._check = check

@@ -261,15 +261,22 @@ class Vector(object):
         """
         arrs = self._views_flat if flat else self._views
 
-        for name, val in arrs.items():
-            yield name, val
+        names = self._names
+        if len(names) == len(self._views):
+            yield from arrs.items()
+        else:
+            for name, val in arrs.items():
+                if name in names:
+                    yield name, val
 
     def _abs_iter(self):
         """
         Iterate over the absolute names in the vector.
         """
+        names = self._names
         for name in self._views:
-            yield name
+            if name in names:
+                yield name
 
     def __contains__(self, name):
         """

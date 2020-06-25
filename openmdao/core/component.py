@@ -124,7 +124,7 @@ class Component(System):
         """
         pass
 
-    def _setup_procs(self, pathname, comm, mode, prob_meta):
+    def _setup_procs(self, pathname, comm, prob_meta):
         """
         Execute first phase of the setup process.
 
@@ -136,13 +136,10 @@ class Component(System):
             Global name of the system, including the path.
         comm : MPI.Comm or <FakeComm>
             MPI communicator object.
-        mode : str
-            Derivatives calculation mode, 'fwd' for forward, and 'rev' for
-            reverse (adjoint). Default is 'rev'.
         prob_meta : dict
             Problem level metadata.
         """
-        super(Component, self)._setup_procs(pathname, comm, mode, prob_meta)
+        super(Component, self)._setup_procs(pathname, comm, prob_meta)
 
         self._vectors = {}
 
@@ -493,6 +490,8 @@ class Component(System):
         var_rel2meta[name] = metadata
         var_rel_names['input'].append(name)
 
+        self._inputs.add_var(name, **metadata)
+
         return metadata
 
     def add_discrete_input(self, name, val, desc='', tags=None):
@@ -544,6 +543,8 @@ class Component(System):
             raise ValueError("{}: Variable name '{}' already exists.".format(self.msginfo, name))
 
         var_rel2meta[name] = self._var_discrete['input'][name] = metadata
+
+        self._inputs.add_var(name, discrete=True, **metadata)
 
         return metadata
 
@@ -694,6 +695,8 @@ class Component(System):
         var_rel2meta[name] = metadata
         var_rel_names['output'].append(name)
 
+        self._outputs.add_var(name, **metadata)
+
         return metadata
 
     def add_discrete_output(self, name, val, desc='', tags=None):
@@ -744,6 +747,8 @@ class Component(System):
             raise ValueError("{}: Variable name '{}' already exists.".format(self.msginfo, name))
 
         var_rel2meta[name] = self._var_discrete['output'][name] = metadata
+
+        self._outputs.add_var(name, discrete=True, **metadata)
 
         return metadata
 
