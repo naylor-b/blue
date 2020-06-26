@@ -336,8 +336,7 @@ class TestGroup(unittest.TestCase):
         with self.assertRaises(Exception) as err:
             p.setup()
         self.assertEqual(str(err.exception),
-                         "when adding subsystem 'comp1', entry '('x', 'foo', 'bar')' "
-                         "is not a string or tuple of size 2")
+                         "Match pattern '('x', 'foo', 'bar')' must be a string or tuple of size 2.")
 
     def test_group_promotes_multiple(self):
         """Promoting multiple variables."""

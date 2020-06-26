@@ -32,7 +32,7 @@ from openmdao.utils.coloring import _compute_coloring, Coloring, \
 import openmdao.utils.coloring as coloring_mod
 from openmdao.utils.general_utils import determine_adder_scaler, \
     format_as_float_or_array, ContainsAll, all_ancestors, \
-    simple_warning, make_set, match_includes_excludes, ensure_compatible
+    simple_warning, make_set, match_includes_excludes, ensure_compatible, split_patterns, match_iter
 from openmdao.approximation_schemes.complex_step import ComplexStep
 from openmdao.approximation_schemes.finite_difference import FiniteDifference
 from openmdao.utils.units import unit_conversion
@@ -1771,41 +1771,6 @@ class System(object):
                 meta['src_indices'] = np.asarray(src_indices, dtype=INT_DTYPE)
                 meta['flat_src_indices'] = flat_src_indices
 
-        def split_list(lst):
-            """
-            Return names, patterns, and renames found in lst.
-
-            Parameters
-            ----------
-            lst : list
-                List of names, patterns and/or tuples specifying promotes.
-
-            Returns
-            -------
-            names : list
-                list of names
-            patterns : list
-                list of patterns
-            renames : dict
-                dictionary of name mappings
-            """
-            names = []
-            patterns = []
-            renames = {}
-            for entry in lst:
-                if isinstance(entry, str):
-                    if '*' in entry or '?' in entry or '[' in entry:
-                        patterns.append(entry)
-                    else:
-                        names.append(entry)
-                elif isinstance(entry, tuple) and len(entry) == 2:
-                    renames[entry[0]] = entry[1]
-                else:
-                    raise TypeError("when adding subsystem '%s', entry '%s'"
-                                    " is not a string or tuple of size 2" %
-                                    (self.pathname, entry))
-            return names, patterns, renames
-
         def resolve(to_match, io_types, matches, proms):
             """
             Determine the mapping of promoted names to the parent scope for a promotion type.
@@ -1821,38 +1786,23 @@ class System(object):
                 return True
 
             found = set()
-            names, patterns, renames = split_list(to_match)
-
             for typ in io_types:
                 is_input = typ == 'input'
                 pmap = matches[typ]
-                for name in proms[typ]:
-                    if name in names:
-                        pmap[name] = name
-                        found.add(name)
-                        if is_input:
-                            update_src_indices(name, name)
-                    elif name in renames:
-                        pmap[name] = renames[name]
-                        found.add(name)
-                        if is_input:
-                            update_src_indices(name, (name, renames[name]))
-                    else:
-                        for pattern in patterns:
-                            # if name matches, promote that variable to parent
-                            if pattern == '*' or fnmatchcase(name, pattern):
-                                pmap[name] = name
-                                found.add(pattern)
-                                if is_input:
-                                    update_src_indices(name, pattern)
-                                break
-                        else:
-                            # Default: prepend the parent system's name
-                            pmap[name] = gname + name if gname else name
-                            if is_input:
-                                update_src_indices(name, name)
 
-            not_found = (set(names).union(renames).union(patterns)) - found
+                for name, pat, alias in match_iter(to_match, proms[typ]):
+                    if pat is None:  # no match found
+                        pmap[name] = gname + name if gname else name
+                    else:
+                        pmap[name] = alias
+                        found.add(pat)
+                        if is_input:
+                            if name is not alias:
+                                update_src_indices(name, (name, alias))
+                            else:
+                                update_src_indices(name, pat)
+
+            not_found = len(to_match) > len(found)
             if not_found:
                 if not self._var_abs2meta and isinstance(self, openmdao.core.group.Group):
                     empty_group_msg = ' Group contains no variables.'
@@ -1863,15 +1813,15 @@ class System(object):
                 else:
                     call = 'promotes_%ss' % io_types[0]
 
-                for p in patterns:
-                    for name, alias in renames.items():
-                        if fnmatchcase(name, p):
-                            raise RuntimeError("%s: %s '%s' matched '%s' but '%s' has been aliased "
-                                               "to '%s'." % (self.msginfo, call, p, name,
-                                                             name, alias))
+                nmap, patterns = split_patterns(to_match)
 
-                    for i in names:
-                        if fnmatchcase(i, p):
+                for p in patterns:
+                    for name, alias in nmap.items():
+                        if fnmatchcase(name, p):
+                            if name != alias:
+                                raise RuntimeError("%s: %s '%s' matched '%s' but '%s' has been "
+                                                   "aliased to '%s'." % (self.msginfo, call, p,
+                                                                         name, name, alias))
                             break
                     else:
                         raise RuntimeError("%s: '%s' failed to find any matches for the following "
@@ -1882,7 +1832,8 @@ class System(object):
                 else:
                     raise RuntimeError("%s: '%s' failed to find any matches for the following "
                                        "names or patterns: %s.%s" %
-                                       (self.msginfo, call, sorted(not_found), empty_group_msg))
+                                       (self.msginfo, call, sorted(set(nmap) - found),
+                                        empty_group_msg))
 
         maps = {'input': {}, 'output': {}}
 

@@ -63,7 +63,7 @@ class UnorderedVarCollection(object):
         """
         self.pathname = ''
         self._meta = {}
-        self._prom = {}
+        # self._prom = {}
         self._root = None
 
     def __contains__(self, name):
@@ -114,8 +114,8 @@ class UnorderedVarCollection(object):
         """
         self._meta[name]['value'] = value
 
-    def set_pathname(self, pathname):
-        self.pathname = pathname
+    # def set_pathname(self, pathname):
+    #     self.pathname = pathname
 
     def _abs_get_val(self, abs_name, flat=True):
         try:

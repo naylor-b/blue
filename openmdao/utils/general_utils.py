@@ -537,6 +537,71 @@ def find_matches(pattern, var_list):
     return [name for name in var_list if fnmatchcase(name, pattern)]
 
 
+def split_patterns(lst):
+    """
+    Return names, patterns, and renames found in lst.
+
+    Parameters
+    ----------
+    lst : list
+        List of names, patterns and/or tuples specifying promotes.
+
+    Returns
+    -------
+    names : list
+        list of names
+    patterns : list
+        list of patterns
+    renames : dict
+        dictionary of name mappings
+    """
+    nmap = {}
+    patterns = []
+    for entry in lst:
+        if isinstance(entry, str):
+            if '*' in entry or '?' in entry or '[' in entry:
+                patterns.append(entry)
+            else:
+                nmap[entry] = entry
+        elif isinstance(entry, tuple) and len(entry) == 2:
+            nmap[entry[0]] = entry[1]
+        else:
+            raise TypeError(f"Match pattern '{entry}' must be a string or tuple of size 2.")
+
+    return nmap, patterns
+
+
+def match_iter(patterns, siter):
+    """
+    Yield tuples of the form (smatch, pattern, rename) for siter members.
+
+    If an siter member matches one of the patterns, then 'pattern' will be that pattern.
+    If no match is found, 'pattern' will be None.
+
+    Parameters
+    ----------
+    patterns : iter of str
+        Glob patterns, plain strings, or tuples of the form (s, alias).
+    siter : iter of str
+        Strings to be matched to patterns.
+    """
+    if '*' in patterns:
+        for s in siter:
+            yield s, '*', s
+    else:
+        nmap, patterns = split_patterns(patterns)
+        for s in siter:
+            if s in nmap:
+                yield s, s, nmap[s]
+            else:
+                for p in patterns:
+                    if fnmatchcase(s, p):
+                        yield s, p, s
+                        break
+                else:
+                    yield s, None, s
+
+
 def pad_name(name, pad_num=10, quotes=False):
     """
     Pad a string so that they all line up when stacked.
