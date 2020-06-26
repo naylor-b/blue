@@ -243,16 +243,12 @@ class Group(System):
         scale_factors = super(Group, self)._compute_root_scale_factors()
 
         if self._has_input_scaling:
-            abs2meta_in = self._var_abs2meta
-            allprocs_meta_out = self._var_allprocs_abs2meta
-            for abs_in, abs_out in self._conn_global_abs_in2out.items():
-                if abs_in not in abs2meta_in:
-                    # we only perform scaling on local, non-discrete arrays, so skip
-                    continue
-
-                meta_in = abs2meta_in[abs_in]
-
-                meta_out = allprocs_meta_out[abs_out]
+            abs2meta = self._var_abs2meta
+            allprocs_meta = self._var_allprocs_abs2meta
+            conns = self._conn_global_abs_in2out
+            for abs_in in self._var_abs_names['input']:
+                meta_in = abs2meta[abs_in]
+                meta_out = allprocs_meta[conns[abs_in]]
                 ref = meta_out['ref']
                 ref0 = meta_out['ref0']
 
@@ -693,7 +689,7 @@ class Group(System):
             self._has_output_scaling |= subsys._has_output_scaling
             self._has_resid_scaling |= subsys._has_resid_scaling
 
-            var_maps = subsys._get_maps(subsys._var_allprocs_prom2abs_list)
+            var_maps = subsys._get_promotion_maps(subsys._var_allprocs_prom2abs_list)
 
             # Assemble allprocs_abs2meta and abs2meta
             allprocs_abs2meta.update(subsys._var_allprocs_abs2meta)

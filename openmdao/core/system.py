@@ -1716,7 +1716,7 @@ class System(object):
         for abs_name in self._var_abs_names['output']:
             self._outputs.set_var(abs_name, abs2meta[abs_name]['value'])
 
-    def _get_maps(self, prom_names):
+    def _get_promotion_maps(self, prom_names):
         """
         Define variable maps based on promotes lists.
 
@@ -1732,41 +1732,6 @@ class System(object):
             to promoted variable names.
         """
         gname = self.name + '.' if self.name else ''
-
-        def split_list(lst):
-            """
-            Return names, patterns, and renames found in lst.
-
-            Parameters
-            ----------
-            lst : list
-                List of names, patterns and/or tuples specifying promotes.
-
-            Returns
-            -------
-            names : list
-                list of names
-            patterns : list
-                list of patterns
-            renames : dict
-                dictionary of name mappings
-            """
-            names = []
-            patterns = []
-            renames = {}
-            for entry in lst:
-                if isinstance(entry, str):
-                    if '*' in entry or '?' in entry or '[' in entry:
-                        patterns.append(entry)
-                    else:
-                        names.append(entry)
-                elif isinstance(entry, tuple) and len(entry) == 2:
-                    renames[entry[0]] = entry[1]
-                else:
-                    raise TypeError("when adding subsystem '%s', entry '%s'"
-                                    " is not a string or tuple of size 2" %
-                                    (self.pathname, entry))
-            return names, patterns, renames
 
         def update_src_indices(name, key):
             """
@@ -1805,6 +1770,41 @@ class System(object):
 
                 meta['src_indices'] = np.asarray(src_indices, dtype=INT_DTYPE)
                 meta['flat_src_indices'] = flat_src_indices
+
+        def split_list(lst):
+            """
+            Return names, patterns, and renames found in lst.
+
+            Parameters
+            ----------
+            lst : list
+                List of names, patterns and/or tuples specifying promotes.
+
+            Returns
+            -------
+            names : list
+                list of names
+            patterns : list
+                list of patterns
+            renames : dict
+                dictionary of name mappings
+            """
+            names = []
+            patterns = []
+            renames = {}
+            for entry in lst:
+                if isinstance(entry, str):
+                    if '*' in entry or '?' in entry or '[' in entry:
+                        patterns.append(entry)
+                    else:
+                        names.append(entry)
+                elif isinstance(entry, tuple) and len(entry) == 2:
+                    renames[entry[0]] = entry[1]
+                else:
+                    raise TypeError("when adding subsystem '%s', entry '%s'"
+                                    " is not a string or tuple of size 2" %
+                                    (self.pathname, entry))
+            return names, patterns, renames
 
         def resolve(to_match, io_types, matches, proms):
             """
