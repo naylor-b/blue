@@ -1790,7 +1790,7 @@ class System(object):
                 is_input = typ == 'input'
                 pmap = matches[typ]
 
-                for name, pat, alias in match_iter(to_match, proms[typ]):
+                for name, pat, alias in match_iter(to_match, proms[typ], yield_all=True):
                     if pat is None:  # no match found
                         pmap[name] = gname + name if gname else name
                     else:

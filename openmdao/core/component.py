@@ -15,7 +15,7 @@ from openmdao.utils.units import valid_units
 from openmdao.utils.name_maps import rel_key2abs_key, abs_key2rel_key, rel_name2abs_name
 from openmdao.utils.mpi import MPI
 from openmdao.utils.general_utils import format_as_float_or_array, ensure_compatible, \
-    find_matches, simple_warning, make_set
+    find_matches, simple_warning, make_set, match_iter
 import openmdao.utils.coloring as coloring_mod
 
 
@@ -357,9 +357,7 @@ class Component(System):
         """
         ofs, allwrt = self._get_partials_varlists()
         wrt_patterns = info['wrt_patterns']
-        matches_prom = set()
-        for w in wrt_patterns:
-            matches_prom.update(find_matches(w, allwrt))
+        matches_prom = {n for n, _, _ in match_iter(wrt_patterns, allwrt)}
 
         # error if nothing matched
         if not matches_prom:

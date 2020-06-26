@@ -571,12 +571,9 @@ def split_patterns(lst):
     return nmap, patterns
 
 
-def match_iter(patterns, siter):
+def match_iter(patterns, siter, yield_all=False):
     """
     Yield tuples of the form (smatch, pattern, rename) for siter members.
-
-    If an siter member matches one of the patterns, then 'pattern' will be that pattern.
-    If no match is found, 'pattern' will be None.
 
     Parameters
     ----------
@@ -584,6 +581,8 @@ def match_iter(patterns, siter):
         Glob patterns, plain strings, or tuples of the form (s, alias).
     siter : iter of str
         Strings to be matched to patterns.
+    yield_all : bool
+        If True, yield all entries, but non-matches will have pattern=None.
     """
     if '*' in patterns:
         for s in siter:
@@ -599,7 +598,8 @@ def match_iter(patterns, siter):
                         yield s, p, s
                         break
                 else:
-                    yield s, None, s
+                    if yield_all:
+                        yield s, None, s
 
 
 def pad_name(name, pad_num=10, quotes=False):
