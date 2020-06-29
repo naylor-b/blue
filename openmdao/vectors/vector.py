@@ -43,29 +43,12 @@ class Vector(object):
         Pointer to the owning system.
     _iproc : int
         Global processor index.
-    _length : int
-        Length of flattened vector.
-    _views : dict
-        Dictionary mapping absolute variable names to the ndarray views.
-    _views_flat : dict
-        Dictionary mapping absolute variable names to the flattened ndarray views.
     _names : set([str, ...])
         Set of variables that are relevant in the current context.
     _root_vector : Vector
         Pointer to the vector owned by the root system.
     _alloc_complex : Bool
         If True, then space for the complex vector is also allocated.
-    _data : ndarray
-        Actual allocated data.
-    _slices : dict
-        Mapping of var name to slice.
-    _cplx_data : ndarray
-        Actual allocated data under complex step.
-    _cplx_views : dict
-        Dictionary mapping absolute variable names to the ndarray views under complex step.
-    _cplx_views_flat : dict
-        Dictionary mapping absolute variable names to the flattened ndarray views under complex
-        step.
     _under_complex_step : bool
         When True, this vector is under complex step, and data is swapped with the complex data.
     _ncol : int
@@ -114,22 +97,15 @@ class Vector(object):
         self._system = weakref.ref(system)
 
         self._iproc = system.comm.rank
-        self._views = {}
-        self._views_flat = {}
 
-        # self._names will either contain the same names as self._views or to the
+        # self._names will either contain the full set of variable absolute names or to the
         # set of variables relevant to the current matvec product.
-        self._names = self._views
+        self._names = set()
 
         self._root_vector = None
-        self._data = None
-        self._slices = None
 
         # Support for Complex Step
         self._alloc_complex = alloc_complex
-        self._cplx_data = None
-        self._cplx_views = {}
-        self._cplx_views_flat = {}
         self._under_complex_step = False
 
         self._do_scaling = ((kind == 'input' and system._has_input_scaling) or
@@ -142,9 +118,6 @@ class Vector(object):
             self._root_vector = self
         else:
             self._root_vector = root_vector
-
-        self._initialize_data(root_vector)
-        self._initialize_views()
 
         self.read_only = False
 
@@ -176,14 +149,16 @@ class Vector(object):
 
     def _copy_views(self):
         """
-        Return a dictionary containing just the views.
+        Return a dictionary containing all variable absolute names and values.
 
         Returns
         -------
         dict
-            Dictionary containing the _views.
+            Dictionary containing the variable names and values.
         """
-        return deepcopy(self._views)
+        raise NotImplementedError('_copy_views not defined for vector type %s' %
+                                  type(self).__name__)
+        return None  # silence lint warning
 
     def keys(self):
         """
@@ -191,7 +166,7 @@ class Vector(object):
 
         Returns
         -------
-        listiterator (Python 3.x) or list (Python 2.x)
+        listiterator
             the variable names.
         """
         return self.__iter__()
@@ -246,10 +221,9 @@ class Vector(object):
             iterator over the variable names.
         """
         system = self._system()
-        path = system.pathname
-        idx = len(path) + 1 if path else 0
+        idx = len(system.pathname) + 1 if system.pathname else 0
 
-        return (n[idx:] for n in system._var_abs_names[self._typ] if n in self._names)
+        return (n[idx:] for n in self._abs_iter())
 
     def _abs_val_iter(self, flat=True):
         """

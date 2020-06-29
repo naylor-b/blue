@@ -17,6 +17,21 @@ class DefaultVector(Vector):
     ----------
     _len : int
         Total length of data vector (including shared memory parts).
+    _views : dict
+        Dictionary mapping absolute variable names to the ndarray views.
+    _views_flat : dict
+        Dictionary mapping absolute variable names to the flattened ndarray views.
+    _data : ndarray
+        Actual allocated data.
+    _cplx_data : ndarray
+        Actual allocated data under complex step.
+    _cplx_views : dict
+        Dictionary mapping absolute variable names to the ndarray views under complex step.
+    _cplx_views_flat : dict
+        Dictionary mapping absolute variable names to the flattened ndarray views under complex
+        step.
+    _slices : dict
+        Mapping of var name to slice.
     """
 
     TRANSFER = DefaultTransfer
@@ -40,8 +55,35 @@ class DefaultVector(Vector):
         ncol : int
             Number of columns for multi-vectors.
         """
-        self._len = 0
         super(DefaultVector, self).__init__(name, kind, system, root_vector, alloc_complex, ncol)
+
+        self._len = 0
+        self._views = {}
+        self._views_flat = {}
+        self._data = None
+        self._cplx_data = None
+        self._cplx_views = {}
+        self._cplx_views_flat = {}
+        self._slices = None
+
+        if root_vector is None:  # we're the root
+            self._data = self._create_data()
+
+            if self._do_scaling:
+                self._init_scaling()
+
+            # Allocate imaginary for complex step
+            if self._alloc_complex:
+                self._cplx_data = np.zeros(self._data.shape, dtype=np.complex)
+
+        else:
+            self._data, self._cplx_data, self._scaling = self._extract_root_data()
+
+        self._initialize_views()
+
+        # self._names will either contain the same names as self._views or to the
+        # set of variables relevant to the current matvec product.
+        self._names = frozenset(self._views)
 
     def __len__(self):
         """
@@ -64,6 +106,17 @@ class DefaultVector(Vector):
             String rep of this object.
         """
         return str(self.asarray())
+
+    def _copy_views(self):
+        """
+        Return a dictionary containing all variable absolute names and values.
+
+        Returns
+        -------
+        dict
+            Dictionary containing the variable names and values.
+        """
+        return deepcopy(self._views)
 
     def _abs_val_iter(self, flat=True):
         """
@@ -89,7 +142,7 @@ class DefaultVector(Vector):
         Iterate over the absolute names in the vector.
         """
         names = self._names
-        for name in self._views:
+        for name in self._system()._var_abs_names[self._typ]:
             if name in names:
                 yield name
 
@@ -288,39 +341,23 @@ class DefaultVector(Vector):
 
         return data, cplx_data, scaling
 
-    def _initialize_data(self, root_vector):
+    def _init_scaling(self):
         """
-        Internally allocate data array.
-
-        Parameters
-        ----------
-        root_vector : Vector or None
-            the root's vector instance or None, if we are at the root.
+        Set up scaling arrays for the root vector.
         """
-        if root_vector is None:  # we're the root
-            self._data = self._create_data()
-
-            if self._do_scaling:
-                self._scaling = {}
-                data = self._data
-                if self._name == 'nonlinear':
-                    self._scaling['phys'] = (np.zeros(data.size), np.ones(data.size))
-                    self._scaling['norm'] = (np.zeros(data.size), np.ones(data.size))
-                elif self._name == 'linear':
-                    # reuse the nonlinear scaling vecs since they're the same as ours
-                    nlvec = self._system()._root_vecs[self._kind]['nonlinear']
-                    self._scaling['phys'] = (None, nlvec._scaling['phys'][1])
-                    self._scaling['norm'] = (None, nlvec._scaling['norm'][1])
-                else:
-                    self._scaling['phys'] = (None, np.ones(data.size))
-                    self._scaling['norm'] = (None, np.ones(data.size))
-
-            # Allocate imaginary for complex step
-            if self._alloc_complex:
-                self._cplx_data = np.zeros(self._data.shape, dtype=np.complex)
-
+        self._scaling = {}
+        data = self._data
+        if self._name == 'nonlinear':
+            self._scaling['phys'] = (np.zeros(data.size), np.ones(data.size))
+            self._scaling['norm'] = (np.zeros(data.size), np.ones(data.size))
+        elif self._name == 'linear':
+            # reuse the nonlinear scaling vecs since they're the same as ours
+            nlvec = self._system()._root_vecs[self._kind]['nonlinear']
+            self._scaling['phys'] = (None, nlvec._scaling['phys'][1])
+            self._scaling['norm'] = (None, nlvec._scaling['norm'][1])
         else:
-            self._data, self._cplx_data, self._scaling = self._extract_root_data()
+            self._scaling['phys'] = (None, np.ones(data.size))
+            self._scaling['norm'] = (None, np.ones(data.size))
 
     def _initialize_views(self):
         """
@@ -381,7 +418,6 @@ class DefaultVector(Vector):
 
             start = end
 
-        self._names = frozenset(views)
         self._len = end
 
     def _in_matvec_context(self):

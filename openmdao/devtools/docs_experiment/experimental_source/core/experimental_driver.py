@@ -401,27 +401,7 @@ class ExperimentalDriver(object):
         value : float or ndarray
             Value for the design variable.
         """
-        if (name in self._remote_dvs and
-                self._problem.model._owning_rank['output'][name] != self._problem.comm.rank):
-            return
-
-        meta = self._designvars[name]
-        indices = meta['indices']
-        if indices is None:
-            indices = slice(None)
-
-        desvar = self._problem.model._outputs._views_flat[name]
-        desvar[indices] = value
-
-        if self._has_scaling:
-            # Scale design variable values
-            scaler = meta['scaler']
-            if scaler is not None:
-                desvar[indices] *= 1.0 / scaler
-
-            adder = meta['adder']
-            if adder is not None:
-                desvar[indices] -= adder
+        pass
 
     def get_response_values(self, filter=None):
         """

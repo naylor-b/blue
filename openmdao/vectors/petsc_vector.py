@@ -32,6 +32,10 @@ class PETScVector(DefaultVector):
         variables that are 'owned' by a different process. Used by certain distributed
         calculations, e.g., get_norm(), where including duplicate values would result in
         the wrong answer.
+    _petsc : PETSc vector
+        Vector managed by PETSc.
+    _imag_petsc : PETSc vector
+        Vector of imaginary values managed by PETSc (if complex step is being used).
     """
 
     TRANSFER = PETScTransfer
@@ -61,19 +65,8 @@ class PETScVector(DefaultVector):
 
         self._dup_inds = None
 
-    def _initialize_data(self, root_vector):
-        """
-        Internally allocate vectors.
-
-        Parameters
-        ----------
-        root_vector : Vector or None
-            the root's vector instance or None, if we are at the root.
-        """
-        super(PETScVector, self)._initialize_data(root_vector)
-
-        self._petsc = {}
-        self._imag_petsc = {}
+        self._petsc = None
+        self._imag_petsc = None
         data = self._data
 
         if self._ncol == 1:
