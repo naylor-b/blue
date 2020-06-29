@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from openmdao.vectors.vector import _matvec_context
 from openmdao.core.varcollection import UnorderedVarCollection
 from openmdao.core.component import Component
 from openmdao.recorders.recording_iteration_stack import Recording
@@ -157,8 +158,10 @@ class ImplicitComponent(Component):
             if vec_name not in self._rel_vec_names:
                 continue
 
-            with self._matvec_context(vec_name, scope_out, scope_in, mode) as vecs:
-                d_inputs, d_outputs, d_residuals = vecs
+            d_inputs = self._vectors['input'][vec_name]
+            d_outputs = self._vectors['output'][vec_name]
+            d_residuals = self._vectors['residual'][vec_name]
+            with _matvec_context(d_inputs, d_outputs, d_residuals, scope_out, scope_in, mode):
 
                 # Jacobian and vectors are all scaled, unitless
                 jac._apply(self, d_inputs, d_outputs, d_residuals, mode)

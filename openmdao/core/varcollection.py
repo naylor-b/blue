@@ -2,10 +2,13 @@
 An unordered collection of variables.  Used before Vectors (ordered collections of variables) exist.
 """
 
+from collections import OrderedDict
 import numpy as np
+import weakref
 
 from openmdao.vectors.vector import _full_slice
 from openmdao.utils.options_dictionary import _undefined
+from openmdao.utils.name_maps import name2abs_names, abs_name2rel_name
 
 # What is a vector?
 #  ORDER INDEPENDENT
@@ -31,15 +34,6 @@ from openmdao.utils.options_dictionary import _undefined
 #  - solvers access by full array
 
 
-_DEFAULT_META_ = {
-    'size': 0,
-    'shape': None,
-    'value': _undefined,
-    'discrete': False,
-    'distributed': False,
-}
-
-
 class UnorderedVarCollection(object):
     """
     A class to represent the input and output nonlinear vectors prior to vector setup.
@@ -49,22 +43,61 @@ class UnorderedVarCollection(object):
 
     Attributes
     ----------
-    pathname : str
-        The pathname of the system containing the variable collection.
-    _meta : dict
-        Metadata dictionary.
     _root : UnorderedVarCollection or None
-        THe var collection owned by the model.
+        The var collection owned by the model.
+    _iotype : str
+        'input' or 'output'
+    _system : System
+        Weak ref to the owning system.
     """
 
-    def __init__(self):
+    def __init__(self, system, iotype):
         """
         Initialize this collection.
+
+        Parameters
+        ----------
+        system : <System>
+            System that owns this variable collection.
+        iotype : str
+            IO type indicator.  Value is either 'input' or 'output'.
         """
-        self.pathname = ''
-        self._meta = {}
-        # self._prom = {}
         self._root = None
+        self._iotype = iotype
+        self._system = weakref.ref(system)
+
+    def name2abs_name(self, name):
+        """
+        Map the given name to the absolute name.
+
+        This is only valid when the name is unique; otherwise, a KeyError is thrown.
+
+        Parameters
+        ----------
+        name : str
+            Promoted or relative variable name in the owning system's namespace.
+
+        Returns
+        -------
+        str or None
+            Absolute variable name if unique abs_name found or None otherwise.
+        """
+        system = self._system()
+        if system._has_var_data():
+            abs_names = system._var_allprocs_prom2abs_list[self._iotype][name]
+            if len(abs_names) > 1:
+                raise RuntimeError(f"The promoted name '{name}'' is invalid because it refers to "
+                                   f"multiple inputs: {abs_names}.")
+            return abs_names[0] if abs_names else None
+        else:  # setup hasn't happened yet
+            try:
+                if name in system._var_rel2meta:
+                    return name  # use relative name since no abs name data structures exist yet
+                else:
+                    return None
+            except AttributeError:  # system most likely a Group
+                raise RuntimeError(f"{system.msginfo}: Can't access variable '{name}' before "
+                                   "setup.")
 
     def __contains__(self, name):
         """
@@ -80,7 +113,7 @@ class UnorderedVarCollection(object):
         boolean
             True or False.
         """
-        return name in self._meta
+        return self.name2abs_name(name) is not None
 
     def __getitem__(self, name):
         """
@@ -96,100 +129,83 @@ class UnorderedVarCollection(object):
         float or ndarray
             variable value.
         """
-        try:
-            return self._meta[name]['value']
-        except KeyError:
-            raise KeyError(f"{self.msginfo}: Variable '{name} not found.")
+        if self._system()._has_var_data():
+            abs_name = self.name2abs_name(name)
+            if abs_name is None:
+                raise KeyError(f"{self.msginfo}: Variable '{name}' not found.")
+            return self._abs_get_val(abs_name, flat=False)
+        else:
+            # pre-setup, assume relative name, since absolute name keyed data
+            # structures don't exist yet and promotions haven't been processed.
+            try:
+                return self._system()._var_rel2meta[name]['value']
+            except KeyError:
+                raise KeyError(f"{self.msginfo}: Variable '{name}' not found.")
+            except AttributeError:
+                raise ValueError(f"{self.msginfo:}: Can't access variable '{name}' before setup.")
 
-    def __setitem__(self, name, value):
-        """
-        Set the variable value.
+    # def __setitem__(self, name, value):
+    #     """
+    #     Set the variable value.
 
-        Parameters
-        ----------
-        name : str
-            Relative variable name in the owning system's namespace.
-        value : float or list or tuple or ndarray
-            variable value to set
-        """
-        self._meta[name]['value'] = value
-
-    # def set_pathname(self, pathname):
-    #     self.pathname = pathname
+    #     Parameters
+    #     ----------
+    #     name : str
+    #         Relative variable name in the owning system's namespace.
+    #     value : float or list or tuple or ndarray
+    #         variable value to set
+    #     """
+    #     self._meta[name]['value'] = value
 
     def _abs_get_val(self, abs_name, flat=True):
+        system = self._system()
         try:
-            sname, vname = abs_name.rsplit('.', 1)
-            if sname == self.pathname:
-                if flat:
-                    meta = self._meta[vname]
-                    val = meta['value']
-                    if meta['discrete'] or np.isscalar(val):
-                        return val
-                    else:
-                        return val.ravel()
+            val = system._var_abs2meta[abs_name]['value']
+        except KeyError:
+            # could be discrete
+            # TODO: change discrete to use abs names like others (or others to use rel)
+            try:
+                rel = abs_name2rel_name(system, abs_name)
+                if self._iotype == 'output':
+                    val = system._var_discrete['output'][rel]['value']
                 else:
-                    return self._meta[vname]['value']
-        except (KeyError, ValueError, IndexError) as err:
-            raise type(err)(f"{self.msginfo}: Variable '{abs_name} not found.")
+                    val = system._var_discrete['input'][rel]['value']
+            except KeyError:
+                raise KeyError(f"{self.msginfo}: Variable '{abs_name}' not found.")
+        if flat:
+            return val.ravel()
+        return val
 
     def _abs_iter(self):
         """
         Iterate over the absolute names in the vector.
         """
-        if self.pathname:
-            path = self.pathname + '.'
-            for name in self._meta:
-                yield path + name
-        else:
-            for name in self._meta:
-                yield name
+        yield from self._system()._var_abs2prom[self.iotype]
 
-    def size_shape_iter(self):
-        """
-        Return tuples of the form (name, size, shape).
+    # def size_shape_iter(self):
+    #     """
+    #     Return tuples of the form (name, size, shape).
 
-        This will be used to build Vector instances.
-        """
-        pass
+    #     This will be used to build Vector instances.
+    #     """
+    #     pass
 
-    def get_meta(self, name, meta_name=None):
-        """
-        Return misc metadata for the named variable.
+    # def add_var(self, name, discrete=False, meta=None):
+    #     """
+    #     Add a variable to this collection.
 
-        Parameters
-        ----------
-        name : str
-            Relative name of the variable.
-        meta_name : str
-            Name of the metadata entry.
-
-        Returns
-        -------
-        object or dict
-            Either a variable's metadata dict or a specific metadata value.
-        """
-        if meta_name is None:
-            return self._meta[name]
-        return self._meta[name][meta_name]
-
-    def add_var(self, name, discrete=False, **kwargs):
-        """
-        Add a variable to this collection.
-
-        Parameters
-        ----------
-        name : str
-            Relative name of the variable.
-        discrete : bool
-            If True, this variable is discrete.
-        **kwargs : dict
-            Metadata for the variable.
-        """
-        # must add to _var2meta since var name is all we have early on
-        self._meta[name] = _DEFAULT_META_.copy()
-        self._meta[name].update(kwargs)
-        self._meta[name]['discrete'] = discrete
+    #     Parameters
+    #     ----------
+    #     name : str
+    #         Relative name of the variable.
+    #     discrete : bool
+    #         If True, this variable is discrete.
+    #     meta : dict
+    #         Metadata for the variable.
+    #     """
+    #     # must add to _var2meta since var name is all we have early on
+    #     self._meta[name] = meta
+    #     self._meta[name]['discrete'] = discrete
 
     # def reshape_var(self, name, shape):
     #     meta = self._meta[name]
@@ -205,31 +221,31 @@ class UnorderedVarCollection(object):
     #             else:
     #                 meta['value'] = np.ones(shape)
 
-    def append(self, vec):
-        """
-        Add the variables from the given UnorderedVarCollection to this UnorderedVarCollection.
+    # def append(self, vec):
+    #     """
+    #     Add the variables from the given UnorderedVarCollection to this UnorderedVarCollection.
 
-        Parameters
-        ----------
-        vec : UnorderedVarCollection
-            UnorderedVarCollection being added.
-        """
-        pass
+    #     Parameters
+    #     ----------
+    #     vec : UnorderedVarCollection
+    #         UnorderedVarCollection being added.
+    #     """
+    #     pass
 
-    def set_var(self, name, val, idxs=_full_slice):
-        """
-        Set the value corresponding to the named variable, with optional indexing.
+    # def set_var(self, name, val, idxs=_full_slice):
+    #     """
+    #     Set the value corresponding to the named variable, with optional indexing.
 
-        Parameters
-        ----------
-        name : str
-            The name of the variable.
-        val : float or ndarray
-            Scalar or array to set data array to.
-        idxs : int or slice or tuple of ints and/or slices.
-            The locations where the data array should be updated.
-        """
-        pass
+    #     Parameters
+    #     ----------
+    #     name : str
+    #         The name of the variable.
+    #     val : float or ndarray
+    #         Scalar or array to set data array to.
+    #     idxs : int or slice or tuple of ints and/or slices.
+    #         The locations where the data array should be updated.
+    #     """
+    #     pass
 
     @property
     def msginfo(self):

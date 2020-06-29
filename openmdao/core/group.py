@@ -13,6 +13,7 @@ import numpy as np
 import networkx as nx
 
 from openmdao.jacobians.dictionary_jacobian import DictionaryJacobian
+from openmdao.vectors.vector import _matvec_context
 from openmdao.core.system import System, INT_DTYPE
 from openmdao.core.component import Component, _DictValues, _full_slice
 from openmdao.proc_allocators.default_allocator import DefaultAllocator, ProcAllocationError
@@ -1957,8 +1958,10 @@ class Group(System):
 
         if jac is not None:
             for vec_name in vec_names:
-                with self._matvec_context(vec_name, scope_out, scope_in, mode) as vecs:
-                    d_inputs, d_outputs, d_residuals = vecs
+                d_inputs = self._vectors['input'][vec_name]
+                d_outputs = self._vectors['output'][vec_name]
+                d_residuals = self._vectors['residual'][vec_name]
+                with _matvec_context(d_inputs, d_outputs, d_residuals, scope_out, scope_in, mode):
                     jac._apply(self, d_inputs, d_outputs, d_residuals, mode)
         # Apply recursion
         else:

@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from openmdao.vectors.vector import _matvec_context
 from openmdao.core.component import Component, _full_slice
 from openmdao.utils.class_util import overrides_method
 from openmdao.utils.general_utils import ContainsAll
@@ -288,8 +289,11 @@ class ExplicitComponent(Component):
             if vec_name not in self._rel_vec_names:
                 continue
 
-            with self._matvec_context(vec_name, scope_out, scope_in, mode) as vecs:
-                d_inputs, d_outputs, d_residuals = vecs
+            d_inputs = self._vectors['input'][vec_name]
+            d_outputs = self._vectors['output'][vec_name]
+            d_residuals = self._vectors['residual'][vec_name]
+
+            with _matvec_context(d_inputs, d_outputs, d_residuals, scope_out, scope_in, mode):
 
                 # Jacobian and vectors are all scaled, unitless
                 J._apply(self, d_inputs, d_outputs, d_residuals, mode)

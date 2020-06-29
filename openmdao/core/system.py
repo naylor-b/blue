@@ -371,8 +371,8 @@ class System(object):
 
         self._vectors = {'input': {}, 'output': {}, 'residual': {}}
 
-        self._inputs = UnorderedVarCollection()
-        self._outputs = UnorderedVarCollection()
+        self._inputs = UnorderedVarCollection(self, 'input')
+        self._outputs = UnorderedVarCollection(self, 'output')
         self._residuals = None
         self._discrete_inputs = None
         self._discrete_outputs = None
@@ -453,6 +453,17 @@ class System(object):
         if self.name:
             return '{} ({})'.format(type(self).__name__, self.name)
         return type(self).__name__
+
+    def _has_var_data(self):
+        """
+        Return True if variable data has been initialized.
+
+        Returns
+        -------
+        bool
+            True if variable data has been initialized.
+        """
+        return self._var_allprocs_prom2abs_list is not None
 
     def _declare_options(self):
         """
@@ -1232,16 +1243,8 @@ class System(object):
 
         if not isinstance(self._inputs, UnorderedVarCollection):
             # must be re-calling setup, so reinitialize inputs/outputs
-            # TODO: later, will need to recreate UVC using vars, metadata from vectors
-            #       For now, just re-init using system metadata
-            self._inputs = UnorderedVarCollection()
-            self._outputs = UnorderedVarCollection()
-            for absname, meta in self._var_abs2meta.items():
-                rname = absname.rsplit('.', 1)[-1]
-                if absname in self._var_abs2prom['input']:
-                    self._inputs.add_var(rname, **meta)
-                else:
-                    self._outputs.add_var(rname, **meta)
+            self._inputs = UnorderedVarCollection(self, 'input')
+            self._outputs = UnorderedVarCollection(self, 'output')
 
         # initialize nonlinear input/output var collections
         if pathname:  # we're a subsystem
@@ -1981,67 +1984,6 @@ class System(object):
 
         for system in self.system_iter(include_self=True, recurse=True):
             system._static_mode = not static_mode
-
-    @contextmanager
-    def _matvec_context(self, vec_name, scope_out, scope_in, mode, clear=True):
-        """
-        Context manager for vectors.
-
-        For the given vec_name, return vectors that use a set of
-        internal variables that are relevant to the current matrix-vector
-        product.  This is called only from _apply_linear.
-
-        Parameters
-        ----------
-        vec_name : str
-            Name of the vector to use.
-        scope_out : frozenset or None
-            Set of absolute output names in the scope of this mat-vec product.
-            If None, all are in the scope.
-        scope_in : frozenset or None
-            Set of absolute input names in the scope of this mat-vec product.
-            If None, all are in the scope.
-        mode : str
-            Key for specifying derivative direction. Values are 'fwd'
-            or 'rev'.
-        clear : bool(True)
-            If True, zero out residuals (in fwd mode) or inputs and outputs
-            (in rev mode).
-
-        Yields
-        ------
-        (d_inputs, d_outputs, d_residuals) : tuple of Vectors
-            Yields the three Vectors configured internally to deal only
-            with variables relevant to the current matrix vector product.
-
-        """
-        d_inputs = self._vectors['input'][vec_name]
-        d_outputs = self._vectors['output'][vec_name]
-        d_residuals = self._vectors['residual'][vec_name]
-
-        if clear:
-            if mode == 'fwd':
-                d_residuals.set_val(0.0)
-            else:  # rev
-                d_inputs.set_val(0.0)
-                d_outputs.set_val(0.0)
-
-        if scope_out is None and scope_in is None:
-            yield d_inputs, d_outputs, d_residuals
-        else:
-            old_ins = d_inputs._names
-            old_outs = d_outputs._names
-
-            if scope_out is not None:
-                d_outputs._names = scope_out.intersection(d_outputs._abs_iter())
-            if scope_in is not None:
-                d_inputs._names = scope_in.intersection(d_inputs._abs_iter())
-
-            yield d_inputs, d_outputs, d_residuals
-
-            # reset _names so users will see full vector contents
-            d_inputs._names = old_ins
-            d_outputs._names = old_outs
 
     def get_nonlinear_vectors(self):
         """

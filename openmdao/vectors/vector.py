@@ -1,5 +1,6 @@
 """Define the base Vector and Transfer classes."""
 from copy import deepcopy
+from contextlib import contextmanager
 import os
 import weakref
 
@@ -29,9 +30,6 @@ class Vector(object):
     This class is instantiated for inputs, outputs, and residuals.
     It provides a dictionary interface and an arithmetic operations interface.
     Implementations:
-
-    - <DefaultVector>
-    - <PETScVector>
 
     Attributes
     ----------
@@ -83,8 +81,6 @@ class Vector(object):
         When True, values in the vector cannot be changed via the user __setitem__ API.
     _under_complex_step : bool
         When True, self._data is replaced with self._cplx_data.
-    _len : int
-        Total length of data vector (including shared memory parts).
     """
 
     # Listing of relevant citations that should be referenced when
@@ -114,7 +110,6 @@ class Vector(object):
         self._kind = kind
         self._ncol = ncol
         self._icol = None
-        self._len = 0
 
         self._system = weakref.ref(system)
 
@@ -162,7 +157,9 @@ class Vector(object):
         str
             String rep of this object.
         """
-        return str(self.asarray())
+        raise NotImplementedError('__str__ not defined for vector type %s' %
+                                  type(self).__name__)
+        return None  # silence lint warning
 
     def __len__(self):
         """
@@ -173,7 +170,9 @@ class Vector(object):
         int
             Total flattened length of this vector.
         """
-        return self._len
+        raise NotImplementedError('__len__ not defined for vector type %s' %
+                                  type(self).__name__)
+        return None  # silence lint warning
 
     def _copy_views(self):
         """
@@ -206,7 +205,9 @@ class Vector(object):
         list
             the variable values.
         """
-        return [v for n, v in self._views.items() if n in self._names]
+        raise NotImplementedError('values not defined for vector type %s' %
+                                  type(self).__name__)
+        return None  # silence lint warning
 
     def name2abs_name(self, name):
         """
@@ -259,24 +260,15 @@ class Vector(object):
         flat : bool
             If True, return the flattened values.
         """
-        arrs = self._views_flat if flat else self._views
-
-        names = self._names
-        if len(names) == len(self._views):
-            yield from arrs.items()
-        else:
-            for name, val in arrs.items():
-                if name in names:
-                    yield name, val
+        raise NotImplementedError('_abs_val_iter not defined for vector type %s' %
+                                  type(self).__name__)
 
     def _abs_iter(self):
         """
         Iterate over the absolute names in the vector.
         """
-        names = self._names
-        for name in self._views:
-            if name in names:
-                yield name
+        raise NotImplementedError('_abs_iter not defined for vector type %s' %
+                                  type(self).__name__)
 
     def __contains__(self, name):
         """
@@ -324,14 +316,9 @@ class Vector(object):
         float or ndarray
             variable value.
         """
-        abs_name = self.name2abs_name(name)
-        if abs_name is not None:
-            if self._icol is None:
-                return self._views[abs_name]
-            else:
-                return self._views[abs_name][:, self._icol]
-        else:
-            raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
+        raise NotImplementedError('__getitem__ not defined for vector type %s' %
+                                  type(self).__name__)
+        return None  # silence lint warning
 
     def _abs_get_val(self, name, flat=True):
         """
@@ -351,9 +338,9 @@ class Vector(object):
         float or ndarray
             variable value.
         """
-        if flat:
-            return self._views_flat[name]
-        return self._views[name]
+        raise NotImplementedError('_abs_get_val not defined for vector type %s' %
+                                  type(self).__name__)
+        return None  # silence lint warning
 
     def __setitem__(self, name, value):
         """
@@ -366,7 +353,8 @@ class Vector(object):
         value : float or list or tuple or ndarray
             variable value to set
         """
-        self.set_var(name, value)
+        raise NotImplementedError('__setitem__ not defined for vector type %s' %
+                                  type(self).__name__)
 
     def _initialize_data(self, root_vector):
         """
@@ -524,28 +512,8 @@ class Vector(object):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        abs_name = self.name2abs_name(name)
-        if abs_name is None:
-            raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
-
-        if self.read_only:
-            raise ValueError(f"{self._system().msginfo}: Attempt to set value of '{name}' in "
-                             f"{self._kind} vector when it is read only.")
-
-        if self._icol is not None:
-            idxs = (idxs, self._icol)
-
-        value = np.asarray(val)
-
-        try:
-            self._views[abs_name][idxs] = value
-        except Exception as err:
-            try:
-                value = value.reshape(self._views[abs_name][idxs].shape)
-            except Exception:
-                raise ValueError(f"{self._system().msginfo}: Failed to set value of "
-                                 f"'{name}': {str(err)}.")
-            self._views[abs_name][idxs] = value
+        raise NotImplementedError('set_var not defined for vector type %s' %
+                                  type(self).__name__)
 
     def dot(self, vec):
         """
@@ -557,9 +525,15 @@ class Vector(object):
         ----------
         vec : <Vector>
             The incoming vector being dotted with self.
+
+        Returns
+        -------
+        float or ndarray
+            dot product of this vector and vec
         """
         raise NotImplementedError('dot not defined for vector type %s' %
                                   type(self).__name__)
+        return None  # silence lint warning.
 
     def get_norm(self):
         """
@@ -574,7 +548,7 @@ class Vector(object):
         """
         raise NotImplementedError('get_norm not defined for vector type %s' %
                                   type(self).__name__)
-        return None  # silence lint warning about missing return value.
+        return None  # silence lint warning.
 
     def _in_matvec_context(self):
         """
@@ -599,17 +573,67 @@ class Vector(object):
             When this flag is True, keep the real value when turning off complex step. You only
             need to do this when temporarily disabling complex step for guess_nonlinear.
         """
-        if active:
-            arr = self._data
-        elif keep_real:
-            arr = self._data.real
-        else:
-            arr = None
+        raise NotImplementedError('set_complex_step_mode not defined for vector type %s' %
+                                  type(self).__name__)
 
-        self._data, self._cplx_data = self._cplx_data, self._data
-        self._views, self._cplx_views = self._cplx_views, self._views
-        self._views_flat, self._cplx_views_flat = self._cplx_views_flat, self._views_flat
-        self._under_complex_step = active
 
-        if arr is not None:
-            self.set_val(arr)
+@contextmanager
+def _matvec_context(d_inputs, d_outputs, d_residuals, scope_out, scope_in, mode, clear=True):
+    """
+    Context manager for vectors.
+
+    For the given vec_name, return vectors that use a set of
+    internal variables that are relevant to the current matrix-vector
+    product.  This is called only from _apply_linear.
+
+    Parameters
+    ----------
+    d_inputs : <Vector>
+        Input derivatives vector.
+    d_outputs : <Vector>
+        Output derivatives vector.
+    d_residuals : <Vector>
+        Residual derivatives vector.
+    scope_out : frozenset or None
+        Set of absolute output names in the scope of this mat-vec product.
+        If None, all are in the scope.
+    scope_in : frozenset or None
+        Set of absolute input names in the scope of this mat-vec product.
+        If None, all are in the scope.
+    mode : str
+        Key for specifying derivative direction. Values are 'fwd'
+        or 'rev'.
+    clear : bool(True)
+        If True, zero out residuals (in fwd mode) or inputs and outputs
+        (in rev mode).
+
+    Yields
+    ------
+    (d_inputs, d_outputs, d_residuals) : tuple of Vectors
+        Yields the three Vectors configured internally to deal only
+        with variables relevant to the current matrix vector product.
+
+    """
+    if clear:
+        if mode == 'fwd':
+            d_residuals.set_val(0.0)
+        else:  # rev
+            d_inputs.set_val(0.0)
+            d_outputs.set_val(0.0)
+
+    if scope_out is None and scope_in is None:
+        yield d_inputs, d_outputs, d_residuals
+    else:
+        old_ins = d_inputs._names
+        old_outs = d_outputs._names
+
+        if scope_out is not None:
+            d_outputs._names = scope_out.intersection(d_outputs._abs_iter())
+        if scope_in is not None:
+            d_inputs._names = scope_in.intersection(d_inputs._abs_iter())
+
+        yield d_inputs, d_outputs, d_residuals
+
+        # reset _names so users will see full vector contents
+        d_inputs._names = old_ins
+        d_outputs._names = old_outs
