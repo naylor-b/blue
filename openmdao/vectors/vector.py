@@ -43,12 +43,27 @@ class Vector(object):
         Pointer to the owning system.
     _iproc : int
         Global processor index.
+    _views : dict
+        Dictionary mapping absolute variable names to the ndarray views.
+    _views_flat : dict
+        Dictionary mapping absolute variable names to the flattened ndarray views.
     _names : set([str, ...])
         Set of variables that are relevant in the current context.
     _root_vector : Vector
         Pointer to the vector owned by the root system.
     _alloc_complex : Bool
         If True, then space for the complex vector is also allocated.
+    _data : ndarray
+        Actual allocated data.
+    _slices : dict
+        Mapping of var name to slice.
+    _cplx_data : ndarray
+        Actual allocated data under complex step.
+    _cplx_views : dict
+        Dictionary mapping absolute variable names to the ndarray views under complex step.
+    _cplx_views_flat : dict
+        Dictionary mapping absolute variable names to the flattened ndarray views under complex
+        step.
     _under_complex_step : bool
         When True, this vector is under complex step, and data is swapped with the complex data.
     _ncol : int
@@ -64,6 +79,8 @@ class Vector(object):
         When True, values in the vector cannot be changed via the user __setitem__ API.
     _under_complex_step : bool
         When True, self._data is replaced with self._cplx_data.
+    _len : int
+        Total length of data vector (including shared memory parts).
     """
 
     # Listing of relevant citations that should be referenced when
@@ -93,19 +110,27 @@ class Vector(object):
         self._kind = kind
         self._ncol = ncol
         self._icol = None
+        self._len = 0
 
         self._system = weakref.ref(system)
 
         self._iproc = system.comm.rank
+        self._views = {}
+        self._views_flat = {}
 
         # self._names will either contain the full set of variable absolute names or to the
         # set of variables relevant to the current matvec product.
-        self._names = set()
+        self._names = self._views
 
         self._root_vector = None
+        self._data = None
+        self._slices = None
 
         # Support for Complex Step
         self._alloc_complex = alloc_complex
+        self._cplx_data = None
+        self._cplx_views = {}
+        self._cplx_views_flat = {}
         self._under_complex_step = False
 
         self._do_scaling = ((kind == 'input' and system._has_input_scaling) or
@@ -119,6 +144,9 @@ class Vector(object):
         else:
             self._root_vector = root_vector
 
+        self._initialize_data(root_vector)
+        self._initialize_views()
+
         self.read_only = False
 
     def __str__(self):
@@ -130,9 +158,7 @@ class Vector(object):
         str
             String rep of this object.
         """
-        raise NotImplementedError('__str__ not defined for vector type %s' %
-                                  type(self).__name__)
-        return None  # silence lint warning
+        return str(self.asarray())
 
     def __len__(self):
         """
@@ -143,9 +169,7 @@ class Vector(object):
         int
             Total flattened length of this vector.
         """
-        raise NotImplementedError('__len__ not defined for vector type %s' %
-                                  type(self).__name__)
-        return None  # silence lint warning
+        return self._len
 
     def _copy_views(self):
         """
@@ -156,9 +180,7 @@ class Vector(object):
         dict
             Dictionary containing the variable names and values.
         """
-        raise NotImplementedError('_copy_views not defined for vector type %s' %
-                                  type(self).__name__)
-        return None  # silence lint warning
+        return deepcopy(self._views)
 
     def keys(self):
         """
@@ -180,9 +202,7 @@ class Vector(object):
         list
             the variable values.
         """
-        raise NotImplementedError('values not defined for vector type %s' %
-                                  type(self).__name__)
-        return None  # silence lint warning
+        return [v for n, v in self._views.items() if n in self._names]
 
     def name2abs_name(self, name):
         """
@@ -234,15 +254,24 @@ class Vector(object):
         flat : bool
             If True, return the flattened values.
         """
-        raise NotImplementedError('_abs_val_iter not defined for vector type %s' %
-                                  type(self).__name__)
+        arrs = self._views_flat if flat else self._views
+
+        names = self._names
+        if len(names) == len(self._views):
+            yield from arrs.items()
+        else:
+            for name, val in arrs.items():
+                if name in names:
+                    yield name, val
 
     def _abs_iter(self):
         """
         Iterate over the absolute names in the vector.
         """
-        raise NotImplementedError('_abs_iter not defined for vector type %s' %
-                                  type(self).__name__)
+        names = self._names
+        for name in self._views:
+            if name in names:
+                yield name
 
     def __contains__(self, name):
         """
@@ -290,9 +319,14 @@ class Vector(object):
         float or ndarray
             variable value.
         """
-        raise NotImplementedError('__getitem__ not defined for vector type %s' %
-                                  type(self).__name__)
-        return None  # silence lint warning
+        abs_name = self.name2abs_name(name)
+        if abs_name is not None:
+            if self._icol is None:
+                return self._views[abs_name]
+            else:
+                return self._views[abs_name][:, self._icol]
+        else:
+            raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
 
     def _abs_get_val(self, name, flat=True):
         """
@@ -312,9 +346,9 @@ class Vector(object):
         float or ndarray
             variable value.
         """
-        raise NotImplementedError('_abs_get_val not defined for vector type %s' %
-                                  type(self).__name__)
-        return None  # silence lint warning
+        if flat:
+            return self._views_flat[name]
+        return self._views[name]
 
     def __setitem__(self, name, value):
         """
@@ -327,8 +361,7 @@ class Vector(object):
         value : float or list or tuple or ndarray
             variable value to set
         """
-        raise NotImplementedError('__setitem__ not defined for vector type %s' %
-                                  type(self).__name__)
+        self.set_var(name, value)
 
     def _initialize_data(self, root_vector):
         """
@@ -486,8 +519,28 @@ class Vector(object):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        raise NotImplementedError('set_var not defined for vector type %s' %
-                                  type(self).__name__)
+        abs_name = self.name2abs_name(name)
+        if abs_name is None:
+            raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
+
+        if self.read_only:
+            raise ValueError(f"{self._system().msginfo}: Attempt to set value of '{name}' in "
+                             f"{self._kind} vector when it is read only.")
+
+        if self._icol is not None:
+            idxs = (idxs, self._icol)
+
+        value = np.asarray(val)
+
+        try:
+            self._views[abs_name][idxs] = value
+        except Exception as err:
+            try:
+                value = value.reshape(self._views[abs_name][idxs].shape)
+            except Exception:
+                raise ValueError(f"{self._system().msginfo}: Failed to set value of "
+                                 f"'{name}': {str(err)}.")
+            self._views[abs_name][idxs] = value
 
     def dot(self, vec):
         """
@@ -547,8 +600,20 @@ class Vector(object):
             When this flag is True, keep the real value when turning off complex step. You only
             need to do this when temporarily disabling complex step for guess_nonlinear.
         """
-        raise NotImplementedError('set_complex_step_mode not defined for vector type %s' %
-                                  type(self).__name__)
+        if active:
+            arr = self._data
+        elif keep_real:
+            arr = self._data.real
+        else:
+            arr = None
+
+        self._data, self._cplx_data = self._cplx_data, self._data
+        self._views, self._cplx_views = self._cplx_views, self._views
+        self._views_flat, self._cplx_views_flat = self._cplx_views_flat, self._views_flat
+        self._under_complex_step = active
+
+        if arr is not None:
+            self.set_val(arr)
 
 
 @contextmanager

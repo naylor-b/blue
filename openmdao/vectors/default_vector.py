@@ -12,275 +12,9 @@ from openmdao.utils.mpi import MPI, multi_proc_exception_check
 class DefaultVector(Vector):
     """
     Default NumPy vector.
-
-    Attributes
-    ----------
-    _len : int
-        Total length of data vector (including shared memory parts).
-    _views : dict
-        Dictionary mapping absolute variable names to the ndarray views.
-    _views_flat : dict
-        Dictionary mapping absolute variable names to the flattened ndarray views.
-    _data : ndarray
-        Actual allocated data.
-    _cplx_data : ndarray
-        Actual allocated data under complex step.
-    _cplx_views : dict
-        Dictionary mapping absolute variable names to the ndarray views under complex step.
-    _cplx_views_flat : dict
-        Dictionary mapping absolute variable names to the flattened ndarray views under complex
-        step.
-    _slices : dict
-        Mapping of var name to slice.
     """
 
     TRANSFER = DefaultTransfer
-
-    def __init__(self, name, kind, system, root_vector=None, alloc_complex=False, ncol=1):
-        """
-        Initialize all attributes.
-
-        Parameters
-        ----------
-        name : str
-            The name of the vector: 'nonlinear', 'linear', or right-hand side name.
-        kind : str
-            The kind of vector, 'input', 'output', or 'residual'.
-        system : <System>
-            Pointer to the owning system.
-        root_vector : <Vector>
-            Pointer to the vector owned by the root system.
-        alloc_complex : bool
-            Whether to allocate any imaginary storage to perform complex step. Default is False.
-        ncol : int
-            Number of columns for multi-vectors.
-        """
-        super(DefaultVector, self).__init__(name, kind, system, root_vector, alloc_complex, ncol)
-
-        self._len = 0
-        self._views = {}
-        self._views_flat = {}
-        self._data = None
-        self._cplx_data = None
-        self._cplx_views = {}
-        self._cplx_views_flat = {}
-        self._slices = None
-
-        if root_vector is None:  # we're the root
-            self._data = self._create_data()
-
-            if self._do_scaling:
-                self._init_scaling()
-
-            # Allocate imaginary for complex step
-            if self._alloc_complex:
-                self._cplx_data = np.zeros(self._data.shape, dtype=np.complex)
-
-        else:
-            self._data, self._cplx_data, self._scaling = self._extract_root_data()
-
-        self._initialize_views()
-
-        # self._names will either contain the same names as self._views or to the
-        # set of variables relevant to the current matvec product.
-        self._names = frozenset(self._views)
-
-    def __len__(self):
-        """
-        Return the flattened length of this Vector.
-
-        Returns
-        -------
-        int
-            Total flattened length of this vector.
-        """
-        return self._len
-
-    def __str__(self):
-        """
-        Return a string representation of the Vector object.
-
-        Returns
-        -------
-        str
-            String rep of this object.
-        """
-        return str(self.asarray())
-
-    def _copy_views(self):
-        """
-        Return a dictionary containing all variable absolute names and values.
-
-        Returns
-        -------
-        dict
-            Dictionary containing the variable names and values.
-        """
-        return deepcopy(self._views)
-
-    def _abs_val_iter(self, flat=True):
-        """
-        Iterate over the items in the vector, using absolute names.
-
-        Parameters
-        ----------
-        flat : bool
-            If True, return the flattened values.
-        """
-        arrs = self._views_flat if flat else self._views
-
-        names = self._names
-        if len(names) == len(self._views):
-            yield from arrs.items()
-        else:
-            for name, val in arrs.items():
-                if name in names:
-                    yield name, val
-
-    def _abs_iter(self):
-        """
-        Iterate over the absolute names in the vector.
-        """
-        names = self._names
-        for name in self._system()._var_abs_names[self._typ]:
-            if name in names:
-                yield name
-
-    def __getitem__(self, name):
-        """
-        Get the variable value.
-
-        Parameters
-        ----------
-        name : str
-            Promoted or relative variable name in the owning system's namespace.
-
-        Returns
-        -------
-        float or ndarray
-            variable value.
-        """
-        abs_name = self.name2abs_name(name)
-        if abs_name is not None:
-            if self._icol is None:
-                return self._views[abs_name]
-            else:
-                return self._views[abs_name][:, self._icol]
-        else:
-            raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
-
-    def _abs_get_val(self, name, flat=True):
-        """
-        Get the variable value using the absolute name.
-
-        No error checking is performed on the name.
-
-        Parameters
-        ----------
-        name : str
-            Absolute name in the owning system's namespace.
-        flat : bool
-            If True, return the flat value.
-
-        Returns
-        -------
-        float or ndarray
-            variable value.
-        """
-        if flat:
-            return self._views_flat[name]
-        return self._views[name]
-
-    def values(self):
-        """
-        Return values of variables contained in this vector.
-
-        Returns
-        -------
-        list
-            the variable values.
-        """
-        return [v for n, v in self._views.items() if n in self._names]
-
-    def __setitem__(self, name, value):
-        """
-        Set the variable value.
-
-        Parameters
-        ----------
-        name : str
-            Promoted or relative variable name in the owning system's namespace.
-        value : float or list or tuple or ndarray
-            variable value to set
-        """
-        self.set_var(name, value)
-
-    def set_var(self, name, val, idxs=_full_slice):
-        """
-        Set the array view corresponding to the named variable, with optional indexing.
-
-        Parameters
-        ----------
-        name : str
-            The name of the variable.
-        val : float or ndarray
-            Scalar or array to set data array to.
-        idxs : int or slice or tuple of ints and/or slices.
-            The locations where the data array should be updated.
-        """
-        abs_name = self.name2abs_name(name)
-        if abs_name is None:
-            raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
-
-        if self.read_only:
-            raise ValueError(f"{self._system().msginfo}: Attempt to set value of '{name}' in "
-                             f"{self._kind} vector when it is read only.")
-
-        if self._icol is not None:
-            idxs = (idxs, self._icol)
-
-        value = np.asarray(val)
-
-        try:
-            self._views[abs_name][idxs] = value
-        except Exception as err:
-            try:
-                value = value.reshape(self._views[abs_name][idxs].shape)
-            except Exception:
-                raise ValueError(f"{self._system().msginfo}: Failed to set value of "
-                                 f"'{name}': {str(err)}.")
-            self._views[abs_name][idxs] = value
-
-    def set_complex_step_mode(self, active, keep_real=False):
-        """
-        Turn on or off complex stepping mode.
-
-        When turned on, the default real ndarray is replaced with a complex ndarray and all
-        pointers are updated to point to it.
-
-        Parameters
-        ----------
-        active : bool
-            Complex mode flag; set to True prior to commencing complex step.
-
-        keep_real : bool
-            When this flag is True, keep the real value when turning off complex step. You only
-            need to do this when temporarily disabling complex step for guess_nonlinear.
-        """
-        if active:
-            arr = self._data
-        elif keep_real:
-            arr = self._data.real
-        else:
-            arr = None
-
-        self._data, self._cplx_data = self._cplx_data, self._data
-        self._views, self._cplx_views = self._cplx_views, self._views
-        self._views_flat, self._cplx_views_flat = self._cplx_views_flat, self._views_flat
-        self._under_complex_step = active
-
-        if arr is not None:
-            self.set_val(arr)
 
     def _create_data(self):
         """
@@ -341,23 +75,39 @@ class DefaultVector(Vector):
 
         return data, cplx_data, scaling
 
-    def _init_scaling(self):
+    def _initialize_data(self, root_vector):
         """
-        Set up scaling arrays for the root vector.
+        Internally allocate data array.
+
+        Parameters
+        ----------
+        root_vector : Vector or None
+            the root's vector instance or None, if we are at the root.
         """
-        self._scaling = {}
-        data = self._data
-        if self._name == 'nonlinear':
-            self._scaling['phys'] = (np.zeros(data.size), np.ones(data.size))
-            self._scaling['norm'] = (np.zeros(data.size), np.ones(data.size))
-        elif self._name == 'linear':
-            # reuse the nonlinear scaling vecs since they're the same as ours
-            nlvec = self._system()._root_vecs[self._kind]['nonlinear']
-            self._scaling['phys'] = (None, nlvec._scaling['phys'][1])
-            self._scaling['norm'] = (None, nlvec._scaling['norm'][1])
+        if root_vector is None:  # we're the root
+            self._data = self._create_data()
+
+            if self._do_scaling:
+                self._scaling = {}
+                data = self._data
+                if self._name == 'nonlinear':
+                    self._scaling['phys'] = (np.zeros(data.size), np.ones(data.size))
+                    self._scaling['norm'] = (np.zeros(data.size), np.ones(data.size))
+                elif self._name == 'linear':
+                    # reuse the nonlinear scaling vecs since they're the same as ours
+                    nlvec = self._system()._root_vecs[self._kind]['nonlinear']
+                    self._scaling['phys'] = (None, nlvec._scaling['phys'][1])
+                    self._scaling['norm'] = (None, nlvec._scaling['norm'][1])
+                else:
+                    self._scaling['phys'] = (None, np.ones(data.size))
+                    self._scaling['norm'] = (None, np.ones(data.size))
+
+            # Allocate imaginary for complex step
+            if self._alloc_complex:
+                self._cplx_data = np.zeros(self._data.shape, dtype=np.complex)
+
         else:
-            self._scaling['phys'] = (None, np.ones(data.size))
-            self._scaling['norm'] = (None, np.ones(data.size))
+            self._data, self._cplx_data, self._scaling = self._extract_root_data()
 
     def _initialize_views(self):
         """
@@ -418,6 +168,7 @@ class DefaultVector(Vector):
 
             start = end
 
+        self._names = frozenset(views)
         self._len = end
 
     def _in_matvec_context(self):

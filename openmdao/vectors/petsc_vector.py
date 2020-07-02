@@ -65,8 +65,19 @@ class PETScVector(DefaultVector):
 
         self._dup_inds = None
 
-        self._petsc = None
-        self._imag_petsc = None
+    def _initialize_data(self, root_vector):
+        """
+        Internally allocate vectors.
+
+        Parameters
+        ----------
+        root_vector : Vector or None
+            the root's vector instance or None, if we are at the root.
+        """
+        super(PETScVector, self)._initialize_data(root_vector)
+
+        self._petsc = {}
+        self._imag_petsc = {}
         data = self._data
 
         if self._ncol == 1:
