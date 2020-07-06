@@ -2872,32 +2872,3 @@ class Group(System):
                 self._show_ambiguity_msg(prom, errs, tgts)
             elif src not in all_discrete_outs:
                 gmeta['units'] = sunits
-
-    def _show_ambiguity_msg(self, prom, metavars, tgts):
-        errs = sorted(metavars)
-        inputs = sorted(tgts)
-        gpath = common_subpath(tgts)
-        g = self._get_subsystem(gpath)
-        gprom = None
-
-        # get promoted name relative to g
-        if MPI is not None and self.comm.size > 1:
-            if not (g is not None and g.comm is not None):  # g is not a local system
-                g = None
-            if self.comm.allreduce(int(g is not None)) < self.comm.size:
-                # some procs have remote g
-                if g is not None:
-                    gprom = g._var_allprocs_abs2prom['input'][inputs[0]]
-                proms = self.comm.allgather(gprom)
-                for p in proms:
-                    if p is not None:
-                        gprom = p
-                        break
-        if gprom is None:
-            gprom = g._var_allprocs_abs2prom['input'][inputs[0]]
-
-        args = ', '.join([f'{n}=?' for n in errs])
-        conditional_error(f"{self.msginfo}: The following inputs, {inputs}, promoted "
-                          f"to '{prom}', are connected but the metadata entries {errs}"
-                          f" differ. Call <group>.set_input_defaults('{gprom}', {args}), "
-                          f"where <group> is the Group named '{gpath}' to remove the ambiguity.")

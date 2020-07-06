@@ -31,7 +31,7 @@ from openmdao.utils.coloring import _compute_coloring, Coloring, \
     _STD_COLORING_FNAME, _DEF_COMP_SPARSITY_ARGS
 import openmdao.utils.coloring as coloring_mod
 from openmdao.utils.general_utils import determine_adder_scaler, \
-    format_as_float_or_array, ContainsAll, all_ancestors, \
+    format_as_float_or_array, ContainsAll, all_ancestors, common_subpath, conditional_error, \
     simple_warning, make_set, match_includes_excludes, ensure_compatible, split_patterns, match_iter
 from openmdao.approximation_schemes.complex_step import ComplexStep
 from openmdao.approximation_schemes.finite_difference import FiniteDifference
@@ -3993,23 +3993,8 @@ class System(object):
 
         # if we have multiple promoted inputs that are explicitly connected to an output and units
         # have not been specified, look for group input to disambiguate
-        if units is None and len(abs_names) > 1:
-            if abs_name not in self._var_allprocs_discrete['input']:
-                # can't get here unless self is a Group because len(abs_names) always == 1 for comp
-                try:
-                    units = self._group_inputs[name]['units']
-                except KeyError:
-                    abs2meta = self._var_allprocs_abs2meta
-                    # check if all units are the same
-                    u0 = None
-                    for i, a in enumerate(abs_names):
-                        if i == 0:
-                            u0 = abs2meta[a]['units']
-                        else:
-                            u = abs2meta[a]['units']
-                            if u != u0:
-                                self._show_ambiguity_msg(name, ('units',), abs_names)
-                                break
+        if units is None:
+            units = self._get_unambiguous_meta(name, 'units')
 
         val = self._abs_get_val(src, get_remote, rank, vec_name, kind, flat, from_root=True)
 
@@ -4075,6 +4060,35 @@ class System(object):
             val = self.convert2units(src, val, vmeta['units'])
 
         return val
+
+    def _show_ambiguity_msg(self, prom, metavars, tgts):
+        errs = sorted(metavars)
+        inputs = sorted(tgts)
+        gpath = common_subpath(tgts)
+        g = self._get_subsystem(gpath)
+        gprom = None
+
+        # get promoted name relative to g
+        if MPI is not None and self.comm.size > 1:
+            if not (g is not None and g.comm is not None):  # g is not a local system
+                g = None
+            if self.comm.allreduce(int(g is not None)) < self.comm.size:
+                # some procs have remote g
+                if g is not None:
+                    gprom = g._var_allprocs_abs2prom['input'][inputs[0]]
+                proms = self.comm.allgather(gprom)
+                for p in proms:
+                    if p is not None:
+                        gprom = p
+                        break
+        if gprom is None:
+            gprom = g._var_allprocs_abs2prom['input'][inputs[0]]
+
+        args = ', '.join([f'{n}=?' for n in errs])
+        conditional_error(f"{self.msginfo}: The following inputs, {inputs}, promoted "
+                          f"to '{prom}', are connected but the metadata entries {errs}"
+                          f" differ. Call <group>.set_input_defaults('{gprom}', {args}), "
+                          f"where <group> is the Group named '{gpath}' to remove the ambiguity.")
 
     def _retrieve_data_of_kind(self, filtered_vars, kind, vec_name, parallel=False):
         """
@@ -4283,9 +4297,12 @@ class System(object):
                                 else:
                                     return v0  # all values are equal, so not ambiguous
 
-                        raise RuntimeError(f"{self.msginfo}: Can't determine {meta_name} "
-                                           f"unambiguously for promoted name '{name}' because it "
-                                           f"matches multiple input variables: {abs_names}.")
+                        if meta_name is None:
+                            raise RuntimeError(f"{self.msginfo}: Can't determine metadata "
+                                               f"unambiguously for promoted name '{name}' because "
+                                               f"it matches multiple input variables: {abs_names}.")
+                        else:
+                            self._show_ambiguity_msg(name, (meta_name,), abs_names)
                 else:
                     meta = meta[abs_names[0]]
 

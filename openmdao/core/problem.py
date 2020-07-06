@@ -441,7 +441,7 @@ class Problem(object):
         else:
             raise KeyError(f'{model.msginfo}: Variable "{name}" not found.')
 
-        if abs_name in conns:
+        if abs_name in conns:  # name is an input
             src = conns[abs_name]
             if abs_name not in model._var_allprocs_discrete['input']:
                 value = np.asarray(value)
