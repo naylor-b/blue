@@ -453,15 +453,7 @@ class Problem(object):
                 else:
                     tlocmeta = None
 
-                gunits = ginputs[name].get('units') if name in ginputs else None
-                if n_proms > 1:  # promoted input name was used
-                    if gunits is None:
-                        tunit_list = [all_meta[n]['units'] for n in abs_names]
-                        tu0 = tunit_list[0]
-                        for tu in tunit_list:
-                            if tu != tu0:
-                                model._show_ambiguity_msg(name, ('units',),
-                                                          abs_names)
+                gunits = self.model._get_unambiguous_meta(name, 'units')
 
                 if units is None:
                     if self._setup_status > 1:  # avoids double unit conversion

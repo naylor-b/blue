@@ -1228,6 +1228,7 @@ class TestProblem(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, msg):
             prob.get_val('comp.x', 'degK')
 
+        msg = "Can't set variable 'comp.x' with units 'degK' to value with units 'cm'."
         with self.assertRaisesRegex(TypeError, msg):
             prob.set_val('comp.x', 55.0, 'degK')
 
