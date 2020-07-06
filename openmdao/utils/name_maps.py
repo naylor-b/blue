@@ -121,47 +121,6 @@ def prom_name2abs_name(system, prom_name, type_):
         return None
 
 
-def name2abs_name(system, name):
-    """
-    Map the given promoted or relative name to the absolute name.
-
-    This is only valid when the name is unique; otherwise, a KeyError is thrown.
-
-    Parameters
-    ----------
-    system : <System>
-        System to which name is relative.
-    name : str
-        Promoted or relative variable name in the owning system's namespace.
-
-    Returns
-    -------
-    str or None
-        Absolute variable name if unique abs_name found or None otherwise.
-    str or None
-        The type ('input' or 'output') of the corresponding variable.
-    """
-    if name in system._var_allprocs_abs2prom['output']:
-        return name
-    if name in system._var_allprocs_abs2prom['input']:
-        return name
-
-    if name in system._var_allprocs_prom2abs_list['output']:
-        abs_name = system._var_allprocs_prom2abs_list['output'][name][0]
-        return abs_name
-
-    # This may raise an exception if name is not unique
-    abs_name = prom_name2abs_name(system, name, 'input')
-    if abs_name is not None:
-        return abs_name
-
-    abs_name = rel_name2abs_name(system, name)
-    if abs_name in system._var_allprocs_abs2prom['output']:
-        return abs_name
-    elif abs_name in system._var_allprocs_abs2prom['input']:
-        return abs_name
-
-
 def name2abs_names(system, name):
     """
     Map the given promoted, relative, or absolute name to any matching absolute names.
@@ -180,7 +139,7 @@ def name2abs_names(system, name):
     tuple or list of str
         Tuple or list of absolute variable names found.
     """
-    # first check relative promoted names
+    # first check relative promoted names, output first
     if name in system._var_allprocs_prom2abs_list['output']:
         return system._var_allprocs_prom2abs_list['output'][name]
 

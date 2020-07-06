@@ -26,7 +26,7 @@ from openmdao.utils.units import is_compatible, unit_conversion
 from openmdao.utils.variable_table import write_var_table
 from openmdao.utils.array_utils import evenly_distrib_idxs
 from openmdao.utils.graph_utils import all_connected_nodes
-from openmdao.utils.name_maps import name2abs_name, name2abs_names
+from openmdao.utils.name_maps import name2abs_names
 from openmdao.utils.coloring import _compute_coloring, Coloring, \
     _STD_COLORING_FNAME, _DEF_COMP_SPARSITY_ARGS
 import openmdao.utils.coloring as coloring_mod
@@ -3999,7 +3999,17 @@ class System(object):
                 try:
                     units = self._group_inputs[name]['units']
                 except KeyError:
-                    self._show_ambiguity_msg(name, ('units',), abs_names)
+                    abs2meta = self._var_allprocs_abs2meta
+                    # check if all units are the same
+                    u0 = None
+                    for i, a in enumerate(abs_names):
+                        if i == 0:
+                            u0 = abs2meta[a]['units']
+                        else:
+                            u = abs2meta[a]['units']
+                            if u != u0:
+                                self._show_ambiguity_msg(name, ('units',), abs_names)
+                                break
 
         val = self._abs_get_val(src, get_remote, rank, vec_name, kind, flat, from_root=True)
 
@@ -4156,15 +4166,13 @@ class System(object):
         float or ndarray of float
             The value converted to the specified units.
         """
-        meta = self._get_var_meta(name)
-
-        base_units = meta['units']
+        base_units = self._get_unambiguous_meta(name, 'units')
 
         try:
             scale, offset = unit_conversion(base_units, units)
         except Exception:
-            msg = "{}: Can't express variable '{}' with units of '{}' in units of '{}'."
-            raise TypeError(msg.format(self.msginfo, name, base_units, units))
+            raise TypeError(f"{self.msginfo}: Can't express variable '{name}' with units of "
+                            f"'{base_units}' in units of '{units}'.")
 
         return (val + offset) * scale
 
@@ -4186,13 +4194,13 @@ class System(object):
         float or ndarray of float
             The value converted to the specified units.
         """
-        base_units = self._get_var_meta(name)['units']
+        base_units = self._get_unambiguous_meta(name, 'units')
 
         try:
             scale, offset = unit_conversion(units, base_units)
         except Exception:
-            msg = "{}: Can't express variable '{}' with units of '{}' in units of '{}'."
-            raise TypeError(msg.format(self.msginfo, name, base_units, units))
+            raise TypeError(f"{self.msginfo}: Can't express variable '{name}' with units of "
+                            f"'{base_units}' in units of '{units}'.")
 
         return (val + offset) * scale
 
@@ -4224,29 +4232,74 @@ class System(object):
 
         return (val + offset) * scale
 
-    def _get_var_meta(self, name):
+    def _get_unambiguous_meta(self, name, meta_name=None):
         """
-        Get the metadata for a variable.
+        Get unambiguous metadata for a variable.
 
         Parameters
         ----------
         name : str
-            Variable name (promoted, relative, or absolute) in the root system's namespace.
+            Variable name (promoted, relative, or absolute) in this system's namespace.
+        meta_name : str or None
+            Name of metadata entry or None.  None means to return the whole metadata dict.
 
         Returns
         -------
-        dict
-            The metadata dictionary for the named variable.
+        object
+            The requested value from the variable metadata or the metadata dict itself.
         """
-        meta = self._problem_meta['all_meta']
-        if name in meta:
-            return meta[name]
+        all_meta = self._problem_meta['all_meta']
+        meta = None
+        if name in all_meta:
+            meta = all_meta[name]
+        else:
+            meta_dicts = (all_meta, self._var_allprocs_discrete['input'],
+                          self._var_allprocs_discrete['output'])
+            abs_names = name2abs_names(self, name)
+            if abs_names is not None:
+                for dct in meta_dicts:
+                    if abs_names[0] in dct:
+                        meta = dct
+                        break
+                if len(abs_names) > 1:
+                    # if we get here, self must be a Group, so check _group_inputs
+                    if name in self._group_inputs and (meta_name is None or
+                                                       meta_name in self._group_inputs[name]):
+                        if meta_name is None:
+                            meta = self._group_inputs[name]
+                        else:
+                            return self._group_inputs[name][meta_name]
+                    else:
+                        if meta_name is not None and meta is not None:
+                            try:
+                                mvals = [meta[a][meta_name] for a in abs_names]
+                            except KeyError:
+                                pass  # fall through to ambiguity error
+                            else:
+                                v0 = mvals[0]
+                                for v in mvals[1:]:
+                                    if v != v0:
+                                        break
+                                else:
+                                    return v0  # all values are equal, so not ambiguous
 
-        abs_name = name2abs_name(self, name)
-        if abs_name is not None:
-            return meta[abs_name]
+                        raise RuntimeError(f"{self.msginfo}: Can't determine {meta_name} "
+                                           f"unambiguously for promoted name '{name}' because it "
+                                           f"matches multiple input variables: {abs_names}.")
+                else:
+                    meta = meta[abs_names[0]]
 
-        raise KeyError('{}: Metadata for variable "{}" not found.'.format(self.msginfo, name))
+        if meta is None:
+            raise KeyError(f"{self.msginfo}: Metadata for variable '{name}' not found.")
+
+        if meta_name is None:
+            return meta
+
+        try:
+            return meta[meta_name]
+        except KeyError:
+            raise KeyError(f"{self.msginfo}: Can't find metadata '{meta_name}' for variable "
+                           f"'{name}'.")
 
     def _resolve_connected_input_defaults(self):
         pass

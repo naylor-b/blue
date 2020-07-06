@@ -225,23 +225,6 @@ class Problem(object):
 
         _setup_hooks(self)
 
-    def _get_var_abs_name(self, name):
-        if name in self.model._var_allprocs_abs2meta:
-            return name
-        elif name in self.model._var_allprocs_prom2abs_list['output']:
-            return self.model._var_allprocs_prom2abs_list['output'][name][0]
-        elif name in self.model._var_allprocs_prom2abs_list['input']:
-            abs_names = self.model._var_allprocs_prom2abs_list['input'][name]
-            if len(abs_names) == 1:
-                return abs_names[0]
-            else:
-                raise KeyError("{}: Using promoted name `{}' is ambiguous and matches unconnected "
-                               "inputs %s. Use absolute name to disambiguate.".format(self.msginfo,
-                                                                                      name,
-                                                                                      abs_names))
-
-        raise KeyError('{}: Variable "{}" not found.'.format(self.msginfo, name))
-
     @property
     def msginfo(self):
         """
@@ -277,14 +260,29 @@ class Problem(object):
             raise RuntimeError("{}: is_local('{}') was called before setup() "
                                "completed.".format(self.msginfo, name))
 
-        try:
-            abs_name = self._get_var_abs_name(name)
-        except KeyError:
+        abs_names = name2abs_names(self.model, name)
+        if not abs_names:
             sub = self.model._get_subsystem(name)
+            # FIXME: currently we report a bogus system name as not local instead of raising
+            #        an exception.
             return sub is not None and sub._is_local
 
         # variable exists, but may be remote
-        return abs_name in self.model._var_abs2meta
+        abs2prom = self.model._var_abs2prom
+        if len(abs_names) == 1:
+            return abs_names[0] in abs2prom['input'] or abs_names[0] in abs2prom['output']
+        else:
+            # if all matches are local or all are remote, return an answer. Otherwise, raise
+            # an exception because the answer is ambiguous.
+            are_local = np.array([n in abs2prom['input'] or n in abs2prom['output']
+                                  for n in abs_names], dtype=bool)
+            if np.all(are_local == are_local[0]):
+                return are_local[0]
+            else:
+                raise ValueError(f"{self.msginfo}: Can't determine locality of variable '{name}' "
+                                 f"because it matches multiple inputs {abs_names} and not all have "
+                                 "the same locality.")
+            return True
 
     def _get_cached_val(self, name, get_remote=False):
         # We have set and cached already

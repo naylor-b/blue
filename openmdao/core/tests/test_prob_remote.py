@@ -76,9 +76,9 @@ class ProbRemoteTestCase(unittest.TestCase):
         p = Problem()
         p.model.add_subsystem('indep', IndepVarComp('x', 1.0))
         par = p.model.add_subsystem('par', ParallelGroup())
-        par.add_subsystem('C1', ExecComp('y=2*x'))
-        par.add_subsystem('C2', ExecComp('y=3*x'))
-        p.model.connect('indep.x', ['par.C1.x', 'par.C2.x'])
+        par.add_subsystem('C1', ExecComp('y=2*x'), promotes=['x'])
+        par.add_subsystem('C2', ExecComp('y=3*x'), promotes=['x'])
+        p.model.connect('indep.x', 'par.x')
 
         with self.assertRaises(RuntimeError) as cm:
             loc = p.is_local('indep.x')
@@ -118,6 +118,27 @@ class ProbRemoteTestCase(unittest.TestCase):
             self.assertTrue(p.is_local('par.C2'), 'par.C2 should be local')
             self.assertTrue(p.is_local('par.C2.x'), 'par.C2.x should be local')
             self.assertTrue(p.is_local('par.C2.y'), 'par.C2.y should be local')
+            
+        with self.assertRaises(ValueError) as cm:
+            p.is_local('par.x')
+        self.assertEqual(str(cm.exception), "Problem: Can't determine locality of variable 'par.x' because it matches multiple inputs ['par.C1.x', 'par.C2.x'] and not all have the same locality.")
+
+    def test_is_local_multi(self):
+        # test that is_local on a promoted name works when the promoted name maps to multiple inputs and they
+        # are all have the same locality.
+        p = Problem()
+        p.model.add_subsystem('indep', IndepVarComp('x', 1.0))
+        par = p.model.add_subsystem('par', ParallelGroup())
+        G1 = par.add_subsystem('G1', Group())
+        G1.add_subsystem('C1', ExecComp('y=2*x'), promotes=['x'])
+        G1.add_subsystem('C2', ExecComp('y=3*x'), promotes=['x'])
+        par.add_subsystem('C3', ExecComp('y=5*x'))
+        p.model.connect('indep.x', ['par.G1.x', 'par.C3.x'])
+                
+        p.setup()
+        
+        loc = p.is_local('par.G1.x')
+        self.assertEqual(loc, p.is_local('par.G1'))
 
 @unittest.skip("FIXME: test is unreliable on CI... (timeout)")
 #@unittest.skipUnless(MPI and PETScVector, "MPI and PETSc are required.")

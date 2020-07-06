@@ -476,10 +476,10 @@ class TestGroup(unittest.TestCase):
     def test_unconnected_input_units_mismatch(self):
         p = om.Problem()
 
-        p.model.add_subsystem('comp1', om.ExecComp('y=sum(x)',
+        comp1 = p.model.add_subsystem('comp1', om.ExecComp('y=sum(x)',
                                                    x={'value': np.zeros(5), 'units': 'inch'},
                                                    y={'units': 'inch'}), promotes=['x'])
-        p.model.add_subsystem('comp2', om.ExecComp('y=sum(x)',
+        comp2 = p.model.add_subsystem('comp2', om.ExecComp('y=sum(x)',
                                                    x={'value': np.zeros(5), 'units': 'ft'},
                                                    y={'units': 'inch'}), promotes=['x'])
 
@@ -491,6 +491,14 @@ class TestGroup(unittest.TestCase):
         p.run_model()
         np.testing.assert_allclose(p['comp1.y'], 60.)
         np.testing.assert_allclose(p['comp2.y'], 5.)
+
+        np.testing.assert_allclose(p.model.convert2units('x', 10., 'inch'), 120.)
+        np.testing.assert_allclose(comp1.convert2units('x', 36., 'ft'), 3.)
+        np.testing.assert_allclose(p.model.convert2units('comp1.x', 24., 'ft'), 2.)
+
+        np.testing.assert_allclose(p.model.convert_from_units('x', 120., 'inch'), 10.)
+        np.testing.assert_allclose(comp1.convert_from_units('x', 3., 'ft'), 36.)
+        np.testing.assert_allclose(p.model.convert_from_units('comp1.x', 2., 'ft'), 24.)
 
     def test_double_src_indices(self):
         class MyComp1(om.ExplicitComponent):
@@ -2605,7 +2613,7 @@ class TestNaturalNaming(unittest.TestCase):
             self.assertEqual(p[name], 7.)
 
         self.assertEqual(g3.get_val('x', get_remote=True), 7.)
-        
+
         # we allow 'g1.g3.x' here even though it isn't relative to g3,
         # because it maps to an absolute name that is contained in g3.
         self.assertEqual(g3.get_val('g1.g3.x', get_remote=True), 7.)
