@@ -92,9 +92,6 @@ class Problem(object):
         Derivatives calculation mode assigned by the user.  If set to 'auto', _mode will be
         automatically assigned to 'fwd' or 'rev' based on relative sizes of design variables vs.
         responses.
-    _initial_condition_cache : dict
-        Any initial conditions that are set at the problem level via setitem are cached here
-        until they can be processed.
     _setup_status : int
         Current status of the setup in _model.
         0 -- Newly initialized problem or newly added model.
@@ -166,8 +163,6 @@ class Problem(object):
         self.comm = comm
 
         self._mode = None  # mode is assigned in setup()
-
-        self._initial_condition_cache = {}
 
         # Status of the setup of _model.
         # 0 -- Newly initialized problem or newly added model.
@@ -284,46 +279,6 @@ class Problem(object):
                                  "the same locality.")
             return True
 
-    def _get_cached_val(self, name, get_remote=False):
-        # We have set and cached already
-        if name in self._initial_condition_cache:
-            return self._initial_condition_cache[name]
-
-        # Vector not setup, so we need to pull values from saved metadata request.
-        else:
-            proms = self.model._var_allprocs_prom2abs_list
-            meta = self.model._var_abs2meta
-            try:
-                conns = self.model._conn_abs_in2out
-            except AttributeError:
-                conns = {}
-
-            abs_names = name2abs_names(self.model, name)
-            if not abs_names:
-                raise KeyError('{}: Variable "{}" not found.'.format(self.model.msginfo, name))
-
-            abs_name = abs_names[0]
-            remote_vars = self._metadata['remote_vars']
-
-            if abs_name in meta:
-                if abs_name in conns:
-                    val = meta[conns[abs_name]]['value']
-                else:
-                    val = meta[abs_name]['value']
-
-            if get_remote and abs_name in remote_vars:
-                owner = remote_vars[abs_name]
-                if self.model.comm.rank == owner:
-                    self.model.comm.bcast(val, root=owner)
-                else:
-                    val = self.model.comm.bcast(None, root=owner)
-
-            if val is not _undefined:
-                # Need to cache the "get" in case the user calls in-place numpy operations.
-                self._initial_condition_cache[name] = val
-
-            return val
-
     @property
     def _recording_iter(self):
         return self._metadata['recording_iter']
@@ -368,16 +323,8 @@ class Problem(object):
         object
             The value of the requested output/input variable.
         """
-        if self._setup_status == 1:
-            val = self._get_cached_val(name, get_remote=get_remote)
-            if val is not _undefined:
-                if indices is not None:
-                    val = val[indices]
-                if units is not None:
-                    val = self.model.convert2units(name, val, units)
-        else:
-            val = self.model.get_val(name, units=units, indices=indices, get_remote=get_remote,
-                                     from_src=True)
+        val = self.model.get_val(name, units=units, indices=indices, get_remote=get_remote,
+                                 from_src=True)
 
         if val is _undefined:
             if get_remote:
@@ -443,7 +390,10 @@ class Problem(object):
 
         if abs_name in conns:  # name is an input
             src = conns[abs_name]
-            if abs_name not in model._var_allprocs_discrete['input']:
+            discrete = abs_name in model._var_allprocs_discrete['input']
+            if discrete:
+                ivalue = value
+            else:
                 value = np.asarray(value)
                 tmeta = all_meta[abs_name]
                 tunits = tmeta['units']
@@ -456,103 +406,79 @@ class Problem(object):
                 gunits = self.model._get_unambiguous_meta(name, 'units')
 
                 if units is None:
-                    if self._setup_status > 1:  # avoids double unit conversion
-                        ivalue = value
-                        if sunits is not None:
-                            if gunits is not None and gunits != tunits:
-                                value = model.convert_from_units(src, value, gunits)
-                            else:
-                                value = model.convert_from_units(src, value, tunits)
+                    ivalue = value
+                    if sunits is not None:
+                        if gunits is not None and gunits != tunits:
+                            value = model.convert_from_units(src, value, gunits)
+                        else:
+                            value = model.convert_from_units(src, value, tunits)
                 else:
                     if gunits is None:
                         ivalue = model.convert_from_units(abs_name, value, units)
                     else:
                         ivalue = model.convert_units(name, value, units, gunits)
-                    if self._setup_status == 1:
-                        value = ivalue
-                    else:
-                        value = model.convert_from_units(src, value, units)
+                    value = model.convert_from_units(src, value, units)
         else:
             src = abs_name
             if units is not None:
                 value = model.convert_from_units(abs_name, value, units)
 
-        # Caching only needed if vectors aren't allocated yet.
-        if self._setup_status == 1:
-            if indices is not None:
-                try:
-                    self._initial_condition_cache[name][indices] = value
-                except Exception as err:
-                    raise RuntimeError(f"Failed to set value of '{name}': {str(err)}.")
-            else:
-                self._initial_condition_cache[name] = value
-        else:
-            myrank = model.comm.rank
+        myrank = model.comm.rank
 
-            if indices is None:
-                indices = _full_slice
+        if indices is None:
+            indices = _full_slice
 
-            if model._outputs._contains_abs(abs_name):
-                model._outputs.set_var(abs_name, value, indices)
-            elif abs_name in conns:  # input name given. Set value into output
-                if model._outputs._contains_abs(src):  # src is local
-                    if (model._outputs._abs_get_val(src).size == 0 and
-                            src.rsplit('.', 1)[0] == '_auto_ivc' and all_meta[src]['distributed']):
-                        pass  # special case, auto_ivc dist var with 0 local size
-                    elif tmeta['has_src_indices'] and n_proms < 2:
-                        if tlocmeta:  # target is local
-                            src_indices = tlocmeta['src_indices']
-                            if tmeta['distributed']:
-                                ssizes = model._var_sizes['nonlinear']['output']
-                                sidx = model._var_allprocs_abs2idx['nonlinear'][src]
-                                ssize = ssizes[myrank, sidx]
-                                start = np.sum(ssizes[:myrank, sidx])
-                                end = start + ssize
-                                if np.any(src_indices < start) or np.any(src_indices >= end):
-                                    raise RuntimeError(f"{model.msginfo}: Can't set {name}: "
-                                                       "src_indices refer "
-                                                       "to out-of-process array entries.")
-                                if start > 0:
-                                    src_indices = src_indices - start
-                            model._outputs.set_var(src, value, src_indices[indices])
-                        else:
-                            raise RuntimeError(f"{model.msginfo}: Can't set {abs_name}: remote"
-                                               " connected inputs with src_indices currently not"
-                                               " supported.")
+        if model._outputs._contains_abs(abs_name):
+            model._outputs.set_var(abs_name, value, indices)
+        elif abs_name in conns:  # input name given. Set value into output
+            if model._outputs._contains_abs(src) and not discrete:  # src is local
+                if (model._var_abs2meta[src]['size'] == 0 and
+                        src.rsplit('.', 1)[0] == '_auto_ivc' and all_meta[src]['distributed']):
+                    pass  # special case, auto_ivc dist var with 0 local size
+                elif tmeta['has_src_indices']:
+                    if tlocmeta:  # target is local
+                        src_indices = tlocmeta['src_indices']
+                        if tmeta['distributed']:
+                            ssizes = model._var_sizes['nonlinear']['output']
+                            sidx = model._var_allprocs_abs2idx['nonlinear'][src]
+                            ssize = ssizes[myrank, sidx]
+                            start = np.sum(ssizes[:myrank, sidx])
+                            end = start + ssize
+                            if np.any(src_indices < start) or np.any(src_indices >= end):
+                                raise RuntimeError(f"{model.msginfo}: Can't set {name}: "
+                                                   "src_indices refer "
+                                                   "to out-of-process array entries.")
+                            if start > 0:
+                                src_indices = src_indices - start
+                        model._outputs.set_var(src, value, src_indices[indices])
                     else:
-                        value = np.asarray(value)
-                        model._outputs.set_var(src, value, indices)
-                elif src in model._discrete_outputs:
-                    model._discrete_outputs[src] = value
-                # also set the input
-                # TODO: maybe remove this if inputs are removed from case recording
-                if n_proms < 2:
-                    if model._inputs._contains_abs(abs_name):
-                        model._inputs.set_var(abs_name, ivalue, indices)
-                    elif abs_name in model._discrete_inputs:
-                        model._discrete_inputs[abs_name] = value
-                    else:
-                        # must be a remote var. so, just do nothing on this proc. We can't get here
-                        # unless abs_name is found in connections, so the variable must exist.
-                        if abs_name in model._var_allprocs_abs2meta:
-                            print(f"Variable '{name}' is remote on rank {self.comm.rank}.  "
-                                  "Local assignment ignored.")
-            elif abs_name in model._discrete_outputs:
-                model._discrete_outputs[abs_name] = value
-            elif model._inputs._contains_abs(abs_name):   # could happen if model is a component
-                model._inputs.set_var(abs_name, value, indices)
-            elif abs_name in model._discrete_inputs:   # could happen if model is a component
-                model._discrete_inputs[abs_name] = value
-
-    def _set_initial_conditions(self):
-        """
-        Set all initial conditions that have been saved in cache after setup.
-        """
-        for name, value in self._initial_condition_cache.items():
-            self.set_val(name, value)
-
-        # Clean up cache
-        self._initial_condition_cache = OrderedDict()
+                        raise RuntimeError(f"{model.msginfo}: Can't set {abs_name}: remote"
+                                           " connected inputs with src_indices currently not"
+                                           " supported.")
+                else:
+                    value = np.asarray(value)
+                    model._outputs.set_var(src, value, indices)
+            elif src in model._discrete_outputs:
+                model._discrete_outputs[src] = value
+            # also set the input
+            # TODO: maybe remove this if inputs are removed from case recording
+            if n_proms < 2:
+                if model._inputs._contains_abs(abs_name):
+                    model._inputs.set_var(abs_name, ivalue, indices)
+                elif abs_name in model._discrete_inputs:
+                    model._discrete_inputs[abs_name] = value
+                else:
+                    # must be a remote var. so, just do nothing on this proc. We can't get here
+                    # unless abs_name is found in connections, so the variable must exist.
+                    if abs_name in model._var_allprocs_abs2meta:
+                        print(f"Variable '{name}' is remote on rank {self.comm.rank}.  "
+                              "Local assignment ignored.")
+        elif abs_name in model._discrete_outputs:
+            model._discrete_outputs[abs_name] = value
+        elif abs_name in model._discrete_inputs:   # could happen if model is a component
+            model._discrete_inputs[abs_name] = value
+        elif model._inputs._contains_abs(abs_name):   # could happen if model is a component
+            model._inputs.set_var(abs_name, value, indices)
 
     def run_model(self, case_prefix=None, reset_iter_counts=True):
         """
@@ -892,9 +818,7 @@ class Problem(object):
             self._setup_recording()
             record_viewer_data(self)
 
-        if self._setup_status < 2:
-            self._setup_status = 2
-            self._set_initial_conditions()
+        self._setup_status = 2
 
         if self._check:
             if self._check is True:

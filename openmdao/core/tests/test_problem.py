@@ -340,10 +340,9 @@ class TestProblem(unittest.TestCase):
 
         # check bad scalar value
         bad_val = -10*np.ones((10))
-        prob['indep.num'] = bad_val
         with self.assertRaisesRegex(ValueError,
                 "Group (.*): Failed to set value of '.*': could not broadcast input array from shape (.*) into shape (.*)."):
-            prob.final_setup()
+            prob['indep.num'] = bad_val
         prob._initial_condition_cache = {}
 
         # check assign scalar to array

@@ -140,7 +140,6 @@ def _setup_func_group():
                          Matrix)),
             ('_configure', (System,)),
             ('set_initial_values', (System,)),
-            ('_set_initial_conditions', (Problem,)),
             ('_build', (Matrix,)),
             ('_add_submat', (Matrix,)),
             ('_get_maps', (System,)),

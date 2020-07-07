@@ -3922,7 +3922,7 @@ class System(object):
                         elif self.comm.rank == rank:
                             val = self.comm.recv(source=owner, tag=tag)
 
-        if not flat and val is not _undefined and not discrete and not np.isscalar(val):
+        if not (flat or val is _undefined or discrete or np.isscalar(val)):
             val.shape = meta['global_shape'] if get_remote and distrib else meta['shape']
 
         return val

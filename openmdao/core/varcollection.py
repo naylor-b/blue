@@ -83,18 +83,24 @@ class UnorderedVarCollection(object):
             Absolute variable name if unique abs_name found or None otherwise.
         """
         system = self._system()
+
         if system._has_var_data():
-            abs_names = system._var_allprocs_prom2abs_list[self._iotype][name]
-            if len(abs_names) > 1:
-                raise RuntimeError(f"The promoted name '{name}'' is invalid because it refers to "
-                                   f"multiple inputs: {abs_names}.")
-            return abs_names[0] if abs_names else None
+            abs_name = name if system.pathname == '' else '.'.join((system.pathname, name))
+            if abs_name in system._var_abs2prom[self._iotype]:
+                return abs_name
+
+            p2a = system._var_allprocs_prom2abs_list[self._iotype]
+            if name in p2a:
+                abs_names = p2a[name]
+                if len(abs_names) > 1:
+                    raise RuntimeError(f"The promoted name '{name}'' is invalid because it refers "
+                                       f"to multiple inputs: {abs_names}.")
+                if abs_names:
+                    return abs_names[0]
         else:  # setup hasn't happened yet
             try:
                 if name in system._var_rel2meta:
                     return name  # use relative name since no abs name data structures exist yet
-                else:
-                    return None
             except AttributeError:  # system most likely a Group
                 raise RuntimeError(f"{system.msginfo}: Can't access variable '{name}' before "
                                    "setup.")
@@ -114,6 +120,16 @@ class UnorderedVarCollection(object):
             True or False.
         """
         return self.name2abs_name(name) is not None
+
+    def _contains_abs(self, abs_name):
+        if abs_name in self._system()._var_abs2prom[self._iotype]:
+            return True
+
+        if abs_name in self._system()._var_allprocs_discrete[self._iotype]:
+            prom = self._system()._var_allprocs_abs2prom[self._iptype][abs_name]
+            return prom in self._system()._var_discrete[self._iotype]
+
+        return False
 
     def __getitem__(self, name):
         """
@@ -144,23 +160,73 @@ class UnorderedVarCollection(object):
             except AttributeError:
                 raise ValueError(f"{self.msginfo:}: Can't access variable '{name}' before setup.")
 
-    # def __setitem__(self, name, value):
-    #     """
-    #     Set the variable value.
+    def __setitem__(self, name, value):
+        """
+        Set the variable value.
 
-    #     Parameters
-    #     ----------
-    #     name : str
-    #         Relative variable name in the owning system's namespace.
-    #     value : float or list or tuple or ndarray
-    #         variable value to set
-    #     """
-    #     self._meta[name]['value'] = value
+        Parameters
+        ----------
+        name : str
+            Relative variable name in the owning system's namespace.
+        value : float or list or tuple or ndarray
+            variable value to set
+        """
+        self.set_var(name, value)
+
+    def set_var(self, name, value, idxs=_full_slice):
+        """
+        Set the value corresponding to the named variable, with optional indexing.
+
+        Parameters
+        ----------
+        name : str
+            The name of the variable.
+        value : float or ndarray
+            Scalar or array to set data array to.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
+        """
+        system = self._system()
+
+        try:
+            if system._has_var_data():
+                abs_name = self.name2abs_name(name)
+                if abs_name is None:
+                    raise KeyError(f"{self.msginfo}: Variable '{name}' not found.")
+                if abs_name in system._var_allprocs_discrete[self._iotype]:
+                    if self._iotype == 'input':
+                        system._discrete_inputs[name] = value
+                    else:
+                        system._discrete_outputs[name] = value
+                else:
+                    meta = system._var_abs2meta
+                    value = np.asarray(value)
+                    if abs_name in meta:
+                        meta[abs_name]['value'][idxs] = value
+                    # else, ignore non-local set
+            else:
+                # pre-setup, assume relative name, since absolute name keyed data
+                # structures don't exist yet and promotions haven't been processed.
+                try:
+                    if idxs is _full_slice:
+                        system._var_rel2meta[name]['value'] = value
+                    else:
+                        system._var_rel2meta[name]['value'][idxs] = value
+                except KeyError:
+                    raise KeyError(f"{self.msginfo}: Variable '{name}' not found.")
+                except AttributeError:
+                    raise AttributeError(f"{self.msginfo:}: Can't access variable '{name}' "
+                                         "before setup.")
+        except (ValueError, TypeError) as err:
+            raise type(err)(f"{self._system().msginfo}: Failed to set value of "
+                            f"'{name}': {str(err)}.")
 
     def _abs_get_val(self, abs_name, flat=True):
         system = self._system()
         try:
             val = system._var_abs2meta[abs_name]['value']
+            if flat:
+                return val.ravel()
         except KeyError:
             # could be discrete
             # TODO: change discrete to use abs names like others (or others to use rel)
@@ -172,8 +238,6 @@ class UnorderedVarCollection(object):
                     val = system._var_discrete['input'][rel]['value']
             except KeyError:
                 raise KeyError(f"{self.msginfo}: Variable '{abs_name}' not found.")
-        if flat:
-            return val.ravel()
         return val
 
     def _abs_iter(self):
@@ -232,21 +296,6 @@ class UnorderedVarCollection(object):
     #     """
     #     pass
 
-    # def set_var(self, name, val, idxs=_full_slice):
-    #     """
-    #     Set the value corresponding to the named variable, with optional indexing.
-
-    #     Parameters
-    #     ----------
-    #     name : str
-    #         The name of the variable.
-    #     val : float or ndarray
-    #         Scalar or array to set data array to.
-    #     idxs : int or slice or tuple of ints and/or slices.
-    #         The locations where the data array should be updated.
-    #     """
-    #     pass
-
     @property
     def msginfo(self):
         """
@@ -257,10 +306,11 @@ class UnorderedVarCollection(object):
         str
             Either our instance pathname or class name.
         """
-        if self.pathname == '':
+        s = self._system()
+        if s.pathname == '':
             return f"(<model>)"
-        if self.pathname is not None:
-            return f"{self.pathname}"
+        if s.pathname is not None:
+            return f"{s.pathname}"
         return f"{type(self).__name__}"
 
     def asarray(self):
