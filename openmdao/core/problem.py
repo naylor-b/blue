@@ -381,10 +381,15 @@ class Problem(object):
         abs_names = name2abs_names(model, name)
         if abs_names:
             n_proms = len(abs_names)  # for output this will never be > 1
-            if n_proms > 1 and name in ginputs:
-                abs_name = ginputs[name].get('use_tgt', abs_names[0])
+            if name in ginputs:
+                gmeta = ginputs[name]
+                abs_name = gmeta.get('use_tgt', abs_names[0])
+                gval = gmeta.get('value', _undefined)
+                gsrc_inds = gmeta.get('src_indices', None)
             else:
                 abs_name = abs_names[0]
+                gval = _undefined
+                gsrc_inds = None
         else:
             raise KeyError(f'{model.msginfo}: Variable "{name}" not found.')
 
