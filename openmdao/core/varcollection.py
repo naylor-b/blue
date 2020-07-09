@@ -3,6 +3,7 @@ An unordered collection of variables.  Used before Vectors (ordered collections 
 """
 
 from collections import OrderedDict
+from copy import deepcopy
 import numpy as np
 import weakref
 
@@ -65,6 +66,7 @@ class UnorderedVarCollection(object):
         self._root = None
         self._iotype = iotype
         self._system = weakref.ref(system)
+        self._cache = {}
 
     def name2abs_name(self, name):
         """
@@ -149,16 +151,25 @@ class UnorderedVarCollection(object):
             abs_name = self.name2abs_name(name)
             if abs_name is None:
                 raise KeyError(f"{self.msginfo}: Variable '{name}' not found.")
-            return self._abs_get_val(abs_name, flat=False)
+            if abs_name in self._cache:
+                return self._cache[abs_name]
+            val = self._abs_get_val(abs_name, flat=False)
         else:
             # pre-setup, assume relative name, since absolute name keyed data
             # structures don't exist yet and promotions haven't been processed.
             try:
-                return self._system()._var_rel2meta[name]['value']
+                pname = self._system().pathname
+                abs_name = pname + '.' + name if pname else name
+                if abs_name in self._cache:
+                    return self._cache[abs_name]
+                val = self._system()._var_rel2meta[name]['value']
             except KeyError:
                 raise KeyError(f"{self.msginfo}: Variable '{name}' not found.")
             except AttributeError:
                 raise ValueError(f"{self.msginfo:}: Can't access variable '{name}' before setup.")
+
+        self._cache[abs_name] = val
+        return val
 
     def __setitem__(self, name, value):
         """
@@ -194,24 +205,26 @@ class UnorderedVarCollection(object):
                 if abs_name is None:
                     raise KeyError(f"{self.msginfo}: Variable '{name}' not found.")
                 if abs_name in system._var_allprocs_discrete[self._iotype]:
-                    if self._iotype == 'input':
-                        system._discrete_inputs[name] = value
-                    else:
-                        system._discrete_outputs[name] = value
+                    self._cache[abs_name] = value
                 else:
                     meta = system._var_abs2meta
                     value = np.asarray(value)
                     if abs_name in meta:
-                        meta[abs_name]['value'][idxs] = value
+                        if idxs is _full_slice:
+                            self._cache[abs_name] = value.copy()
+                        else:
+                            self[abs_name][idxs] = value
                     # else, ignore non-local set
             else:
                 # pre-setup, assume relative name, since absolute name keyed data
                 # structures don't exist yet and promotions haven't been processed.
+                pname = self._system().pathname
+                abs_name = pname + '.' + name if pname else name
                 try:
                     if idxs is _full_slice:
-                        system._var_rel2meta[name]['value'] = value
+                        self._cache[abs_name] = deepcopy(value)
                     else:
-                        system._var_rel2meta[name]['value'][idxs] = value
+                        self[abs_name][idxs] = value
                 except KeyError:
                     raise KeyError(f"{self.msginfo}: Variable '{name}' not found.")
                 except AttributeError:
@@ -221,24 +234,66 @@ class UnorderedVarCollection(object):
             raise type(err)(f"{self._system().msginfo}: Failed to set value of "
                             f"'{name}': {str(err)}.")
 
+    def _update_vector_data(self):
+        """
+        Update the vector and discrete var data structures after vector setup.
+        """
+        system = self._system()
+        pname = system.pathname
+        vec = system._vectors['nonlinear'][self._iotype]
+
+        abs2meta = self._var_abs2meta
+        for abs_name in self._var_abs_names[self._iotype]:
+            if abs_name in self._cache:
+                system._inputs.set_var(abs_name, self._cache[abs_name])
+            else:
+                system._inputs.set_var(abs_name, abs2meta[abs_name]['value'])
+
+
+        try:
+            abs_name = self.name2abs_name(name)
+            if abs_name is None:
+                raise KeyError(f"{self.msginfo}: Variable '{name}' not found.")
+            if abs_name in system._var_allprocs_discrete[self._iotype]:
+                if self._iotype == 'input':
+                    system._discrete_inputs[name] = value
+                else:
+                    system._discrete_outputs[name] = value
+            else:
+                meta = system._var_abs2meta
+                value = np.asarray(value)
+                if abs_name in meta:
+                    meta[abs_name]['value'][idxs] = value
+                # else, ignore non-local set
+        except (ValueError, TypeError) as err:
+            raise type(err)(f"{self._system().msginfo}: Failed to set value of "
+                            f"'{name}': {str(err)}.")
+
     def _abs_get_val(self, abs_name, flat=True):
         system = self._system()
         try:
-            val = system._var_abs2meta[abs_name]['value']
-            if flat:
-                return val.ravel()
+            val = self._cache[abs_name]
         except KeyError:
-            # could be discrete
-            # TODO: change discrete to use abs names like others (or others to use rel)
-            try:
-                rel = abs_name2rel_name(system, abs_name)
-                if self._iotype == 'output':
-                    val = system._var_discrete['output'][rel]['value']
-                else:
-                    val = system._var_discrete['input'][rel]['value']
-            except KeyError:
-                raise KeyError(f"{self.msginfo}: Variable '{abs_name}' not found.")
+            raise KeyError(f"{self.msginfo}: Variable '{abs_name}' not found.")
+
         return val
+
+        # try:
+        #     val = system._var_abs2meta[abs_name]['value']
+        #     if flat:
+        #         return val.ravel()
+        # except KeyError:
+        #     # could be discrete
+        #     # TODO: change discrete to use abs names like others (or others to use rel)
+        #     try:
+        #         rel = abs_name2rel_name(system, abs_name)
+        #         if self._iotype == 'output':
+        #             val = system._var_discrete['output'][rel]['value']
+        #         else:
+        #             val = system._var_discrete['input'][rel]['value']
+        #     except KeyError:
+        #         raise KeyError(f"{self.msginfo}: Variable '{abs_name}' not found.")
+        # return val
 
     def _abs_iter(self):
         """

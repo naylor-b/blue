@@ -440,15 +440,20 @@ class Problem(object):
                 if (model._var_abs2meta[src]['size'] == 0 and
                         src.rsplit('.', 1)[0] == '_auto_ivc' and all_meta[src]['distributed']):
                     pass  # special case, auto_ivc dist var with 0 local size
-                elif tmeta['has_src_indices']:
-                    if tlocmeta:  # target is local
+                elif (tmeta['has_src_indices'] and n_proms < 2) or gsrc_inds is not None:
+                    ssizes = model._var_sizes['nonlinear']['output']
+                    sidx = model._var_allprocs_abs2idx['nonlinear'][src]
+                    ssize = ssizes[myrank, sidx]
+                    start = np.sum(ssizes[:myrank, sidx])
+                    end = start + ssize
+                    if gsrc_inds is not None:
+                        src_indices = gsrc_inds
+                    elif tlocmeta:  # target is local
                         src_indices = tlocmeta['src_indices']
+                    else:
+                        src_indices = None
+                    if src_indices is not None:
                         if tmeta['distributed']:
-                            ssizes = model._var_sizes['nonlinear']['output']
-                            sidx = model._var_allprocs_abs2idx['nonlinear'][src]
-                            ssize = ssizes[myrank, sidx]
-                            start = np.sum(ssizes[:myrank, sidx])
-                            end = start + ssize
                             if np.any(src_indices < start) or np.any(src_indices >= end):
                                 raise RuntimeError(f"{model.msginfo}: Can't set {name}: "
                                                    "src_indices refer "
@@ -457,9 +462,11 @@ class Problem(object):
                                 src_indices = src_indices - start
                         model._outputs.set_var(src, value, src_indices[indices])
                     else:
-                        raise RuntimeError(f"{model.msginfo}: Can't set {abs_name}: remote"
-                                           " connected inputs with src_indices currently not"
-                                           " supported.")
+                        if not tlocmeta:
+                            raise RuntimeError(f"{model.msginfo}: Can't set {abs_name}: remote"
+                                               " connected inputs with src_indices currently not"
+                                               " supported.")
+                        model._outputs.set_var(src, value, indices)
                 else:
                     value = np.asarray(value)
                     model._outputs.set_var(src, value, indices)

@@ -1263,24 +1263,28 @@ class System(object):
         self._design_vars.update(self._static_design_vars)
         self._responses.update(self._static_responses)
 
-    def _setup_var_index_ranges(self):
-        """
-        Compute the division of variables by subsystem.
-        """
-        self._setup_var_index_maps()
-
     def _setup_var_data(self):
         """
         Compute the list of abs var names, abs/prom name maps, and metadata dictionaries.
         """
         self._var_allprocs_abs_names = {'input': [], 'output': []}
+        self._var_allprocs_abs_names_discrete = {'input': [], 'output': []}
         self._var_abs_names = {'input': [], 'output': []}
+        self._var_abs_names_discrete = {'input': [], 'output': []}
         self._var_allprocs_prom2abs_list = {'input': OrderedDict(), 'output': OrderedDict()}
         self._var_abs2prom = {'input': {}, 'output': {}}
         self._var_allprocs_abs2prom = {'input': {}, 'output': {}}
         self._var_allprocs_abs2meta = {}
         self._var_abs2meta = {}
         self._var_allprocs_abs2idx = {}
+        self._has_output_scaling = False
+        self._has_resid_scaling = False
+
+    def _setup_var_index_ranges(self):
+        """
+        Compute the division of variables by subsystem.
+        """
+        self._setup_var_index_maps()
 
     def _setup_var_index_maps(self):
         """

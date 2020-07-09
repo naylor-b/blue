@@ -359,13 +359,11 @@ class Group(System):
 
         self.comm = comm
 
-        self._subsystems_allprocs = []
-        self._manual_connections = {}
+        self._subsystems_allprocs = self._static_subsystems_allprocs.copy()
+        self._manual_connections = self._static_manual_connections.copy()
         self._approx_subjac_keys = None
 
         self._static_mode = False
-        self._subsystems_allprocs.extend(self._static_subsystems_allprocs)
-        self._manual_connections.update(self._static_manual_connections)
 
         # Call setup function for this group.
         self.setup()

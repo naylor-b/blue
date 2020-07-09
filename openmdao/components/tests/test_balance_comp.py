@@ -45,6 +45,10 @@ class TestBalanceComp(unittest.TestCase):
 
         assert_check_partials(cpd, atol=2e-5, rtol=2e-5)
 
+        #??? problem is that the current UnorderedVarCollection just updates the existing metadata values,
+        # but the old behavior was that those metadata values where never changed.  Has nothing to do with solvers.
+        #????????????????????????????????
+        
         # set an actual solver, and re-setup. Then check derivatives at a converged point
         prob.model.linear_solver = om.DirectSolver()
         prob.model.nonlinear_solver = om.NewtonSolver(solve_subsystems=False)
