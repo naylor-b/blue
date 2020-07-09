@@ -1249,12 +1249,13 @@ class System(object):
         # initialize nonlinear input/output var collections
         if pathname:  # we're a subsystem
             self._inputs.pathname = pathname
-            self._inputs._root = prob_meta['root_inputs']
             self._outputs.pathname = pathname
-            self._outputs._root = prob_meta['root_outputs']
         else:   # we're the top level system
             prob_meta['root_inputs'] = self._inputs
             prob_meta['root_outputs'] = self._outputs
+
+        self._inputs.set_root(prob_meta['root_inputs'])
+        self._outputs.set_root(prob_meta['root_outputs'])
 
         self.options._parent_name = self.msginfo
         self.recording_options._parent_name = self.msginfo
@@ -1603,6 +1604,10 @@ class System(object):
                     vec_name, kind, self, rootvec,
                     alloc_complex=vec_alloc_complex, ncol=rootvec._ncol)
 
+        if self.pathname == '' and isinstance(self._inputs, UnorderedVarCollection):
+            self._inputs._update_vector_data()
+            self._outputs._update_vector_data()
+
         self._inputs = vectors['input']['nonlinear']
         self._outputs = vectors['output']['nonlinear']
         self._residuals = vectors['residual']['nonlinear']
@@ -1716,12 +1721,13 @@ class System(object):
         """
         Set all input and output variables to their declared initial values.
         """
-        abs2meta = self._var_abs2meta
-        for abs_name in self._var_abs_names['input']:
-            self._inputs.set_var(abs_name, abs2meta[abs_name]['value'])
+        pass
+        # abs2meta = self._var_abs2meta
+        # for abs_name in self._var_abs_names['input']:
+        #     self._inputs.set_var(abs_name, abs2meta[abs_name]['value'])
 
-        for abs_name in self._var_abs_names['output']:
-            self._outputs.set_var(abs_name, abs2meta[abs_name]['value'])
+        # for abs_name in self._var_abs_names['output']:
+        #     self._outputs.set_var(abs_name, abs2meta[abs_name]['value'])
 
     def _get_promotion_maps(self, prom_names):
         """
@@ -3873,11 +3879,14 @@ class System(object):
                 vec = self._vectors[kind][vec_name]
             except KeyError:
                 if abs_name in my_meta:
-                    if vec_name != 'nonlinear':
+                    if vec_name != 'nonlinear' or kind not in ('input', 'output'):
                         raise ValueError(f"{self.msginfo}: Can't get variable named '{abs_name}' "
-                                         "because linear vectors are not available before "
-                                         "final_setup.")
-                    val = my_meta[abs_name]['value']
+                                         "because linear vectors and residuals are not available "
+                                         "before final_setup.")
+                    if kind == 'output':
+                        val = self._outputs[abs_name]
+                    else:
+                        val = self._inputs[abs_name]
             else:
                 if from_root:
                     vec = vec._root_vector

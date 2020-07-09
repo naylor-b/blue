@@ -2729,7 +2729,7 @@ class Group(System):
                     units = gmeta['units']
                 else:
                     units = all_abs2meta[tgt]['units']
-                if 'value' in gmeta:
+                if not remote and 'value' in gmeta:
                     val = gmeta['value']
                 auto_ivc.add_output(src.rsplit('.', 1)[-1], val=val, units=units)
                 if remote:
