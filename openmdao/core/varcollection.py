@@ -11,7 +11,7 @@ from openmdao.vectors.vector import _full_slice
 from openmdao.utils.options_dictionary import _undefined
 from openmdao.utils.name_maps import name2abs_names, abs_name2rel_name
 
-# What is a vector?
+# What is a Vector?
 #  ORDER INDEPENDENT
 #   - provides a mapping from var name to var value (shaped)
 #
@@ -25,7 +25,7 @@ from openmdao.utils.name_maps import name2abs_names, abs_name2rel_name
 
 # Where are vector vars accessed by var name vs. by full array?
 #  - in components - by (relative=promoted) var name
-#  - at top level (from problem get/set) by abs var name
+#  - at top level (from problem get/set) by promoted or abs name
 #  - problem.compute_jacvec_product by prom var name AND full array
 #  - problem.check_partials
 #  - matvec_context sets internal set of allowed names
@@ -238,11 +238,7 @@ class UnorderedVarCollection(object):
             system = self._system()
             if system._has_var_data():
                 try:
-                    v = system._var_abs2meta[abs_name]['value']
-                    if isinstance(v, np.ndarray):
-                        v = v.copy()
-                    else:
-                        v = deepcopy(v)
+                    v = np.asarray(system._var_abs2meta[abs_name]['value'], dtype=float)
                     self._cache[abs_name] = v
                     return v
                 except KeyError:
@@ -251,11 +247,7 @@ class UnorderedVarCollection(object):
                     if relname in system._var_discrete[self._iotype]:
                         v = deepcopy(system._var_discrete[self._iotype][relname]['value'])
                     else:
-                        v = system._var_rel2meta[relname]['value']
-                        if isinstance(np.ndarray):
-                            v = v.copy()
-                        else:
-                            v = deepcopy(v)
+                        v = np.asarray(system._var_rel2meta[relname]['value'], dtype=float)
                     self._cache[abs_name] = v
                     return v
             else:
@@ -263,7 +255,11 @@ class UnorderedVarCollection(object):
                     name = abs_name[len(system.pathname) + 1:]
                 else:
                     name = abs_name
-                self._cache[abs_name] = v = deepcopy(system._var_rel2meta[name]['value'])
+                if name in system._var_discrete[self._iotype]:
+                    self._cache[abs_name] = v = deepcopy(system._var_rel2meta[name]['value'])
+                else:
+                    self._cache[abs_name] = v = np.asarray(system._var_rel2meta[name]['value'],
+                                                           dtype=float)
                 return v
 
     def _update_vector_data(self):
