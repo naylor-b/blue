@@ -566,7 +566,7 @@ class Group(System):
                                        " dotted names.")
 
     def _top_level_setup2(self):
-        self._resolve_connected_input_defaults()
+        # self._resolve_connected_input_defaults()
 
         if self.comm.size > 1:
             abs2meta = self._var_abs2meta
@@ -2562,13 +2562,81 @@ class Group(System):
                                "auto_ivc using negative src_indices.")
         return inds, np.max(inds)
 
-    def _get_auto_ivc_out_val(self, tgts, remote_ins, all_abs2meta, abs2meta):
+    def _get_auto_ivc_out_info(self, tgts, remote_ins, all_abs2meta, abs2meta, group_meta):
         info = []
         dist_ranges = []
         loc_ranges = []
+        disc_ins = self._var_allprocs_discrete['input']
+        prom = self._var_allprocs_abs2prom['input'][tgts[0]]
+
+        # if len(tgts) > 1 and (gunits is _undefined or gval is _undefined):
+        #     errs = set()
+        #     if self.comm.size > 1:
+        #         remote_tgts = [tgt for tgt in tgts
+        #                        if tgt in remote_ins or all_abs2meta[tgt]['distributed']]
+        #     else:
+        #         remote_tgts = ()
+        #     if gunits is _undefined:
+        #         units0 = all_abs2meta[tgts[0]]['units']
+        #         for tgt in tgts:
+        #             if all_abs2meta[tgt]['units'] != units0:
+        #                 errs.add('units')
+        #                 break
+
+        #     if gval is _undefined:
+        #         if remote_tgts:
+        #             # punt for now if some tgts are distributed
+        #             dists = [t for t in tgts if all_abs2meta[t]['distributed']]
+        #             if dists:
+        #                 simple_warning("Skipping value comparison between distributed inputs "
+        #                                f"{sorted(dists)}.")
+        #             else:
+        #                 vals = [(abs2meta[t]['value'], abs2meta[t].get('units'))
+        #                         if t in abs2meta else None for t in tgts]
+        #                 allvals = self.comm.gather(vals, root=0)
+        #                 if self.comm.rank == 0:
+        #                     ambiguous = False
+        #                     for i in range(len(allvals[0])):
+        #                         vs = [allvals[j][i] for j in range(self.comm.size)
+        #                               if allvals[j][i] is not None]
+        #                         if len(vs) > 1:
+        #                             v0, units0 = vs[0]
+        #                             for v, units in vs[1:]:
+        #                                 if _has_val_mismatch(units0, v0, units, v):
+        #                                     ambiguous = True
+        #                                     break
+        #                             if ambiguous:
+        #                                 break
+        #                     if ambiguous:
+        #                         self.comm.bcast(ambiguous, root=0)
+        #                 else:
+        #                     ambiguous = self.comm.bcast(None, root=0)
+
+        #                 if ambiguous:
+        #                     errs.add('value')
+        #         else:  # all tgts are local
+        #             meta = abs2meta[tgts[0]]
+        #             val0 = meta['value']
+        #             units0 = meta.get('units')
+        #             for tgt in tgts:
+        #                 val = abs2meta[tgt]['value']
+        #                 units = abs2meta[tgt].get('units')
+        #                 if _has_val_mismatch(units0, val0, units, val):
+        #                     errs.add('value')
+        #                     break
+
+        #     if errs:
+        #         self._show_ambiguity_msg(prom, errs, tgts)
+
         for tgt in tgts:
-            all_meta = all_abs2meta[tgt]
-            dist = all_meta['distributed']
+            try:
+                all_meta = all_abs2meta[tgt]
+            except KeyError:
+                discs = [t for t in tgts if t in disc_ins]
+                conts = [t for t in tgts if t not in disc_ins]
+                raise TypeError(f"{self.msginfo}: Discrete variables {discs} were promoted to the "
+                                f"same name ({prom}) as continuous variables {conts}.")
+            distributed = all_meta['distributed']
             has_src_inds = all_meta['has_src_indices']
 
             if tgt in remote_ins:  # remote somewhere
@@ -2582,7 +2650,7 @@ class Group(System):
                         info.append((tgt, meta['size'], val, False))
                 else:
                     info.append((tgt, 0, np.zeros(0), True))
-            elif dist:  # distributed and local everywhere
+            elif distributed:
                 if has_src_inds:
                     if tgt in abs2meta:
                         src_indices = abs2meta[tgt]['src_indices']
@@ -2602,6 +2670,7 @@ class Group(System):
                 src_inds, mx = self._get_src_inds_max(tgt, meta)
                 loc_ranges.append((tgt, mx, src_inds, meta['value'], False))
             else:  # duplicated variable with no src_indices.  Overrides any other conn sizing.
+                self._resolve_connected_input_defaults(tgts, remote_ins, all_abs2meta, abs2meta, group_meta)
                 return tgt, abs2meta[tgt]['size'], abs2meta[tgt]['value'], False
 
         if loc_ranges:  # auto_ivc connected to local vars with src_indices
@@ -2673,8 +2742,22 @@ class Group(System):
 
             info.append((tgt, val.size, val, True))
 
+        self._resolve_connected_input_defaults(tgts, remote_ins, all_abs2meta, abs2meta, group_meta)
+
         # return max sized tgt, size, value
         return sorted(info, key=lambda x: x[1])[-1]
+
+    def _get_discrete_input(self, abs_in, remote_ins):
+        if abs_in in self._var_abs2prom['input']:  # var is local
+            val = self._var_discrete['input'][abs_in]['value']
+        else:
+            val = None
+        if abs_in in remote_ins:
+            if remote_ins[abs_in] == self.comm.rank:
+                self.comm.bcast(val, root=remote_ins[abs_in])
+            else:
+                val = self.comm.bcast(None, root=remote_ins[abs_in])
+        return val
 
     def _setup_auto_ivcs(self, mode):
         from openmdao.core.indepvarcomp import _AutoIndepVarComp
@@ -2697,8 +2780,10 @@ class Group(System):
         abs2prom = self._var_allprocs_abs2prom['input']
         abs2meta = self._var_abs2meta
         all_abs2meta = self._var_allprocs_abs2meta
+        disc_ins = self._var_allprocs_discrete['input']
         conns = self._problem_meta['connections']
-        auto_tgts = [n for n in self._var_allprocs_abs_names['input'] if n not in conns]
+        auto_tgts = [n for n in chain(self._var_allprocs_abs_names['input'],
+                                      self._var_allprocs_discrete['input']) if n not in conns]
         for tgt in auto_tgts:
             prom = abs2prom[tgt]
             if prom in prom2auto:
@@ -2715,54 +2800,67 @@ class Group(System):
 
         myrank = self.comm.rank
         with multi_proc_exception_check(self.comm):
-            for src, tgts in auto2tgt.items():
-                tgt, sz, val, remote = self._get_auto_ivc_out_val(tgts, remote_ins, all_abs2meta,
-                                                                  abs2meta)
-                prom = abs2prom[tgt]
+            # have to sort to keep vars in sync because we may be doing bcasts
+            for src, tgts in sorted(auto2tgt.items()):
+                prom = abs2prom[tgts[0]]
                 if prom not in self._group_inputs:
-                    self._group_inputs[prom] = {'use_tgt': tgt}
+                    self._group_inputs[prom] = gmeta = {}
                 else:
-                    self._group_inputs[prom]['use_tgt'] = tgt
-                gmeta = self._group_inputs[prom]
-
-                if 'units' in gmeta:
-                    units = gmeta['units']
-                else:
-                    units = all_abs2meta[tgt]['units']
-                if not remote and 'value' in gmeta:
-                    val = gmeta['value']
-                auto_ivc.add_output(src.rsplit('.', 1)[-1], val=val, units=units)
-                if remote:
-                    auto_ivc._add_remote(src)
-
-        # have to sort to keep vars in sync because we may be doing bcasts
-        for abs_in in sorted(self._var_allprocs_discrete['input']):
-            if abs_in not in conns:  # unconnected, so connect the input to an _auto_ivc output
-                prom = abs2prom[abs_in]
-                val = _undefined
-
-                if prom in prom2auto:
-                    # multiple connected inputs w/o a src. Connect them to the same IVC
-                    # check if they have different metadata, and if they do, there must be
-                    # a group input defined that sets the default, else it's an error
-                    conns[abs_in] = prom2auto[prom][0]
-                else:
-                    ivc_name = f"_auto_ivc.v{count}"
-                    loc_out_name = ivc_name.rsplit('.', 1)[-1]
-                    count += 1
-                    prom2auto[prom] = (ivc_name, abs_in)
-                    conns[abs_in] = ivc_name
-
-                    if abs_in in self._var_abs2prom['input']:  # var is local
-                        val = self._var_discrete['input'][abs_in]['value']
+                    gmeta = self._group_inputs[prom]
+                if tgts[0] in disc_ins:
+                    if 'value' in gmeta:
+                        val = gmeta['value']
                     else:
-                        val = None
-                    if abs_in in remote_ins:
-                        if remote_ins[abs_in] == self.comm.rank:
-                            self.comm.bcast(val, root=remote_ins[abs_in])
-                        else:
-                            val = self.comm.bcast(None, root=remote_ins[abs_in])
-                    auto_ivc.add_discrete_output(loc_out_name, val=val)
+                        val = self._get_discrete_input(tgts[0], remote_ins)
+                    auto_ivc.add_discrete_output(src.rsplit('.', 1)[-1], val=val)
+                    if len(tgts) > 1:
+                        for tgt in tgts[1:]:
+                            if self._get_discrete_input(tgt, remote_ins) != val:
+                                self._show_ambiguity_msg(prom, ('value',), tgts)
+                else:
+                    tgt, sz, val, remote = self._get_auto_ivc_out_info(tgts, remote_ins, all_abs2meta,
+                                                                       abs2meta, gmeta)
+                    if 'units' in gmeta:
+                        units = gmeta['units']
+                    else:
+                        units = all_abs2meta[tgt]['units']
+
+                    gmeta['use_tgt'] = tgt
+
+                    if not remote and 'value' in gmeta:
+                        val = gmeta['value']
+                    auto_ivc.add_output(src.rsplit('.', 1)[-1], val=val, units=units)
+                    if remote:
+                        auto_ivc._add_remote(src)
+
+        # # have to sort to keep vars in sync because we may be doing bcasts
+        # for abs_in in sorted(self._var_allprocs_discrete['input']):
+        #     if abs_in not in conns:  # unconnected, so connect the input to an _auto_ivc output
+        #         prom = abs2prom[abs_in]
+        #         if prom not in self._group_inputs:
+        #             self._group_inputs[prom] = gmeta = {}
+        #         else:
+        #             gmeta = self._group_inputs[prom]
+
+        #         if prom not in prom2auto:
+        #             ivc_name = f"_auto_ivc.v{count}"
+        #             loc_out_name = ivc_name.rsplit('.', 1)[-1]
+        #             count += 1
+        #             prom2auto[prom] = (ivc_name, abs_in)
+
+        #         conns[abs_in] = prom2auto[prom][0]
+
+        #         val = _undefined
+        #             if abs_in in self._var_abs2prom['input']:  # var is local
+        #                 val = self._var_discrete['input'][abs_in]['value']
+        #             else:
+        #                 val = None
+        #             if abs_in in remote_ins:
+        #                 if remote_ins[abs_in] == self.comm.rank:
+        #                     self.comm.bcast(val, root=remote_ins[abs_in])
+        #                 else:
+        #                     val = self.comm.bcast(None, root=remote_ins[abs_in])
+        #             auto_ivc.add_discrete_output(loc_out_name, val=val)
 
         if not prom2auto:
             return auto_ivc
@@ -2815,58 +2913,151 @@ class Group(System):
 
         return auto_ivc
 
-    def _resolve_connected_input_defaults(self):
-        # This should only be called on the top level Group.
+    def _resolve_connected_input_defaults(self, tgts, remote_ins, all_abs2meta, abs2meta, group_meta):
+        gunits = group_meta.get('units', _undefined)
+        gval = group_meta.get('value', _undefined)
 
-        srcconns = defaultdict(list)
-        for tgt, src in self._problem_meta['connections'].items():
-            if src.startswith('_auto_ivc.'):
-                srcconns[src].append(tgt)
-
-        abs2prom = self._var_allprocs_abs2prom['input']
-        all_abs2meta = self._var_allprocs_abs2meta
-        abs2meta = self._var_abs2meta
-        all_discrete_outs = self._var_allprocs_discrete['output']
-        all_discrete_ins = self._var_allprocs_discrete['input']
-
-        for src, tgts in srcconns.items():
-            if len(tgts) < 2:
-                continue
-            if src not in all_discrete_outs:
-                smeta = abs2meta[src] if src in abs2meta else all_abs2meta[src]
-                sunits = smeta['units'] if 'units' in smeta else None
-
-            sval = self.get_val(src, kind='output', get_remote=True, from_src=False)
+        if len(tgts) > 1 and (gunits is _undefined or gval is _undefined):
             errs = set()
-
-            prom = abs2prom[tgts[0]]
-            if prom in self._group_inputs:
-                gmeta = self._group_inputs[prom]
+            if self.comm.size > 1:
+                remote_tgts = [tgt for tgt in tgts
+                               if tgt in remote_ins or all_abs2meta[tgt]['distributed']]
             else:
-                gmeta = self._group_inputs[prom] = {}
-
-            for tgt in tgts:
-                tval = self.get_val(tgt, kind='input', get_remote=True, from_src=False)
-
-                if tgt in all_discrete_ins:
-                    if 'value' not in gmeta and sval != tval:
-                        errs.add('value')
-                else:
-                    tmeta = abs2meta[tgt] if tgt in abs2meta else all_abs2meta[tgt]
-                    tunits = tmeta['units'] if 'units' in tmeta else None
-                    if 'units' not in gmeta and sunits != tunits:
+                remote_tgts = ()
+            if gunits is _undefined:
+                units0 = all_abs2meta[tgts[0]]['units']
+                for tgt in tgts:
+                    if all_abs2meta[tgt]['units'] != units0:
                         errs.add('units')
-                    if 'value' not in gmeta:
-                        if tval.shape == sval.shape:
-                            if _has_val_mismatch(tunits, tval, sunits, sval):
-                                errs.add('value')
+                        break
+
+            if gval is _undefined:
+                if remote_tgts:
+                    # punt for now if some tgts are distributed
+                    dists = [t for t in tgts if all_abs2meta[t]['distributed']]
+                    if dists:
+                        simple_warning("Skipping value comparison between distributed inputs "
+                                       f"{sorted(dists)}.")
+                    else:
+                        vals = [(abs2meta[t]['value'], abs2meta[t].get('units'))
+                                if t in abs2meta else None for t in tgts]
+                        allvals = self.comm.gather(vals, root=0)
+                        if self.comm.rank == 0:
+                            ambiguous = False
+                            for i in range(len(allvals[0])):
+                                vs = [allvals[j][i] for j in range(self.comm.size)
+                                      if allvals[j][i] is not None]
+                                if len(vs) > 1:
+                                    v0, units0 = vs[0]
+                                    for v, units in vs[1:]:
+                                        if _has_val_mismatch(units0, v0, units, v):
+                                            ambiguous = True
+                                            break
+                                    if ambiguous:
+                                        break
+                            self.comm.bcast(ambiguous, root=0)
                         else:
-                            if all_abs2meta[tgt]['has_src_indices'] and tgt in abs2meta:
-                                srcpart = sval[abs2meta[tgt]['src_indices']]
-                                if _has_val_mismatch(tunits, tval, sunits, srcpart):
-                                    errs.add('value')
+                            ambiguous = self.comm.bcast(None, root=0)
+
+                        if ambiguous:
+                            errs.add('value')
+                else:  # all tgts are local
+                    meta = abs2meta[tgts[0]]
+                    val0 = meta['value']
+                    units0 = meta.get('units')
+                    for tgt in tgts:
+                        val = abs2meta[tgt]['value']
+                        units = abs2meta[tgt].get('units')
+                        if _has_val_mismatch(units0, val0, units, val):
+                            errs.add('value')
+                            break
 
             if errs:
+                prom = self._var_allprocs_abs2prom['input'][tgts[0]]
                 self._show_ambiguity_msg(prom, errs, tgts)
-            elif src not in all_discrete_outs:
-                gmeta['units'] = sunits
+
+
+
+
+    # def _resolve_connected_input_defaults(self):
+    #     # This should only be called on the top level Group.
+
+    #     remote_vars = self._problem_meta['remote_vars']
+    #     auto_conns = defaultdict(list)
+    #     for tgt, src in self._problem_meta['connections'].items():
+    #         if src.startswith('_auto_ivc.'):
+    #             auto_conns[src].append(tgt)
+
+    #     abs2prom = self._var_allprocs_abs2prom['input']
+    #     all_abs2meta = self._var_allprocs_abs2meta
+    #     abs2meta = self._var_abs2meta
+    #     all_discrete_outs = self._var_allprocs_discrete['output']
+    #     all_discrete_ins = self._var_allprocs_discrete['input']
+
+    #     unresolved = {}
+    #     for src, tgts in auto_conns.items():
+    #         if len(tgts) < 2:
+    #             continue
+
+    #         prom = abs2prom[tgts[0]]
+    #         if prom in self._group_inputs:
+    #             gmeta = self._group_inputs[prom]
+    #             if 'units' in gmeta and 'value' in gmeta:
+    #                 continue  # no ambiguity
+    #             gunits = gmeta.get('units', _undefined)
+    #             gval = gmeta.get('value', _undefined)
+    #         else:
+    #             gunits = _undefined
+    #             gval = _undefined
+
+    #         errs = set()
+
+    #         if gunits is _undefined and src not in all_discrete_outs:
+    #             smeta = all_abs2meta[src]
+    #             sunits = smeta['units'] if 'units' in smeta else None
+
+    #         if gval is _undefined:
+    #             if src in abs2meta:
+    #                 sval = abs2meta[src]['value']
+    #             else:
+    #                 unresolved[src] = tgts
+    #                 sval = _undefined
+
+    #         for tgt in tgts:
+    #             if gunits is _undefined and tgt not in all_discrete_ins:
+    #                 tmeta = all_abs2meta[tgt]
+    #                 tunits = tmeta['units'] if 'units' in tmeta else None
+    #                 if 'units' not in gmeta and sunits != tunits:
+    #                     errs.add('units')
+
+    #             if gval is _undefined and sval is not _undefined:
+    #                 if tgt in abs2meta:
+    #                     tval = abs2meta[tgt]['value']
+    #                     if tgt in all_discrete_ins:
+    #                         if sval != tval:
+    #                             errs.add('value')
+    #                     else:
+    #                         if tval.shape == sval.shape:
+    #                             if _has_val_mismatch(tunits, tval, sunits, sval):
+    #                                 errs.add('value')
+    #                         else:
+    #                             if all_abs2meta[tgt]['has_src_indices'] and tgt in abs2meta:
+    #                                 srcpart = sval[abs2meta[tgt]['src_indices']]
+    #                                 if _has_val_mismatch(tunits, tval, sunits, srcpart):
+    #                                     errs.add('value')
+    #                 else:
+    #                     unresolved[src] = tgts
+
+    #         if errs:
+    #             self._show_ambiguity_msg(prom, errs, tgts)
+    #         elif src not in all_discrete_outs:
+    #             gmeta['units'] = sunits
+
+    #     if unresolved:
+    #         rank_unresolved = self.comm.allgather(list(unresolved))
+    #         all_unresolved = set()
+    #         for unres in rank_unresolved:
+    #             all_unresolved.update(unres)
+
+    #         # we have some remote input values we have to compare to
+    #         for auto_src in all_unresolved:

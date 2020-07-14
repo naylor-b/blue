@@ -1844,7 +1844,7 @@ class TestGroupAddInput(unittest.TestCase):
                                             x={'value': 1.0, 'units': 'inch'},
                                             y={'value': 1.0, 'units': 'inch'}),
                                             promotes_inputs=['x'])
-
+        
         with self.assertRaises(Exception) as cm:
            p.setup()
 

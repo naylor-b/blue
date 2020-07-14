@@ -50,6 +50,8 @@ class UnorderedVarCollection(object):
         'input' or 'output'
     _system : System
         Weak ref to the owning system.
+    _cache : dict
+        Mapping of absolute name to cached values for the entire model.
     """
 
     def __init__(self, system, iotype):
@@ -85,8 +87,12 @@ class UnorderedVarCollection(object):
             Absolute variable name if unique abs_name found or None otherwise.
         """
         system = self._system()
+        if name in self._cache:
+            return name
 
         if system._has_var_data():
+            if name in system._var_abs2prom[self._iotype]:
+                return name
             abs_name = name if system.pathname == '' else '.'.join((system.pathname, name))
             if abs_name in system._var_abs2prom[self._iotype]:
                 return abs_name
@@ -177,7 +183,7 @@ class UnorderedVarCollection(object):
         """
         self.set_var(name, value)
 
-    def set_root(self, root):
+    def _set_root(self, root):
         self._root = root
         self_cache = root._cache
 
@@ -236,9 +242,21 @@ class UnorderedVarCollection(object):
                     return v
                 except KeyError:
                     plen = len(system.pathname) + 1 if system.pathname else 0
-                    self._cache[abs_name] = v = deepcopy(system._rel2meta[self._iotype][abs_name[plen:]])
+                    relname = abs_name[plen:]
+                    if relname in system._var_discrete[self._iotype]:
+                        v = deepcopy(system._var_discrete[self._iotype][relname]['value'])
+                    else:
+                        v = deepcopy(system._var_rel2meta[relname]['value'])
+                    self._cache[abs_name] = v
                     return v
-        
+            else:
+                if system.pathname:
+                    name = abs_name[len(system.pathname) + 1:]
+                else:
+                    name = abs_name
+                self._cache[abs_name] = v = deepcopy(system._var_rel2meta[name]['value'])
+                return v
+
     def _update_vector_data(self):
         """
         Update the vector and discrete var data structures after vector setup.
@@ -282,7 +300,8 @@ class UnorderedVarCollection(object):
         """
         Iterate over the absolute names in the vector.
         """
-        yield from self._system()._var_abs2prom[self.iotype]
+        yield from self._system()._var_abs_names[self._iotype]
+        yield from self._system()._var_abs_names_discrete[self._iotype]
 
     # def size_shape_iter(self):
     #     """

@@ -160,10 +160,9 @@ def name2abs_names(system, name):
             return absnames
 
     if name in system._problem_meta['prom2abs']['input']:
-        absnames = system._problem_meta['prom2abs']['input'][name]
-        # reduce scope to this system
-        if absnames[0] in system._var_allprocs_abs2prom['input']:
-            return absnames
+        myabs2prom = system._var_allprocs_abs2prom['input']
+        return [n for n in system._problem_meta['prom2abs']['input'][name]
+                if n in myabs2prom]
 
     return ()
 

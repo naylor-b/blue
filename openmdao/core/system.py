@@ -653,8 +653,6 @@ class System(object):
             The global communicator.
         """
         self._setup_vectors(self._get_root_vectors())
-
-        # Transfers do not require recursion, but they have to be set up after the vector setup.
         self._setup_transfers()
 
         # Same situation with solvers, partials, and Jacobians.
@@ -1254,8 +1252,8 @@ class System(object):
             prob_meta['root_inputs'] = self._inputs
             prob_meta['root_outputs'] = self._outputs
 
-        self._inputs.set_root(prob_meta['root_inputs'])
-        self._outputs.set_root(prob_meta['root_outputs'])
+        self._inputs._set_root(prob_meta['root_inputs'])
+        self._outputs._set_root(prob_meta['root_outputs'])
 
         self.options._parent_name = self.msginfo
         self.recording_options._parent_name = self.msginfo
@@ -1278,8 +1276,6 @@ class System(object):
         self._var_allprocs_abs2meta = {}
         self._var_abs2meta = {}
         self._var_allprocs_abs2idx = {}
-        self._has_output_scaling = False
-        self._has_resid_scaling = False
 
     def _setup_var_index_ranges(self):
         """
@@ -3884,7 +3880,10 @@ class System(object):
                                          "because linear vectors and residuals are not available "
                                          "before final_setup.")
                     if kind == 'output':
-                        val = self._outputs[abs_name]
+                        if from_root:
+                            val = self._outputs._root[abs_name]
+                        else:
+                            val = self._outputs[abs_name]
                     else:
                         val = self._inputs[abs_name]
             else:
@@ -4331,8 +4330,8 @@ class System(object):
             raise KeyError(f"{self.msginfo}: Can't find metadata '{meta_name}' for variable "
                            f"'{name}'.")
 
-    def _resolve_connected_input_defaults(self):
-        pass
+    # def _resolve_connected_input_defaults(self):
+    #     pass
 
 
 def get_relevant_vars(connections, desvars, responses, mode):

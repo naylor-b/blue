@@ -1,6 +1,7 @@
 """Define the MetaModelStructured class."""
 
 import numpy as np
+from collections import OrderedDict
 
 from openmdao.components.interp_util.outofbounds_error import OutOfBoundsError
 from openmdao.components.interp_util.interp import InterpND, TABLE_METHODS
@@ -51,8 +52,8 @@ class MetaModelStructuredComp(ExplicitComponent):
 
         self.pnames = []
         self.params = []
-        self.training_outputs = {}
-        self.interps = {}
+        self.training_outputs = OrderedDict()
+        self.interps = OrderedDict()
         self.grad_shape = ()
 
     def initialize(self):

@@ -68,6 +68,8 @@ class SerialTests(unittest.TestCase):
         if not auto:
             model.connect('indeps.x', 'par.x')
 
+        #import wingdbstub
+        
         p.setup()
 
         inval = np.arange(size) + 1.0
