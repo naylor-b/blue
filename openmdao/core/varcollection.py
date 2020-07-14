@@ -212,7 +212,7 @@ class UnorderedVarCollection(object):
                 else:
                     if abs_name in system._var_abs2meta:
                         self._get_cache_val(abs_name)
-                        self._cache[abs_name][idxs] = np.asarray(value)
+                        self._cache[abs_name][idxs] = value
                     # else, ignore non-local set
             else:
                 # pre-setup, assume relative name, since absolute name keyed data

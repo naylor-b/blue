@@ -698,6 +698,9 @@ class TestMetaModelStructuredPython(unittest.TestCase):
 
         model.add_subsystem('comp', comp, promotes=["*"])
         self.prob = om.Problem(model)
+        
+        # import wingdbstub
+        
         self.prob.setup(force_alloc_complex=True)
 
         self.prob['x'] = 1.0
