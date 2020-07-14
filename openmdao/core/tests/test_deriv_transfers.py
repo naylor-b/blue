@@ -100,8 +100,6 @@ class TestParallelGroups(unittest.TestCase):
 
         prob.model.linear_solver = om.LinearRunOnce()
 
-        #import wingdbstub
-
         prob.setup(check=False, mode=mode)
         prob.set_solver_print(level=0)
         prob.run_model()
@@ -274,7 +272,7 @@ class TestParallelGroups(unittest.TestCase):
         wrt=['x']
 
         prob.model.linear_solver = om.LinearRunOnce()
-        
+
         prob.setup(check=False, mode=mode)
         prob.set_solver_print(level=0)
         prob.run_model()

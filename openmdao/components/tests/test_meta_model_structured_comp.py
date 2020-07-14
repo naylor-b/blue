@@ -698,7 +698,8 @@ class TestMetaModelStructuredPython(unittest.TestCase):
 
         model.add_subsystem('comp', comp, promotes=["*"])
         self.prob = om.Problem(model)
-        self.prob.setup()
+        self.prob.setup(force_alloc_complex=True)
+
         self.prob['x'] = 1.0
         self.prob['y'] = 0.75
         self.prob['z'] = -1.7

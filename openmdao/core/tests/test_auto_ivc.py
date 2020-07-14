@@ -68,8 +68,6 @@ class SerialTests(unittest.TestCase):
         if not auto:
             model.connect('indeps.x', 'par.x')
 
-        #import wingdbstub
-        
         p.setup()
 
         inval = np.arange(size) + 1.0
@@ -204,11 +202,11 @@ class SerialTests(unittest.TestCase):
         par = model.add_subsystem('par', om.ParallelGroup(), promotes=['x'])
         par.add_subsystem('C1', PathCompEx('foo'), promotes=['x'])
         par.add_subsystem('C2', PathCompEx('bar'), promotes=['x'])
-
+        
         try:
             p.setup()
         except Exception as err:
-            self.assertEqual(str(err), "Group (<model>): The following inputs, ['par.C1.x', 'par.C2.x'], promoted to 'x', are connected but the metadata entries ['value'] differ. Call <group>.set_input_defaults('x', value=?), where <group> is the Group named 'par' to remove the ambiguity.")
+            self.assertTrue("Group (<model>): The following inputs, ['par.C1.x', 'par.C2.x'], promoted to 'x', are connected but the metadata entries ['value'] differ. Call <group>.set_input_defaults('x', value=?), where <group> is the Group named 'par' to remove the ambiguity." in str(err))
         else:
             self.fail("Exception expected.")
 

@@ -2944,16 +2944,19 @@ class Group(System):
                         allvals = self.comm.gather(vals, root=0)
                         if self.comm.rank == 0:
                             ambiguous = False
-                            for i in range(len(allvals[0])):
-                                vs = [allvals[j][i] for j in range(self.comm.size)
-                                      if allvals[j][i] is not None]
-                                if len(vs) > 1:
-                                    v0, units0 = vs[0]
-                                    for v, units in vs[1:]:
-                                        if _has_val_mismatch(units0, v0, units, v):
-                                            ambiguous = True
+                            for col in range(len(allvals[0])):
+                                if allvals[0][col] is None:
+                                    for row in range(self.comm.size):
+                                        if allvals[row][col] is not None:
+                                            allvals[0][col] = allvals[row][col]
                                             break
-                                    if ambiguous:
+                                    
+                            vs = [v for v in allvals[0] if v is not None]
+                            if len(vs) > 1:
+                                v0, units0 = vs[0]
+                                for v, units in vs[1:]:
+                                    if _has_val_mismatch(units0, v0, units, v):
+                                        ambiguous = True
                                         break
                             self.comm.bcast(ambiguous, root=0)
                         else:

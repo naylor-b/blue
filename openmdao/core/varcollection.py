@@ -211,8 +211,8 @@ class UnorderedVarCollection(object):
                     self._cache[abs_name] = value
                 else:
                     if abs_name in system._var_abs2meta:
-                        v = self._get_cache_val(abs_name)
-                        v[idxs] = np.asarray(value)
+                        self._get_cache_val(abs_name)
+                        self._cache[abs_name][idxs] = np.asarray(value)
                     # else, ignore non-local set
             else:
                 # pre-setup, assume relative name, since absolute name keyed data
@@ -238,7 +238,12 @@ class UnorderedVarCollection(object):
             system = self._system()
             if system._has_var_data():
                 try:
-                    self._cache[abs_name] = v = deepcopy(system._var_abs2meta[abs_name]['value'])
+                    v = system._var_abs2meta[abs_name]['value']
+                    if isinstance(v, np.ndarray):
+                        v = v.copy()
+                    else:
+                        v = deepcopy(v)
+                    self._cache[abs_name] = v
                     return v
                 except KeyError:
                     plen = len(system.pathname) + 1 if system.pathname else 0
@@ -246,7 +251,11 @@ class UnorderedVarCollection(object):
                     if relname in system._var_discrete[self._iotype]:
                         v = deepcopy(system._var_discrete[self._iotype][relname]['value'])
                     else:
-                        v = deepcopy(system._var_rel2meta[relname]['value'])
+                        v = system._var_rel2meta[relname]['value']
+                        if isinstance(np.ndarray):
+                            v = v.copy()
+                        else:
+                            v = deepcopy(v)
                     self._cache[abs_name] = v
                     return v
             else:
