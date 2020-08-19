@@ -26,7 +26,7 @@ class _RecIteration(object):
         Initialize.
         """
         self.stack = []
-        self.prefix = None
+        self.prefix = ''
         self._norec_refcount = 0
 
     def print_recording_iteration_stack(self):
@@ -51,25 +51,18 @@ class _RecIteration(object):
         str :
             the iteration coordinate formatted in our proprietary way.
         """
-        separator = '|'
+        rank = MPI.COMM_WORLD.rank if MPI else 0
 
         # prefix
         if self.prefix:
-            prefix = '%s_' % self.prefix
+            prefix = f"{self.prefix}_rank{rank}:"
         else:
-            prefix = ''
-
-        if MPI:
-            prefix += 'rank%d:' % MPI.COMM_WORLD.rank
-        else:
-            prefix += 'rank0:'
+            prefix = f"rank{rank}:"
 
         # iteration hierarchy
-        coord_list = []
-        for name, iter_count in self.stack:
-            coord_list.append('{}{}{}'.format(name, separator, iter_count))
+        coord_list = [f'{name}|{iter_count}' for name, iter_count in self.stack]
 
-        return prefix + separator.join(coord_list)
+        return prefix + '|'.join(coord_list)
 
     def push(self, iter_coord):
         """
