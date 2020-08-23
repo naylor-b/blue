@@ -586,9 +586,12 @@ class Problem(object):
             raise RuntimeError(self.msginfo +
                                ": The `setup` method must be called before `run_model`.")
 
-        if case_prefix and not isinstance(case_prefix, str):
-            raise TypeError(self.msginfo + ": The 'case_prefix' argument should be a string.")
-        self._recording_iter.prefix = case_prefix
+        if case_prefix:
+            if not isinstance(case_prefix, str):
+                raise TypeError(self.msginfo + ": The 'case_prefix' argument should be a string.")
+            self._recording_iter.prefix = case_prefix
+        else:
+            self._recording_iter.prefix = None
 
         if self.model.iter_count > 0 and reset_iter_counts:
             self.driver.iter_count = 0
@@ -2250,6 +2253,9 @@ def _format_error(error, tol):
 class Slicer(object):
     """
     Helper class that can be used with the indices argument for Problem set_val and get_val.
+
+    It will convert python's array slicing syntax into python objects, for example,
+    slicer[3, :] would return (3, slice(None, None, None)).
     """
 
     def __getitem__(self, val):

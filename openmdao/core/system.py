@@ -2239,31 +2239,31 @@ class System(object):
 
     @property
     def _force_alloc_complex(self):
-        return self._problem_meta['force_alloc_complex']
+        return self._problem_meta['force_alloc_complex'] if self._problem_meta else None
 
     @property
     def _use_derivatives(self):
-        return self._problem_meta['use_derivatives']
+        return self._problem_meta['use_derivatives'] if self._problem_meta else None
 
     @property
     def _local_vector_class(self):
-        return self._problem_meta['local_vector_class']
+        return self._problem_meta['local_vector_class'] if self._problem_meta else None
 
     @property
     def _distributed_vector_class(self):
-        return self._problem_meta['distributed_vector_class']
+        return self._problem_meta['distributed_vector_class'] if self._problem_meta else None
 
     @property
     def _vec_names(self):
-        return self._problem_meta['vec_names']
+        return self._problem_meta['vec_names'] if self._problem_meta else None
 
     @property
     def _lin_vec_names(self):
-        return self._problem_meta['lin_vec_names']
+        return self._problem_meta['lin_vec_names'] if self._problem_meta else None
 
     @property
     def _recording_iter(self):
-        return self._problem_meta['recording_iter']
+        return self._problem_meta['recording_iter'] if self._problem_meta else None
 
     @property
     def _static_mode(self):

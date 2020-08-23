@@ -122,17 +122,21 @@ def _find_owning_class(mro, func_name):
     return None, None
 
 
+def _visit_func_src(func, visitor):
+    src = inspect.getsource(func)
+    dedented_src = textwrap.dedent(src)
+
+    node = ast.parse(dedented_src, mode='exec')
+    visitor.visit(node)
+
+
 def _get_nested_calls(starting_class, class_, func_name, parent, graph, seen):
     """
     Parse the AST of the given method and all 'self' methods it calls and record owning classes.
     """
     func = getattr(class_, func_name)
-    src = inspect.getsource(func)
-    dedented_src = textwrap.dedent(src)
-
-    node = ast.parse(dedented_src, mode='exec')
     visitor = _SelfCallCollector(starting_class)
-    visitor.visit(node)
+    _visit_func_src(func, visitor)
 
     seen.add('.'.join((class_.__name__, func_name)))
 
