@@ -1068,6 +1068,26 @@ def _is_slicer_op(indices):
         return isinstance(indices, slice)
 
 
+def _expand_shape(shape, slicer):
+    if isinstance(slicer, tuple):
+        ellip_size = len(shape) - (len(slicer) - 1)
+        tmp = []
+        for entry in slicer:
+            if entry is ...:
+                tmp.extend([slice(None)] * ellip_size)
+            else:
+                tmp.append(entry)
+
+        ret = []
+        for sh, slc in zip(shape, tmp):
+            if isinstance(slc, slice):
+                ret.append(np.arange(sh)[slc].size)
+            else:
+                ret.append(slc)
+        return tuple(ret)
+    else:
+        return slicer
+
 def _slice_indices(slicer, out_size, out_shape):
     """
     Check if an array of indices contains a slice object.
