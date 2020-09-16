@@ -574,10 +574,10 @@ class _IODict(object):
         self._inputs = inputs
 
     def __getitem__(self, name):
-        if name in self._outputs:
-            return self._outputs[name]
-        else:
+        if name in self._inputs:
             return self._inputs[name]
+        else:
+            return self._outputs[name]
 
     def __setitem__(self, name, value):
         if name in self._outputs:
@@ -588,7 +588,7 @@ class _IODict(object):
             self._outputs[name] = value  # will raise KeyError
 
     def __contains__(self, name):
-        return name in self._outputs or name in self._inputs
+        return name in self._inputs or name in self._outputs
 
 
 def _import_functs(mod, dct, names=None):

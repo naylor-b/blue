@@ -96,7 +96,7 @@ class DenseMatrix(COOMatrix):
             sub = d_inputs._names
             mask = np.ones(len(d_inputs), dtype=np.bool)
             for key, val in self._metadata.items():
-                if key[1] in sub:
+                if val[-1] in sub:
                     mask[val[1]] = False
 
             return mask

@@ -5,7 +5,7 @@ import weakref
 
 import numpy as np
 
-from openmdao.utils.name_maps import prom_name2abs_name, rel_name2abs_name
+from openmdao.utils.name_maps import prom_name2abs_name
 
 
 _full_slice = slice(None)
@@ -201,47 +201,45 @@ class Vector(object):
         """
         return [v for n, v in self._views.items() if n in self._names]
 
-    def _name2abs_name(self, name):
+    def _abs2rel(self, abs_name):
+        s = self._system()
+        if s.pathname:
+            return abs_name[len(s.pathname) + 1:]
+        return abs_name
+
+    def _prom2rel(self, name):
         """
-        Map the given promoted or relative name to the absolute name.
+        Map the given promoted name to the relative name.
 
         This is only valid when the name is unique; otherwise, a KeyError is thrown.
 
         Parameters
         ----------
         name : str
-            Promoted or relative variable name in the owning system's namespace.
+            Promoted variable name in the owning system's namespace.
 
         Returns
         -------
         str or None
-            Absolute variable name if unique abs_name found or None otherwise.
+            Relative variable name if unique name found or None otherwise.
         """
         system = self._system()
-
-        # try relative name first
-        abs_name = '.'.join((system.pathname, name)) if system.pathname else name
-        if abs_name in self._names:
-            return abs_name
-
         abs_name = prom_name2abs_name(system, name, self._typ)
-        if abs_name in self._names:
-            return abs_name
+        if abs_name is not None:
+            return self._abs2rel(abs_name)
 
     def __iter__(self):
         """
         Yield an iterator over variables involved in the current mat-vec product (relative names).
 
-        Returns
+        Yields
         -------
-        listiterator
-            iterator over the variable names.
+        str
+            Variable names.
         """
-        system = self._system()
-        path = system.pathname
-        idx = len(path) + 1 if path else 0
-
-        return (n[idx:] for n in system._var_abs2meta[self._typ] if n in self._names)
+        for n in self._views:
+            if n in self._names:
+                yield n
 
     def _abs_item_iter(self, flat=True):
         """
@@ -253,16 +251,25 @@ class Vector(object):
             If True, return the flattened values.
         """
         arrs = self._views_flat if flat else self._views
-
-        for name, val in arrs.items():
-            yield name, val
+        s = self._system()
+        if s.pathname:
+            prefix = s.pathname + '.'
+            for name, val in arrs.items():
+                yield prefix + name, val
+        else:
+            yield from arrs.items()
 
     def _abs_iter(self):
         """
         Iterate over the absolute names in the vector.
         """
-        for name in self._views:
-            yield name
+        s = self._system()
+        if s.pathname:
+            prefix = s.pathname + '.'
+            for name in self._views:
+                yield prefix + name
+        else:
+            yield from self._views
 
     def __contains__(self, name):
         """
@@ -278,7 +285,11 @@ class Vector(object):
         boolean
             True or False.
         """
-        return self._name2abs_name(name) is not None
+        if name in self._views:
+            return True
+
+        # check for promoted name
+        return name in self._system()._var_allprocs_prom2abs_list[self._typ]
 
     def _contains_abs(self, name):
         """
@@ -294,7 +305,7 @@ class Vector(object):
         boolean
             True or False.
         """
-        return name in self._names
+        return self._abs2rel(name) in self._names
 
     def __getitem__(self, name):
         """
@@ -310,14 +321,41 @@ class Vector(object):
         float or ndarray
             variable value.
         """
-        abs_name = self._name2abs_name(name)
-        if abs_name is not None:
+        try:
             if self._icol is None:
-                return self._views[abs_name]
+                return self._views[name]
             else:
-                return self._views[abs_name][:, self._icol]
-        else:
-            raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
+                return self._views[name][:, self._icol]
+        except KeyError:  # might be a promoted name
+            rel = self._prom2rel(name)
+            if rel is None or rel not in self._views:
+                raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
+            return self[rel]
+
+    def get_flat_val(self, name):
+        """
+        Get the variable value.
+
+        Parameters
+        ----------
+        name : str
+            Promoted or relative variable name in the owning system's namespace.
+
+        Returns
+        -------
+        float or ndarray
+            variable value.
+        """
+        try:
+            if self._icol is None:
+                return self._views_flat[name]
+            else:
+                return self._views_flat[name][:, self._icol]
+        except KeyError:  # might be a promoted name
+            rel = self._prom2rel(name)
+            if rel is None:
+                raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
+            return self.get_flat_val(rel)
 
     def _abs_get_val(self, name, flat=True):
         """
@@ -338,8 +376,8 @@ class Vector(object):
             variable value.
         """
         if flat:
-            return self._views_flat[name]
-        return self._views[name]
+            return self._views_flat[self._abs2rel(name)]
+        return self._views[self._abs2rel(name)]
 
     def __setitem__(self, name, value):
         """
@@ -525,10 +563,6 @@ class Vector(object):
         idxs : int or slice or tuple of ints and/or slices.
             The locations where the data array should be updated.
         """
-        abs_name = self._name2abs_name(name)
-        if abs_name is None:
-            raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
-
         if self.read_only:
             raise ValueError(f"{self._system().msginfo}: Attempt to set value of '{name}' in "
                              f"{self._kind} vector when it is read only.")
@@ -538,15 +572,24 @@ class Vector(object):
 
         value = np.asarray(val)
 
+        if name in self._views:
+            rel = name
+        elif name in self._system()._var_abs2meta[self._typ]:
+            rel = self._abs2rel(name)
+        else:
+            rel = self._prom2rel(name)
+            if rel is None:
+                raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
+
         try:
-            self._views[abs_name][idxs] = value
+            self._views[rel][idxs] = value
         except Exception as err:
             try:
-                value = value.reshape(self._views[abs_name][idxs].shape)
+                value = value.reshape(self._views[rel][idxs].shape)
             except Exception:
                 raise ValueError(f"{self._system().msginfo}: Failed to set value of "
-                                 f"'{name}': {str(err)}.")
-            self._views[abs_name][idxs] = value
+                                f"'{name}': {str(err)}.")
+            self._views[rel][idxs] = value
 
     def dot(self, vec):
         """

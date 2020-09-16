@@ -49,6 +49,7 @@ class COOMatrix(Matrix):
         submats = self._submats
         metadata = self._metadata
         key_ranges = self._key_ranges = OrderedDict()
+        rel_idx = len(system.pathname) + 1 if system is not None and system.pathname else 0
 
         start = end = 0
         for key, (info, loc, src_indices, shape, factor) in submats.items():
@@ -70,14 +71,14 @@ class COOMatrix(Matrix):
             else:  # list sparse format
                 end += len(rows)
 
-            key_ranges[key] = (start, end, dense, rows)
+            key_ranges[key] = (start, end, dense, rows, key[1][rel_idx:])
             start = end
 
         data = np.zeros(end)
         rows = np.empty(end, dtype=int)
         cols = np.empty(end, dtype=int)
 
-        for key, (start, end, dense, jrows) in key_ranges.items():
+        for key, (start, end, dense, jrows, rel_inp) in key_ranges.items():
             info, loc, src_indices, shape, factor = submats[key]
             irow, icol = loc
             val = info['value']
@@ -126,7 +127,7 @@ class COOMatrix(Matrix):
                     rows[start:end] = irows
                     cols[start:end] = icols
 
-            metadata[key] = (start, end, idxs, jac_type, factor)
+            metadata[key] = (start, end, idxs, jac_type, factor, rel_inp)
 
         return data, rows, cols
 
@@ -146,13 +147,13 @@ class COOMatrix(Matrix):
         data, rows, cols = self._build_coo(system)
 
         metadata = self._metadata
-        for key, (start, end, idxs, jac_type, factor) in metadata.items():
+        for key, (start, end, idxs, jac_type, factor, rel_inp) in metadata.items():
             if idxs is None:
-                metadata[key] = (slice(start, end), jac_type, factor)
+                metadata[key] = (slice(start, end), jac_type, factor, rel_inp)
             else:
                 # store reverse indices to avoid copying subjac data during
                 # update_submat.
-                metadata[key] = (np.argsort(idxs) + start, jac_type, factor)
+                metadata[key] = (np.argsort(idxs) + start, jac_type, factor, rel_inp)
 
         self._matrix = self._coo = coo_matrix((data, (rows, cols)), shape=(num_rows, num_cols))
 
@@ -167,7 +168,7 @@ class COOMatrix(Matrix):
         jac : ndarray or scipy.sparse or tuple
             the sub-jacobian, the same format with which it was declared.
         """
-        idxs, jac_type, factor = self._metadata[key]
+        idxs, jac_type, factor, _ = self._metadata[key]
         if not isinstance(jac, jac_type) and (jac_type is list and not isinstance(jac, ndarray)):
             raise TypeError("Jacobian entry for %s is of different type (%s) than "
                             "the type (%s) used at init time." % (key,
@@ -247,10 +248,10 @@ class COOMatrix(Matrix):
             input_names = d_inputs._names
             mask = None
             for key, val in self._key_ranges.items():
-                if key[1] in input_names:
+                ind1, ind2, _, _, rel_inp = val
+                if rel_inp in input_names:
                     if mask is None:
                         mask = np.ones(self._matrix.data.size, dtype=np.bool)
-                    ind1, ind2, _, _ = val
                     mask[ind1:ind2] = False
 
             if mask is not None:

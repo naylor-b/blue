@@ -30,6 +30,7 @@ from openmdao.utils.mpi import MPI, check_mpi_exceptions, multi_proc_exception_c
 from openmdao.utils.coloring import Coloring, _STD_COLORING_FNAME
 import openmdao.utils.coloring as coloring_mod
 from openmdao.utils.array_utils import evenly_distrib_idxs
+from openmdao.utils.class_util import overrides_method
 from openmdao.core.constants import _SetupStatus
 
 # regex to check for valid names.
@@ -354,6 +355,8 @@ class Group(System):
         self._group_inputs = self._pre_config_group_inputs.copy()
         for n, lst in self._group_inputs.items():
             self._group_inputs[n] = lst.copy()
+
+        self._has_guess = overrides_method('guess_nonlinear', self, Group)
 
         for subsys in self._subsystems_myproc:
             subsys._configure()
@@ -2321,36 +2324,36 @@ class Group(System):
                 if sub._is_local and sub._has_guess:
                     sub._guess_nonlinear()
 
-        # call our own guess_nonlinear method, after the recursion is done to
-        # all the lower level systems and the data transfers have happened
-        complex_step = self._inputs._under_complex_step
+            # call our own guess_nonlinear method, after the recursion is done to
+            # all the lower level systems and the data transfers have happened
+            complex_step = self._inputs._under_complex_step
 
-        if complex_step:
-            self._inputs.set_complex_step_mode(False, keep_real=True)
-            self._residuals.set_complex_step_mode(False, keep_real=True)
+            if complex_step:
+                self._inputs.set_complex_step_mode(False, keep_real=True)
+                self._residuals.set_complex_step_mode(False, keep_real=True)
 
-            # The Group outputs vector contains imaginary numbers from other components, so we need
-            # to save a cache and restore it later.
-            imag_cache = np.empty(len(self._outputs._data))
-            imag_cache[:] = self._outputs._data.imag
-            self._outputs.set_complex_step_mode(False, keep_real=True)
+                # The Group outputs vector contains imaginary numbers from other components, so we need
+                # to save a cache and restore it later.
+                imag_cache = np.empty(len(self._outputs._data))
+                imag_cache[:] = self._outputs._data.imag
+                self._outputs.set_complex_step_mode(False, keep_real=True)
 
-        if self._discrete_inputs or self._discrete_outputs:
-            self.guess_nonlinear(self._inputs, self._outputs, self._residuals,
-                                 self._discrete_inputs, self._discrete_outputs)
-        else:
-            self.guess_nonlinear(self._inputs, self._outputs, self._residuals)
+            if self._discrete_inputs or self._discrete_outputs:
+                self.guess_nonlinear(self._inputs, self._outputs, self._residuals,
+                                    self._discrete_inputs, self._discrete_outputs)
+            else:
+                self.guess_nonlinear(self._inputs, self._outputs, self._residuals)
 
-        if complex_step:
-            # Note: passing in False swaps back to the complex vector, which is valid since
-            # the inputs and residuals value cannot be edited by guess_nonlinear.
-            self._inputs.set_complex_step_mode(False)
-            self._residuals.set_complex_step_mode(False)
-            self._inputs._under_complex_step = True
-            self._residuals._under_complex_step = True
+            if complex_step:
+                # Note: passing in False swaps back to the complex vector, which is valid since
+                # the inputs and residuals value cannot be edited by guess_nonlinear.
+                self._inputs.set_complex_step_mode(False)
+                self._residuals.set_complex_step_mode(False)
+                self._inputs._under_complex_step = True
+                self._residuals._under_complex_step = True
 
-            self._outputs.set_complex_step_mode(True)
-            self._outputs.iadd(imag_cache * 1j)
+                self._outputs.set_complex_step_mode(True)
+                self._outputs.iadd(imag_cache * 1j)
 
     def guess_nonlinear(self, inputs, outputs, residuals,
                         discrete_inputs=None, discrete_outputs=None):

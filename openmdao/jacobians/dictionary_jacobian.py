@@ -93,12 +93,13 @@ class DictionaryJacobian(Jacobian):
         if not d_out_names and not d_inp_names:
             return
 
-        rflat = d_residuals._abs_get_val
-        oflat = d_outputs._abs_get_val
-        iflat = d_inputs._abs_get_val
+        rflat = d_residuals.get_flat_val
+        oflat = d_outputs.get_flat_val
+        iflat = d_inputs.get_flat_val
         ncol = d_residuals._ncol
         subjacs_info = self._subjacs_info
         is_explicit = isinstance(system, ExplicitComponent)
+        rel_idx = len(system.pathname) + 1 if system.pathname else 0
 
         with system._unscaled_context(outputs=[d_outputs], residuals=[d_residuals]):
             for abs_key in self._iter_abs_keys(system, d_residuals._name):
@@ -107,7 +108,12 @@ class DictionaryJacobian(Jacobian):
                     subjac = self._randomize_subjac(subjac_info['value'], abs_key)
                 else:
                     subjac = subjac_info['value']
+
                 res_name, other_name = abs_key
+                if rel_idx > 0:
+                    res_name = res_name[rel_idx:]
+                    other_name = other_name[rel_idx:]
+
                 if res_name in d_res_names:
 
                     if other_name in d_out_names:

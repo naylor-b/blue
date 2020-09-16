@@ -2116,11 +2116,14 @@ class System(object):
         else:
             old_ins = d_inputs._names
             old_outs = d_outputs._names
+            rel_idx = len(self.pathname) + 1 if self.pathname else 0
 
             if scope_out is not None:
-                d_outputs._names = scope_out.intersection(d_outputs._abs_iter())
+                names = scope_out.intersection(d_outputs._abs_iter())
+                d_outputs._names = frozenset(n[rel_idx:] for n in names)
             if scope_in is not None:
-                d_inputs._names = scope_in.intersection(d_inputs._abs_iter())
+                names = scope_in.intersection(d_inputs._abs_iter())
+                d_inputs._names = frozenset(n[rel_idx:] for n in names)
 
             yield d_inputs, d_outputs, d_residuals
 

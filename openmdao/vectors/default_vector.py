@@ -136,8 +136,10 @@ class DefaultVector(Vector):
         self._cplx_views_flat = cplx_views_flat = {}
 
         abs2meta = system._var_abs2meta[io]
+        rel_idx = len(system.pathname) + 1 if system.pathname else 0
         start = end = 0
         for abs_name in system._var_relevant_names[self._name][io]:
+            rel_name = abs_name[rel_idx:]
             meta = abs2meta[abs_name]
             end = start + meta['size']
             shape = meta['shape']
@@ -146,18 +148,18 @@ class DefaultVector(Vector):
                     shape = (shape,)
                 shape = tuple(list(shape) + [ncol])
 
-            views_flat[abs_name] = v = self._data[start:end]
+            views_flat[rel_name] = v = self._data[start:end]
             if shape != v.shape:
                 v = v.view()
                 v.shape = shape
-            views[abs_name] = v
+            views[rel_name] = v
 
             if alloc_complex:
-                cplx_views_flat[abs_name] = v = self._cplx_data[start:end]
+                cplx_views_flat[rel_name] = v = self._cplx_data[start:end]
                 if shape != v.shape:
                     v = v.view()
                     v.shape = shape
-                cplx_views[abs_name] = v
+                cplx_views[rel_name] = v
 
             if do_scaling:
                 for scaleto in ('phys', 'norm'):
@@ -411,8 +413,13 @@ class DefaultVector(Vector):
         if self._slices is None:
             slices = {}
             start = end = 0
-            for name in self._system()._var_relevant_names[self._name][self._typ]:
-                end += self._views_flat[name].size
+            s = self._system()
+            rel_idx = len(s.pathname) + 1 if s.pathname else 0
+            for name in s._var_relevant_names[self._name][self._typ]:
+                if rel_idx:
+                    end += self._views_flat[name[rel_idx:]].size
+                else:
+                    end += self._views_flat[name].size
                 slices[name] = slice(start, end)
                 start = end
             self._slices = slices
