@@ -99,7 +99,8 @@ class DictionaryJacobian(Jacobian):
         ncol = d_residuals._ncol
         subjacs_info = self._subjacs_info
         is_explicit = isinstance(system, ExplicitComponent)
-        rel_idx = len(system.pathname) + 1 if system.pathname else 0
+        prefix = system.pathname + '.' if system.pathname else ''
+        rel_idx = len(prefix)
 
         with system._unscaled_context(outputs=[d_outputs], residuals=[d_residuals]):
             for abs_key in self._iter_abs_keys(system, d_residuals._name):
@@ -111,8 +112,10 @@ class DictionaryJacobian(Jacobian):
 
                 res_name, other_name = abs_key
                 if rel_idx > 0:
-                    res_name = res_name[rel_idx:]
-                    other_name = other_name[rel_idx:]
+                    if res_name.startswith(prefix):
+                        res_name = res_name[rel_idx:]
+                    if other_name.startswith(prefix):
+                        other_name = other_name[rel_idx:]
 
                 if res_name in d_res_names:
 
