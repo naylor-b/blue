@@ -57,6 +57,8 @@ class BroydenSolver(NonlinearSolver):
         When True, Broyden considers the whole vector rather than a list of states.
     _recompute_jacobian : bool
         Flag that becomes True when Broyden detects it needs to recompute the inverse Jacobian.
+    _rel_states : list of str
+        State variable names that are relative to the owning system.
     """
 
     SOLVER = 'BROYDEN'
@@ -90,6 +92,7 @@ class BroydenSolver(NonlinearSolver):
         self.delta_fxm = None
         self._converge_failures = 0
         self._computed_jacobians = 0
+        self._rel_states = None  # relative state names
 
         # This gets set to True if the user doesn't declare any states.
         self._full_inverse = False
@@ -178,6 +181,9 @@ class BroydenSolver(NonlinearSolver):
             msg = "{}: The following variable names were not found: {}"
             raise ValueError(msg.format(self.msginfo, ', '.join(bad_names)))
 
+        rel_idx = len(system.pathname) + 1 if system.pathname else 0
+        self._rel_states = [prom2abs[n][0][rel_idx:] for n in states]
+
         # Size linear system
         if len(states) > 0:
             # User has specified states, so we must size them.
@@ -186,7 +192,7 @@ class BroydenSolver(NonlinearSolver):
 
             for i, name in enumerate(states):
                 size = meta[prom2abs[name][0]]['global_size']
-                self._idx[name] = (n, n + size)
+                self._idx[self._rel_states[i]] = (n, n + size)
                 n += size
         else:
             # Full system size.
@@ -494,7 +500,7 @@ class BroydenSolver(NonlinearSolver):
         else:
             states = self.options['state_vars']
             xm = self.xm.copy()
-            for name in states:
+            for name in self._rel_states:
                 i, j = self._idx[name]
                 xm[i:j] = vec[name]
 
@@ -514,8 +520,7 @@ class BroydenSolver(NonlinearSolver):
         if self._full_inverse:
             outputs.set_val(new_val)
         else:
-            states = self.options['state_vars']
-            for name in states:
+            for name in self._rel_states:
                 i, j = self._idx[name]
                 outputs[name] = new_val[i:j]
 
@@ -534,7 +539,7 @@ class BroydenSolver(NonlinearSolver):
             linear.set_val(dx)
         else:
             linear.set_val(0.0)
-            for name in self.options['state_vars']:
+            for name in self._rel_states:
                 i, j = self._idx[name]
                 linear[name] = dx[i:j]
 
@@ -571,7 +576,8 @@ class BroydenSolver(NonlinearSolver):
             my_asm_jac._update(system)
         self._linearize()
 
-        for wrt_name in states:
+        prom2abs = system._var_allprocs_prom2abs_list['output']
+        for wrt_name in self._rel_states:
             i_wrt, j_wrt = self._idx[wrt_name]
             if wrt_name in d_res:
                 d_wrt = d_res[wrt_name]
@@ -586,7 +592,7 @@ class BroydenSolver(NonlinearSolver):
                 ln_solver.solve(['linear'], 'fwd')
 
                 # Extract results.
-                for of_name in states:
+                for of_name in self._rel_states:
                     i_of, j_of = self._idx[of_name]
                     inv_jac[i_of:j_of, i_wrt + j] = d_out[of_name]
 

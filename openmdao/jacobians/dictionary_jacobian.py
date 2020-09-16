@@ -121,7 +121,7 @@ class DictionaryJacobian(Jacobian):
 
                     if other_name in d_out_names:
                         # skip the matvec mult completely for identity subjacs
-                        if is_explicit and res_name is other_name:
+                        if is_explicit and res_name == other_name:
                             if fwd:
                                 val = rflat(res_name)
                                 val -= oflat(other_name)

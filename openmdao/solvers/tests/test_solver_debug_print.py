@@ -51,24 +51,24 @@ class TestNonlinearSolvers(unittest.TestCase):
             "# Inputs and outputs at start of iteration '%s':" % coord,
             "",
             "# nonlinear inputs",
-            "{'circuit.D1.V_in': array([ 1.]),",
-            " 'circuit.D1.V_out': array([ 0.]),",
-            " 'circuit.R1.V_in': array([ 1.]),",
-            " 'circuit.R1.V_out': array([ 0.]),",
-            " 'circuit.R2.V_in': array([ 1.]),",
-            " 'circuit.R2.V_out': array([ 1.]),",
-            " 'circuit.n1.I_in:0': array([ 0.1]),",
-            " 'circuit.n1.I_out:0': array([ 1.]),",
-            " 'circuit.n1.I_out:1': array([ 1.]),",
-            " 'circuit.n2.I_in:0': array([ 1.]),",
-            " 'circuit.n2.I_out:0': array([ 1.])}",
+            "{'D1.V_in': array([ 1.]),",
+            " 'D1.V_out': array([ 0.]),",
+            " 'R1.V_in': array([ 1.]),",
+            " 'R1.V_out': array([ 0.]),",
+            " 'R2.V_in': array([ 1.]),",
+            " 'R2.V_out': array([ 1.]),",
+            " 'n1.I_in:0': array([ 0.1]),",
+            " 'n1.I_out:0': array([ 1.]),",
+            " 'n1.I_out:1': array([ 1.]),",
+            " 'n2.I_in:0': array([ 1.]),",
+            " 'n2.I_out:0': array([ 1.])}",
             "",
             "# nonlinear outputs",
-            "{'circuit.D1.I': array([ 1.]),",
-            " 'circuit.R1.I': array([ 1.]),",
-            " 'circuit.R2.I': array([ 1.]),",
-            " 'circuit.n1.V': array([ 10.]),",
-            " 'circuit.n2.V': array([ 0.001])}",
+            "{'D1.I': array([ 1.]),",
+            " 'R1.I': array([ 1.]),",
+            " 'R2.I': array([ 1.]),",
+            " 'n1.V': array([ 10.]),",
+            " 'n2.V': array([ 0.001])}",
             ""
         ])
 
@@ -252,7 +252,7 @@ class TestNonlinearSolversIsolated(unittest.TestCase):
         sys.stdout = stdout
 
         output = strout.getvalue()
-        target = "'thrust_equilibrium_group.thrust_bal.thrust'"
+        target = "'thrust_bal.thrust'"
         self.assertTrue(target in output, msg=target + "NOT FOUND IN" + output)
 
         # Make sure exception is unchanged.

@@ -2332,15 +2332,15 @@ class Group(System):
                 self._inputs.set_complex_step_mode(False, keep_real=True)
                 self._residuals.set_complex_step_mode(False, keep_real=True)
 
-                # The Group outputs vector contains imaginary numbers from other components, so we need
-                # to save a cache and restore it later.
+                # The Group outputs vector contains imaginary numbers from other components,
+                # so we need to save a cache and restore it later.
                 imag_cache = np.empty(len(self._outputs._data))
                 imag_cache[:] = self._outputs._data.imag
                 self._outputs.set_complex_step_mode(False, keep_real=True)
 
             if self._discrete_inputs or self._discrete_outputs:
                 self.guess_nonlinear(self._inputs, self._outputs, self._residuals,
-                                    self._discrete_inputs, self._discrete_outputs)
+                                     self._discrete_inputs, self._discrete_outputs)
             else:
                 self.guess_nonlinear(self._inputs, self._outputs, self._residuals)
 

@@ -233,7 +233,7 @@ class Vector(object):
         Yield an iterator over variables involved in the current mat-vec product (relative names).
 
         Yields
-        -------
+        ------
         str
             Variable names.
         """
@@ -285,11 +285,10 @@ class Vector(object):
         boolean
             True or False.
         """
-        if name in self._views:
+        if name in self._names:
             return True
-
-        # check for promoted name
-        return name in self._system()._var_allprocs_prom2abs_list[self._typ]
+        rel = self._prom2rel(name)
+        return rel is not None and rel in self._names
 
     def _contains_abs(self, name):
         """
@@ -574,8 +573,6 @@ class Vector(object):
 
         if name in self._views:
             rel = name
-        elif name in self._system()._var_abs2meta[self._typ]:
-            rel = self._abs2rel(name)
         else:
             rel = self._prom2rel(name)
             if rel is None:
@@ -583,12 +580,14 @@ class Vector(object):
 
         try:
             self._views[rel][idxs] = value
+        except KeyError:
+            raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
         except Exception as err:
             try:
                 value = value.reshape(self._views[rel][idxs].shape)
             except Exception:
                 raise ValueError(f"{self._system().msginfo}: Failed to set value of "
-                                f"'{name}': {str(err)}.")
+                                 f"'{name}': {str(err)}.")
             self._views[rel][idxs] = value
 
     def dot(self, vec):
