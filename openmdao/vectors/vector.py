@@ -584,7 +584,7 @@ class Vector(object):
             raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
         except Exception as err:
             try:
-                value = value.reshape(self._views[rel][idxs].shape)
+                value.shape = self._views[rel][idxs].shape
             except Exception:
                 raise ValueError(f"{self._system().msginfo}: Failed to set value of "
                                  f"'{name}': {str(err)}.")
