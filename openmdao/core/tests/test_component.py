@@ -82,7 +82,7 @@ class TestExplicitComponent(unittest.TestCase):
         comp.add_output('aro', shape=shapes[0])
         comp.add_input('ari', shape=shapes[0])
 
-        msg = 'The val argument should be a float, list, tuple, ndarray or Iterable'
+        msg = 'The val argument should be a float or Iterable'
         val = Component
 
         with self.assertRaisesRegex(TypeError, msg):
@@ -91,7 +91,7 @@ class TestExplicitComponent(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, msg):
             comp.add_output('x', val=val)
 
-        msg = 'The src_indices argument should be an int, list, tuple, ndarray or Iterable'
+        msg = 'The src_indices argument should be an int or Iterable'
         src = Component
 
         with self.assertRaisesRegex(TypeError, msg):
@@ -106,19 +106,19 @@ class TestExplicitComponent(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, msg):
             comp.add_output('x', val=np.ones((2, 2)), units=units)
 
-        msg = 'The ref argument should be a float, list, tuple, ndarray or Iterable'
+        msg = 'The ref argument should be a float or Iterable'
         val = Component
 
         with self.assertRaisesRegex(TypeError, msg):
             comp.add_output('x', val=5.0, ref=val)
 
-        msg = 'The ref0 argument should be a float, list, tuple, ndarray or Iterable'
+        msg = 'The ref0 argument should be a float or Iterable'
         val = Component
 
         with self.assertRaisesRegex(TypeError, msg):
             comp.add_output('x', val=5.0, ref0=val)
 
-        msg = 'The res_ref argument should be a float, list, tuple, ndarray or Iterable'
+        msg = 'The res_ref argument should be a float or Iterable'
         val = Component
 
         with self.assertRaisesRegex(TypeError, msg):

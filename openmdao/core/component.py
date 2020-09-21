@@ -456,16 +456,14 @@ class Component(System):
         if not _valid_var_name(name):
             raise NameError("%s: '%s' is not a valid input name." % (self.msginfo, name))
 
-        if not isscalar(val) and not isinstance(val, (list, tuple, ndarray, Iterable)):
-            raise TypeError('%s: The val argument should be a float, list, tuple, ndarray or '
-                            'Iterable' % self.msginfo)
-        if shape is not None and not isinstance(shape, (int, tuple, list, np.integer)):
+        if not isscalar(val) and not isinstance(val, Iterable):
+            raise TypeError('%s: The val argument should be a float or Iterable' % self.msginfo)
+        if shape is not None and not isinstance(shape, (tuple, int, list, np.integer)):
             raise TypeError("%s: The shape argument should be an int, tuple, or list but "
                             "a '%s' was given" % (self.msginfo, type(shape)))
-        if src_indices is not None and not isinstance(src_indices, (int, list, tuple,
-                                                                    ndarray, Iterable)):
-            raise TypeError('%s: The src_indices argument should be an int, list, '
-                            'tuple, ndarray or Iterable' % self.msginfo)
+        if src_indices is not None and not isinstance(src_indices, (Iterable, int)):
+            raise TypeError('%s: The src_indices argument should be an int or Iterable' %
+                            self.msginfo)
         if units is not None and not isinstance(units, str):
             raise TypeError('%s: The units argument should be a str or None' % self.msginfo)
 
@@ -658,17 +656,17 @@ class Component(System):
             raise NameError("%s: '%s' is not a valid output name." % (self.msginfo, name))
 
         if not (copy_shape or shape_by_conn):
-            if not isscalar(val) and not isinstance(val, (list, tuple, ndarray, Iterable)):
-                msg = '%s: The val argument should be a float, list, tuple, ndarray or Iterable'
+            if not isscalar(val) and not isinstance(val, Iterable):
+                msg = '%s: The val argument should be a float or Iterable'
                 raise TypeError(msg % self.msginfo)
-            if not isscalar(ref) and not isinstance(val, (list, tuple, ndarray, Iterable)):
-                msg = '%s: The ref argument should be a float, list, tuple, ndarray or Iterable'
+            if not isscalar(ref) and not isinstance(val, Iterable):
+                msg = '%s: The ref argument should be a float or Iterable'
                 raise TypeError(msg % self.msginfo)
-            if not isscalar(ref0) and not isinstance(val, (list, tuple, ndarray, Iterable)):
-                msg = '%s: The ref0 argument should be a float, list, tuple, ndarray or Iterable'
+            if not isscalar(ref0) and not isinstance(val, Iterable):
+                msg = '%s: The ref0 argument should be a float or Iterable'
                 raise TypeError(msg % self.msginfo)
-            if not isscalar(res_ref) and not isinstance(val, (list, tuple, ndarray, Iterable)):
-                msg = '%s: The res_ref argument should be a float, list, tuple, ndarray or Iterable'
+            if not isscalar(res_ref) and not isinstance(val, Iterable):
+                msg = '%s: The res_ref argument should be a float or Iterable'
                 raise TypeError(msg % self.msginfo)
 
         if shape is not None and not isinstance(shape, (int, tuple, list, np.integer)):

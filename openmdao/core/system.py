@@ -25,7 +25,7 @@ from openmdao.vectors.vector import _full_slice
 from openmdao.utils.mpi import MPI
 from openmdao.utils.options_dictionary import OptionsDictionary
 from openmdao.utils.record_util import create_local_meta, check_path
-from openmdao.utils.units import is_compatible, unit_conversion
+from openmdao.utils.units import is_compatible, unit_conversion, _find_unit
 from openmdao.utils.variable_table import write_var_table
 from openmdao.utils.array_utils import evenly_distrib_idxs
 from openmdao.utils.graph_utils import all_connected_nodes
@@ -1713,20 +1713,15 @@ class System(object):
         dict
             Mapping of each absoute var name to its corresponding scaling factor tuple.
         """
-        # make this a defaultdict to handle the case of access using unconnected inputs
-        scale_factors = defaultdict(lambda: {
-            ('input', 'phys'): (0.0, 1.0),
-            ('input', 'norm'): (0.0, 1.0)
-        })
+        scale_factors = {}
 
         for abs_name, meta in self._var_allprocs_abs2meta['output'].items():
             ref0 = meta['ref0']
             res_ref = meta['res_ref']
-            a0 = ref0
             a1 = meta['ref'] - ref0
             scale_factors[abs_name] = {
-                ('output', 'phys'): (a0, a1),
-                ('output', 'norm'): (-a0 / a1, 1.0 / a1),
+                ('output', 'phys'): (ref0, a1),
+                ('output', 'norm'): (-ref0 / a1, 1.0 / a1),
                 ('residual', 'phys'): (0.0, res_ref),
                 ('residual', 'norm'): (0.0, 1.0 / res_ref),
             }
@@ -4772,6 +4767,44 @@ class System(object):
 
     def _resolve_ambiguous_input_meta(self):
         pass
+
+    def can_share_mem(self, vname):
+        """
+        Return True if the named input can share memory with a connected output.
+
+        Parameters
+        ----------
+        vname : str
+            Name of variable.
+
+        Returns
+        -------
+        bool
+            True if the named input variable can share memory with its connected output.
+        """
+        model = self._problem_meta['model_ref']()
+        try:
+            src = model._conn_global_abs_in2out[vname]
+        except KeyError:
+            return False
+
+        meta_in = self._var_abs2meta['input'][vname]
+        if src not in self._var_abs2meta['output']:
+            return False  # both vars must be local to share
+
+        if meta_in['src_indices'] is not None:
+            return False
+
+        meta_out = model._var_abs2meta['output'][src]
+
+        units_in = meta_in['units']
+        units_out = meta_out['units']
+        if unit_in != units_out and not (units_in is None or units_out is None):
+            # could actually compare _find_unit(in) vs _find_unit(out) but the slowdown
+            # isn't worth it.
+            return False
+
+        return meta_out['ref'] == 1.0 and meta_out['ref0'] == 0.0 and meta_out['res_ref'] == 1.0
 
     def get_relevant_vars(self, desvars, responses, mode):
         """

@@ -238,10 +238,9 @@ class Vector(object):
             iterator over the variable names.
         """
         system = self._system()
-        path = system.pathname
-        idx = len(path) + 1 if path else 0
-
-        return (n[idx:] for n in system._var_abs2meta[self._typ] if n in self._names)
+        idx = len(system.pathname) + 1 if system.pathname else 0
+        names = self._names
+        return (n[idx:] for n in system._var_abs2meta[self._typ] if n in names)
 
     def _abs_item_iter(self, flat=True):
         """
@@ -253,16 +252,13 @@ class Vector(object):
             If True, return the flattened values.
         """
         arrs = self._views_flat if flat else self._views
-
-        for name, val in arrs.items():
-            yield name, val
+        yield from arrs.items()
 
     def _abs_iter(self):
         """
         Iterate over the absolute names in the vector.
         """
-        for name in self._views:
-            yield name
+        yield from self._views
 
     def __contains__(self, name):
         """
