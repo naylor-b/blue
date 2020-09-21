@@ -6,7 +6,7 @@ import os
 import logging
 import weakref
 
-from collections import defaultdict, namedtuple, OrderedDict
+from collections import defaultdict, namedtuple
 from fnmatch import fnmatchcase
 from itertools import product
 
@@ -576,7 +576,7 @@ class Problem(object):
             self.set_val(name, value)
 
         # Clean up cache
-        self._initial_condition_cache = OrderedDict()
+        self._initial_condition_cache = {}
 
     def run_model(self, case_prefix=None, reset_iter_counts=True):
         """
@@ -1673,9 +1673,9 @@ class Problem(object):
             The header line for the table.
         col_names : list of str
             List of column labels.
-        meta : OrderedDict
+        meta : {}
             Dictionary of metadata for each problem variable.
-        vals : OrderedDict
+        vals : {}
             Dictionary of values for each problem variable.
         print_arrays : bool, optional
             When False, in the columnar display, just display norm of any ndarrays with size > 1.

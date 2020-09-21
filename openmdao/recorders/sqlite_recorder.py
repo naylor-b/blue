@@ -4,7 +4,6 @@ Class definition for SqliteRecorder, which provides dictionary backed by SQLite.
 
 from copy import deepcopy
 from io import BytesIO
-from collections import OrderedDict
 
 import os
 import sqlite3
@@ -301,8 +300,8 @@ class SqliteRecorder(CaseRecorder):
             if driver is None:
                 desvars = system.get_design_vars(True, get_sizes=False, use_prom_ivc=False)
                 responses = system.get_responses(True, get_sizes=False)
-                objectives = OrderedDict()
-                constraints = OrderedDict()
+                objectives = {}
+                constraints = {}
                 for name, data in responses.items():
                     if data['type'] == 'con':
                         constraints[name] = data
@@ -463,7 +462,7 @@ class SqliteRecorder(CaseRecorder):
                     driver._designvars and driver._responses:
                 totals = data['totals']
             else:
-                totals = OrderedDict([])
+                totals = {}
             totals_array = dict_to_structured_array(totals)
             totals_blob = array_to_blob(totals_array)
 

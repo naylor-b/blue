@@ -9,7 +9,7 @@ import json
 import pickle
 import inspect
 import traceback
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from itertools import combinations, chain
 from distutils.version import LooseVersion
 from contextlib import contextmanager
@@ -1500,14 +1500,14 @@ def _jac2subjac_sparsity(J, ofs, wrts, of_sizes, wrt_sizes):
 
     Returns
     -------
-    OrderedDict
-        Nested OrderedDict of form sparsity[of][wrt] = (rows, cols, shape)
+    dict
+        Nested dict of form sparsity[of][wrt] = (rows, cols, shape)
     """
-    sparsity = OrderedDict()
+    sparsity = {}
     row_start = row_end = 0
 
     for of, of_size in zip(ofs, of_sizes):
-        sparsity[of] = OrderedDict()
+        sparsity[of] = {}
         row_end += of_size
         col_start = col_end = 0
         for wrt, wrt_size in zip(wrts, wrt_sizes):

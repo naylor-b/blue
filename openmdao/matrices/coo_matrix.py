@@ -3,8 +3,6 @@ import numpy as np
 from numpy import ndarray
 from scipy.sparse import coo_matrix, csc_matrix
 
-from collections import OrderedDict
-
 from openmdao.matrices.matrix import Matrix, _compute_index_map
 
 
@@ -48,7 +46,7 @@ class COOMatrix(Matrix):
         """
         submats = self._submats
         metadata = self._metadata
-        key_ranges = self._key_ranges = OrderedDict()
+        key_ranges = self._key_ranges = {}
 
         start = end = 0
         for key, (info, loc, src_indices, shape, factor) in submats.items():

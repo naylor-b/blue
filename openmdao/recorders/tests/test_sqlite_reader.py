@@ -6,7 +6,6 @@ import unittest
 
 from shutil import rmtree
 from tempfile import mkdtemp, mkstemp
-from collections import OrderedDict
 
 import numpy as np
 from io import StringIO
@@ -42,14 +41,14 @@ def count_keys(d):
 
     Parameters
     ----------
-    d : nested OrderedDict
+    d : nested dict
         The dictionary of cases to be counted.
     """
     count = 0
 
     for k in d:
         count += 1
-        if isinstance(d[k], OrderedDict):
+        if isinstance(d[k], dict):
             count += count_keys(d[k])
 
     return count

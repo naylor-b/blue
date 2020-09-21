@@ -26,7 +26,7 @@ class DOEGenerator(object):
 
         Parameters
         ----------
-        design_vars : OrderedDict
+        design_vars : dict
             Dictionary of design variables for which to generate values.
 
         model : Group
@@ -77,7 +77,7 @@ class ListGenerator(DOEGenerator):
 
         Parameters
         ----------
-        design_vars : OrderedDict
+        design_vars : dict
             Dictionary of design variables for which to generate values.
 
         model : Group
@@ -161,7 +161,7 @@ class CSVGenerator(DOEGenerator):
 
         Parameters
         ----------
-        design_vars : OrderedDict
+        design_vars : dict
             Dictionary of design variables for which to generate values.
 
         model : Group
@@ -240,7 +240,7 @@ class UniformGenerator(DOEGenerator):
 
         Parameters
         ----------
-        design_vars : OrderedDict
+        design_vars : dict
             Dictionary of design variables for which to generate values.
 
         model : Group
@@ -303,7 +303,7 @@ class _pyDOE_Generator(DOEGenerator):
 
         Parameters
         ----------
-        design_vars : OrderedDict
+        design_vars : dict
             Dictionary of design variables for which to generate values.
 
         model : Group
@@ -536,7 +536,7 @@ class LatinHypercubeGenerator(DOEGenerator):
 
         Parameters
         ----------
-        design_vars : OrderedDict
+        design_vars : dict
             Dictionary of design variables for which to generate values.
 
         model : Group

@@ -1,6 +1,5 @@
 """Define the base Solver, NonlinearSolver, and LinearSolver classes."""
 
-from collections import OrderedDict
 import os
 import pprint
 import re
@@ -516,7 +515,7 @@ class NonlinearSolver(Solver):
             options dictionary.
         """
         super(NonlinearSolver, self).__init__(**kwargs)
-        self._err_cache = OrderedDict()
+        self._err_cache = {}
 
     def _declare_options(self):
         """

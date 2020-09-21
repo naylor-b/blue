@@ -1,5 +1,4 @@
 """Define a base class for all Drivers in OpenMDAO."""
-from collections import OrderedDict
 import pprint
 import sys
 import os
@@ -757,8 +756,8 @@ class Driver(object):
         int
             Total size of design vars.
         """
-        self._objs = objs = OrderedDict()
-        self._cons = cons = OrderedDict()
+        self._objs = objs = {}
+        self._cons = cons = {}
 
         model._setup_driver_units()
 

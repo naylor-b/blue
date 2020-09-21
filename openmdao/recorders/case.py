@@ -5,8 +5,6 @@ A Case class.
 import sys
 import itertools
 
-from collections import OrderedDict
-
 import numpy as np
 
 from openmdao.core.constants import _DEFAULT_OUT_STREAM
@@ -663,7 +661,7 @@ class Case(object):
             return
 
         # Make a dict of variables. Makes it easier to work with in this method
-        var_dict = OrderedDict()
+        var_dict = {}
         for name, vals in var_data:
             var_dict[name] = vals
 

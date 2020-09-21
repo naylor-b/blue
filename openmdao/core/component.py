@@ -1,6 +1,6 @@
 """Define the Component class."""
 
-from collections import OrderedDict, Counter, defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 from itertools import product
 
@@ -58,7 +58,7 @@ class Component(System):
 
     Attributes
     ----------
-    _approx_schemes : OrderedDict
+    _approx_schemes : dict
         A mapping of approximation types to the associated ApproximationScheme.
     _var_rel2meta : dict
         Dictionary mapping relative names to metadata.
@@ -513,6 +513,7 @@ class Component(System):
             'tags': make_set(tags),
             'shape_by_conn': shape_by_conn,
             'copy_shape': copy_shape,
+            'shared': False,  # will be set to True later if memory is shared with connected output
         }
 
         if self._static_mode:

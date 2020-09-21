@@ -4,7 +4,7 @@ import os
 import time
 
 from contextlib import contextmanager
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from collections.abc import Iterable
 from itertools import chain
 
@@ -25,7 +25,7 @@ from openmdao.vectors.vector import _full_slice
 from openmdao.utils.mpi import MPI
 from openmdao.utils.options_dictionary import OptionsDictionary
 from openmdao.utils.record_util import create_local_meta, check_path
-from openmdao.utils.units import is_compatible, unit_conversion, _find_unit
+from openmdao.utils.units import is_compatible, unit_conversion
 from openmdao.utils.variable_table import write_var_table
 from openmdao.utils.array_utils import evenly_distrib_idxs
 from openmdao.utils.graph_utils import all_connected_nodes
@@ -89,6 +89,7 @@ allowed_meta_names = {
     'flat_src_indices',
     'type',
     'res_units',
+    'shared',
 }
 allowed_meta_names.update(global_meta_names['input'])
 allowed_meta_names.update(global_meta_names['output'])
@@ -145,7 +146,7 @@ class System(object):
         MPI communicator object used when System's comm is split for parallel FD.
     _solver_print_cache : list
         Allows solver iprints to be set to requested values after setup calls.
-    _subsystems_allprocs : OrderedDict
+    _subsystems_allprocs : dict
         Dict mapping subsystem name to SysInfo(system, index) for children of this system.
     _subsystems_myproc : [<System>, ...]
         List of local subsystems that exist on this proc.
@@ -211,7 +212,7 @@ class System(object):
         Nonlinear solver to be used for solve_nonlinear.
     _linear_solver : <LinearSolver>
         Linear solver to be used for solve_linear; not the Newton system.
-    _approx_schemes : OrderedDict
+    _approx_schemes : dict
         A mapping of approximation types to the associated ApproximationScheme.
     _jacobian : <Jacobian>
         <Jacobian> object to be used in apply_linear.
@@ -246,7 +247,7 @@ class System(object):
         dict of all driver responses added to the system.
     _rec_mgr : <RecordingManager>
         object that manages all recorders added to this system.
-    _static_subsystems_allprocs : OrderedDict
+    _static_subsystems_allprocs : dict
         Dict of SysInfo(subsys, index) that stores all subsystems added outside of setup.
     _static_design_vars : dict of dict
         Driver design variables added outside of setup.
@@ -404,7 +405,7 @@ class System(object):
         self._linear_solver = None
 
         self._jacobian = None
-        self._approx_schemes = OrderedDict()
+        self._approx_schemes = {}
         self._subjacs_info = {}
         self.matrix_free = False
 
@@ -418,15 +419,15 @@ class System(object):
 
         self.under_complex_step = False
 
-        self._design_vars = OrderedDict()
-        self._responses = OrderedDict()
+        self._design_vars = {}
+        self._responses = {}
         self._rec_mgr = RecordingManager()
 
         self._conn_global_abs_in2out = {}
 
         self._static_subsystems_allprocs = {}
-        self._static_design_vars = OrderedDict()
-        self._static_responses = OrderedDict()
+        self._static_design_vars = {}
+        self._static_responses = {}
 
         self.supports_multivecs = False
 
@@ -547,9 +548,9 @@ class System(object):
         """
         # save root vecs as an attribute so that we can reuse the nonlinear scaling vecs in the
         # linear root vec
-        self._root_vecs = root_vectors = {'input': OrderedDict(),
-                                          'output': OrderedDict(),
-                                          'residual': OrderedDict()}
+        self._root_vecs = root_vectors = {'input': {},
+                                          'output': {},
+                                          'residual': {}}
 
         relevant = self._relevant
         vec_names = self._rel_vec_name_list if self._use_derivatives else self._vec_names
@@ -1349,8 +1350,8 @@ class System(object):
         self.options._parent_name = self.msginfo
         self.recording_options._parent_name = self.msginfo
         self._mode = mode
-        self._design_vars = OrderedDict()
-        self._responses = OrderedDict()
+        self._design_vars = {}
+        self._responses = {}
         self._design_vars.update(self._static_design_vars)
         self._responses.update(self._static_responses)
 
@@ -1358,7 +1359,7 @@ class System(object):
         """
         Compute the list of abs var names, abs/prom name maps, and metadata dictionaries.
         """
-        self._var_allprocs_prom2abs_list = {'input': OrderedDict(), 'output': OrderedDict()}
+        self._var_allprocs_prom2abs_list = {'input': {}, 'output': {}}
         self._var_abs2prom = {'input': {}, 'output': {}}
         self._var_allprocs_abs2prom = {'input': {}, 'output': {}}
         self._var_allprocs_abs2meta = {'input': {}, 'output': {}}
@@ -1664,9 +1665,7 @@ class System(object):
         alloc_complex : bool
             Whether to allocate any imaginary storage to perform complex step. Default is False.
         """
-        self._vectors = vectors = {'input': OrderedDict(),
-                                   'output': OrderedDict(),
-                                   'residual': OrderedDict()}
+        self._vectors = vectors = {'input': {}, 'output': {}, 'residual': {}}
 
         # Allocate complex if root vector was allocated complex.
         alloc_complex = root_vectors['output']['nonlinear']._alloc_complex
@@ -1713,7 +1712,11 @@ class System(object):
         dict
             Mapping of each absoute var name to its corresponding scaling factor tuple.
         """
-        scale_factors = {}
+        # make this a defaultdict to handle the case of access using unconnected inputs
+        scale_factors = defaultdict(lambda: {
+            ('input', 'phys'): (0.0, 1.0),
+            ('input', 'norm'): (0.0, 1.0)
+        })
 
         for abs_name, meta in self._var_allprocs_abs2meta['output'].items():
             ref0 = meta['ref0']
@@ -2502,7 +2505,7 @@ class System(object):
         else:
             design_vars = self._design_vars
 
-        dvs = OrderedDict()
+        dvs = {}
 
         if isinstance(scaler, np.ndarray):
             if np.all(scaler == 1.0):
@@ -2652,7 +2655,7 @@ class System(object):
         else:
             responses = self._responses
 
-        resp = OrderedDict()
+        resp = {}
 
         if type_ == 'con':
 
@@ -2916,7 +2919,7 @@ class System(object):
         abs2meta_out = model._var_allprocs_abs2meta['output']
 
         # Human readable error message during Driver setup.
-        out = OrderedDict()
+        out = {}
         try:
             for name, data in self._design_vars.items():
                 if name in pro2abs_out:
@@ -2995,7 +2998,7 @@ class System(object):
             if self.comm.size > 1 and self._subsystems_allprocs:
                 my_out = out
                 allouts = self.comm.allgather(out)
-                out = OrderedDict()
+                out = {}
                 for rank, all_out in enumerate(allouts):
                     for name, meta in all_out.items():
                         if name not in out:
@@ -3110,7 +3113,7 @@ class System(object):
 
             if self.comm.size > 1 and self._subsystems_allprocs:
                 all_outs = self.comm.allgather(out)
-                out = OrderedDict()
+                out = {}
                 for rank, all_out in enumerate(all_outs):
                     out.update(all_out)
 
@@ -3135,9 +3138,8 @@ class System(object):
             The constraints defined in the current system.
 
         """
-        return OrderedDict((key, response) for (key, response) in
-                           self.get_responses(recurse=recurse).items()
-                           if response['type'] == 'con')
+        return {key: response for (key, response) in self.get_responses(recurse=recurse).items()
+                if response['type'] == 'con'}
 
     def get_objectives(self, recurse=True):
         """
@@ -3158,9 +3160,8 @@ class System(object):
             The objectives defined in the current system.
 
         """
-        return OrderedDict((key, response) for (key, response) in
-                           self.get_responses(recurse=recurse).items()
-                           if response['type'] == 'obj')
+        return {key: response for (key, response) in self.get_responses(recurse=recurse).items()
+                if response['type'] == 'obj'}
 
     def run_apply_nonlinear(self):
         """
@@ -3228,7 +3229,7 @@ class System(object):
         all2meta = self._var_allprocs_abs2meta
 
         dynset = set(('shape', 'size', 'value'))
-        gather_keys = {'value', 'src_indices'}
+        gather_keys = {'value', 'src_indices', 'shared'}
         need_gather = get_remote and self.comm.size > 1
         if metadata_keys is not None:
             keyset = set(metadata_keys)
@@ -4786,12 +4787,12 @@ class System(object):
         try:
             src = model._conn_global_abs_in2out[vname]
         except KeyError:
-            return False
+            return False  # shouldn't happen unless vname is an output
 
-        meta_in = self._var_abs2meta['input'][vname]
         if src not in self._var_abs2meta['output']:
             return False  # both vars must be local to share
 
+        meta_in = self._var_abs2meta['input'][vname]
         if meta_in['src_indices'] is not None:
             return False
 

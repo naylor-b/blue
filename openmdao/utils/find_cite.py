@@ -1,7 +1,6 @@
 """
 Helper function to find all the `cite` attributes throughout a model.
 """
-from collections import OrderedDict
 import inspect
 import sys
 
@@ -44,7 +43,7 @@ def find_citations(prob):
     """
     # dict keyed by the class so we don't report multiple citations
     # for the same class showing up in multiple instances
-    citations = OrderedDict()
+    citations = {}
     _check_cite(prob, citations)
     _check_cite(prob.driver, citations)
     _check_cite(prob.model._vector_class, citations)
@@ -79,7 +78,7 @@ def _filter_citations(citations, classes):
     if classes is None:
         return citations
 
-    cits = OrderedDict()
+    cits = {}
     for klass, cit in citations.items():
         if klass.__name__ in classes or '.'.join((klass.__module__, klass.__name__)) in classes:
             cits[klass] = cit

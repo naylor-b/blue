@@ -4,7 +4,7 @@ import weakref
 import numpy as np
 from numpy.random import rand
 
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from scipy.sparse import issparse
 
 from openmdao.utils.name_maps import key2abs_key, rel_name2abs_name

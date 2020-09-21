@@ -4,7 +4,6 @@ Surrogate model based on the N-Dimensional Interpolation library by Stephen Maro
 https://github.com/SMarone/NDInterp
 """
 
-from collections import OrderedDict
 from openmdao.surrogate_models.surrogate_model import SurrogateModel
 from openmdao.surrogate_models.nn_interpolators.linear_interpolator import \
     LinearInterpolator
@@ -13,9 +12,11 @@ from openmdao.surrogate_models.nn_interpolators.weighted_interpolator import \
 from openmdao.surrogate_models.nn_interpolators.rbf_interpolator import \
     RBFInterpolator
 
-_interpolators = OrderedDict([('linear', LinearInterpolator),
-                              ('weighted', WeightedInterpolator),
-                              ('rbf', RBFInterpolator)])
+_interpolators = {
+    'linear': LinearInterpolator,
+    'weighted': WeightedInterpolator,
+    'rbf': RBFInterpolator
+}
 
 
 class NearestNeighbor(SurrogateModel):

@@ -2,8 +2,6 @@
 Definition of the SqliteCaseReader.
 """
 import sqlite3
-from collections import OrderedDict
-
 from io import StringIO
 
 import sys
@@ -533,7 +531,7 @@ class SqliteCaseReader(BaseCaseReader):
                     return cases
                 else:
                     # return nested dict of cases from the source and child cases
-                    cases = OrderedDict()
+                    cases = {}
                     source_cases = case_table.get_cases(source)
                     for case in source_cases:
                         cases.update(self._list_cases_recurse_nested(case.name))
@@ -647,8 +645,8 @@ class SqliteCaseReader(BaseCaseReader):
         else:
             raise RuntimeError('Case not found for coordinate:', coord)
 
-        cases = OrderedDict()
-        children = OrderedDict()
+        cases = {}
+        children = {}
         cases[parent_case.name] = children
 
         # return all cases in the global iteration table that precede the given case
@@ -694,7 +692,7 @@ class SqliteCaseReader(BaseCaseReader):
         if isinstance(case_ids, list):
             return [self.get_case(case_id) for case_id in case_ids]
         else:
-            return self._get_cases_nested(case_ids, OrderedDict())
+            return self._get_cases_nested(case_ids, {})
 
     def _get_cases_nested(self, case_ids, cases):
         """
@@ -702,23 +700,23 @@ class SqliteCaseReader(BaseCaseReader):
 
         Parameters
         ----------
-        case_ids : OrderedDict
+        case_ids : dict
             The nested dictionary of case IDs.
-        cases : OrderedDict
+        cases : dict
             The nested dictionary of cases.
 
         Returns
         -------
-        OrderedDict
+        dict
             The nested dictionary of cases with cases added from case_ids.
         """
         for case_id in case_ids:
             case = self.get_case(case_id)
             children = case_ids[case_id]
             if len(children.keys()) > 0:
-                cases[case] = self._get_cases_nested(children, OrderedDict())
+                cases[case] = self._get_cases_nested(children, {})
             else:
-                cases[case] = OrderedDict()
+                cases[case] = {}
 
         return cases
 
@@ -941,7 +939,7 @@ class CaseTable(object):
         elif '|' in source:
             # source is a coordinate
             if recurse and not flat:
-                cases = OrderedDict()
+                cases = {}
                 for key in self._keys:
                     if len(key) > len(source) and key.startswith(source):
                         cases[key] = self.get_cases(key, recurse, flat)
@@ -957,7 +955,7 @@ class CaseTable(object):
                     return list([self.get_case(key) for key in self._keys
                                  if get_source_system(key).startswith(source_sys)])
                 else:
-                    cases = OrderedDict()
+                    cases = {}
                     for key in self._keys:
                         case_source = self._get_source(key)
                         if case_source == source:
