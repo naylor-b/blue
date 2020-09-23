@@ -138,7 +138,7 @@ def tree(top, show_solvers=True, show_jacs=True, show_colors=True, show_approx=T
 
         # FIXME: these sizes could be wrong under MPI
         if show_sizes:
-            cprint(" (%d / %d)" % (s._inputs._data.size, s._outputs._data.size),
+            cprint(" (%d / %d)" % (len(s._inputs), len(s._outputs)),
                 color=Fore.RED + Style.BRIGHT)
 
         if show_solvers:

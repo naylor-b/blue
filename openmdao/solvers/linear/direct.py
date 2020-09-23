@@ -247,7 +247,7 @@ class DirectSolver(LinearSolver):
                                  scope_out, scope_in)
 
             # put new value in out_vec
-            mtx[:, i] = bvec._data
+            mtx[:, i] = bvec.asarray()
 
         # Restore the backed-up vectors
         bvec.set_val(b_data)
@@ -430,19 +430,19 @@ class DirectSolver(LinearSolver):
 
         # assign x and b vectors based on mode
         if mode == 'fwd':
-            x_vec = d_outputs._data
-            b_vec = d_residuals._data
+            x_vec = d_outputs
+            b_array = d_residuals.asarray()
             trans_lu = 0
             trans_splu = 'N'
         else:  # rev
-            x_vec = d_residuals._data
-            b_vec = d_outputs._data
+            x_vec = d_residuals
+            b_array = d_outputs.asarray()
             trans_lu = 1
             trans_splu = 'T'
 
         # AssembledJacobians are unscaled.
         if self._assembled_jac is not None:
-            full_b = tmp = b_vec
+            full_b = tmp = b_array
 
             with system._unscaled_context(outputs=[d_outputs], residuals=[d_residuals]):
                 if isinstance(self._assembled_jac._int_mtx, DenseMatrix):
@@ -450,8 +450,8 @@ class DirectSolver(LinearSolver):
                 else:
                     arr = self._lu.solve(full_b, trans_splu)
 
-                x_vec[:] = arr
+                x_vec.set_val(arr)
 
         # matrix-vector-product generated jacobians are scaled.
         else:
-            x_vec[:] = scipy.linalg.lu_solve(self._lup, b_vec, trans=trans_lu)
+            x_vec.set_val(scipy.linalg.lu_solve(self._lup, b_array, trans=trans_lu))

@@ -187,10 +187,10 @@ class ComplexStep(ApproximationScheme):
 
         if total:
             system.run_solve_nonlinear()
-            result_array[:] = system._outputs._data
+            result_array[:] = system._outputs.asarray()
         else:
             system.run_apply_nonlinear()
-            result_array[:] = system._residuals._data
+            result_array[:] = system._residuals.asarray()
 
         for vec, idxs in idx_info:
             if vec is not None:

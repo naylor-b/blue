@@ -992,9 +992,12 @@ class Group(System):
                                                                 len(all_abs2meta[io])),
                                                                 dtype=INT_DTYPE)
             abs2meta = self._var_abs2meta[io]
+            isinp = io == 'input'
             for i, name in enumerate(self._var_allprocs_abs2meta[io]):
                 if name in abs2meta:
-                    sizes[iproc, i] = abs2meta[name]['size']
+                    meta = abs2meta[name]
+                    if not (isinp and meta['shared']):
+                        sizes[iproc, i] = meta['size']
 
             if self.comm.size > 1:
                 my_sizes = sizes[iproc, :].copy()
@@ -2344,8 +2347,7 @@ class Group(System):
 
             # The Group outputs vector contains imaginary numbers from other components, so we need
             # to save a cache and restore it later.
-            imag_cache = np.empty(len(self._outputs._data))
-            imag_cache[:] = self._outputs._data.imag
+            imag_cache = self._outputs.asarray(copy=True).imag
             self._outputs.set_complex_step_mode(False, keep_real=True)
 
         if self._discrete_inputs or self._discrete_outputs:

@@ -79,6 +79,8 @@ class Vector(object):
         When True, self._data is replaced with self._cplx_data.
     _len : int
         Total length of data vector (including shared memory parts).
+    _data_len : int
+        Total length of only the internal _data array (does not include shared memory parts).
     """
 
     # Listing of relevant citations that should be referenced when
@@ -109,6 +111,7 @@ class Vector(object):
         self._ncol = ncol
         self._icol = None
         self._len = 0
+        self._data_len = 0
 
         self._system = weakref.ref(system)
 
@@ -144,6 +147,9 @@ class Vector(object):
         self._initialize_data(root_vector)
         self._initialize_views()
 
+        if self._len != self._data_len:
+            self._init_nocopy()
+
         self.read_only = False
 
     def __str__(self):
@@ -159,14 +165,43 @@ class Vector(object):
 
     def __len__(self):
         """
-        Return the flattened length of this Vector.
+        Return the length of the array that would be returned from self.asarray().
+
+        Note that this may be a larger array than this Vector's actual internal _data
+        array if this is an input vector that shares some of its memory with its connected
+        outputs.
 
         Returns
         -------
         int
-            Total flattened length of this vector.
+            Total flattened length of this vector, including shared memory parts.
         """
         return self._len
+
+    def data_len(self):
+        """
+        Return the flattened length of this Vector's data array.
+
+        Note that for input vectors, this data array may be smaller than the array returned
+        from self.asarray() since some input entries will share memory with their connected outputs.
+
+        Returns
+        -------
+        int
+            The length of the internal _data array.
+        """
+        return self._data_len
+
+    def _init_nocopy(self):
+        """
+        Switch over some methods to nocopy versions in order to avoid overhead for other versions.
+        """
+        # self.get_nocopy = self._get_nl_input_nocopy
+        self.set_val = self._nocopy_set_val
+        self.asarray = self._nocopy_asarray
+        self.iadd = self._nocopy_iadd
+        self.isub = self._nocopy_isub
+        self.imul = self._nocopy_imul
 
     def _copy_views(self):
         """
@@ -333,9 +368,7 @@ class Vector(object):
         float or ndarray
             variable value.
         """
-        if flat:
-            return self._views_flat[name]
-        return self._views[name]
+        return self._views_flat[name] if flat else self._views[name]
 
     def __setitem__(self, name, value):
         """
@@ -413,22 +446,6 @@ class Vector(object):
             scalar to multiply self.
         """
         raise NotImplementedError('__imul__ not defined for vector type %s' %
-                                  type(self).__name__)
-
-    def add_scal_vec(self, val, vec):
-        """
-        Perform in-place addition of a vector times a scalar.
-
-        Must be implemented by the subclass.
-
-        Parameters
-        ----------
-        val : int or float
-            scalar.
-        vec : <Vector>
-            this vector times val is added to self.
-        """
-        raise NotImplementedError('add_scale_vec not defined for vector type %s' %
                                   type(self).__name__)
 
     def scale(self, scale_to):
@@ -608,5 +625,5 @@ class Vector(object):
         self._views_flat, self._cplx_views_flat = self._cplx_views_flat, self._views_flat
         self._under_complex_step = active
 
-        if arr is not None:
+        if arr is not None and arr.size > 0:
             self.set_val(arr)

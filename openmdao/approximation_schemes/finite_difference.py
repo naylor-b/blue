@@ -187,9 +187,9 @@ class FiniteDifference(ApproximationScheme):
         if jac is None:
             jac = system._jacobian
 
-        self._starting_outs = system._outputs.asarray(True)
-        self._starting_resids = system._residuals.asarray(True)
-        self._starting_ins = system._inputs.asarray(True)
+        self._starting_outs = system._outputs.asarray(copy=True)
+        self._starting_resids = system._residuals.asarray(copy=True)
+        self._starting_ins = system._inputs.asarray(copy=True)
         if total:
             self._results_tmp = self._starting_outs.copy()
         else:
@@ -261,7 +261,7 @@ class FiniteDifference(ApproximationScheme):
         if current_coeff:
             current_vec = system._outputs if total else system._residuals
             # copy data from outputs (if doing total derivs) or residuals (if doing partials)
-            results_array[:] = current_vec._data
+            results_array[:] = current_vec.asarray()
             results_array *= current_coeff
         else:
             results_array[:] = 0.

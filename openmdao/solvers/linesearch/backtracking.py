@@ -295,7 +295,7 @@ class ArmijoGoldsteinLS(LinesearchSolver):
         self._dir_derivative = -phi0
 
         # Initial step length based on the input step length parameter
-        u.add_scal_vec(alpha, du)
+        u += alpha * du.asarray()
 
         self._enforce_bounds(step=du, alpha=alpha)
 
@@ -432,7 +432,7 @@ class ArmijoGoldsteinLS(LinesearchSolver):
                     alpha_old = self.alpha
                     self._update_step_length_parameter(rho)
                     # Moving on the line search with the difference of the old and new step length.
-                    u.add_scal_vec(self.alpha - alpha_old, du)
+                    u += (self.alpha - alpha_old) * du.asarray()
                 cache = self._solver_info.save_cache()
 
                 try:
@@ -517,7 +517,7 @@ def _enforce_bounds_vector(u, du, alpha, lower_bounds, upper_bounds):
         # Therefore 0 <= d_alpha <= alpha.
 
         # We first update u to reflect the required change to du.
-        u.add_scal_vec(-d_alpha, du)
+        u -= d_alpha * du.asarray()
 
         # At this point, we normalize d_alpha by alpha to figure out the relative
         # amount that the du vector has to be reduced, then apply the reduction.
@@ -550,7 +550,7 @@ def _enforce_bounds_scalar(u, du, alpha, lower_bounds, upper_bounds):
     # the step vector directly.
 
     # enforce bounds on step in-place.
-    u_data = u._data
+    u_data = u.asarray()
 
     # If u > lower, we're just adding zero. Otherwise, we're adding
     # the step required to get up to the lower bound.
@@ -566,7 +566,7 @@ def _enforce_bounds_scalar(u, du, alpha, lower_bounds, upper_bounds):
     change = change_lower + change_upper
 
     u_data += change
-    du._data += change / alpha
+    du.iadd(change / alpha)
 
 
 def _enforce_bounds_wall(u, du, alpha, lower_bounds, upper_bounds):
@@ -595,8 +595,8 @@ def _enforce_bounds_wall(u, du, alpha, lower_bounds, upper_bounds):
     # the step vector directly.
 
     # enforce bounds on step in-place.
-    u_data = u._data
-    du_data = du._data
+    u_data = u.asarray()
+    du_data = du.asarray()
 
     # If u > lower, we're just adding zero. Otherwise, we're adding
     # the step required to get up to the lower bound.
@@ -611,10 +611,11 @@ def _enforce_bounds_wall(u, du, alpha, lower_bounds, upper_bounds):
 
     change = change_lower + change_upper
 
-    u_data += change
+    u.iadd(change)
     du_data += change / alpha
 
     # Now we ensure that we will backtrack along the wall during the
     # line search by setting the entries of du at the bounds to zero.
     changed_either = change.astype(bool)
     du_data[changed_either] = 0.
+    du.set_val(du_data)

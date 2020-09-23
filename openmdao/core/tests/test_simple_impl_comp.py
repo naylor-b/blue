@@ -99,12 +99,12 @@ class Test(unittest.TestCase):
 
         d_outputs.set_val(1.0)
         root.run_apply_linear(['linear'], 'fwd')
-        output = d_residuals._data
+        output = d_residuals.asarray()
         assert_near_equal(output, [7, 3])
 
         d_residuals.set_val(1.0)
         root.run_apply_linear(['linear'], 'rev')
-        output = d_outputs._data
+        output = d_outputs.asarray()
         assert_near_equal(output, [7, 3])
 
     def test_solve_linear(self):
@@ -116,13 +116,13 @@ class Test(unittest.TestCase):
         d_residuals.set_val(11.0)
         d_outputs.set_val(0.0)
         root.run_solve_linear(['linear'], 'fwd')
-        output = d_outputs._data
+        output = d_outputs.asarray()
         assert_near_equal(output, [1, 5], 1e-10)
 
         d_outputs.set_val(11.0)
         d_residuals.set_val(0.0)
         root.run_solve_linear(['linear'], 'rev')
-        output = d_residuals._data
+        output = d_residuals.asarray()
         assert_near_equal(output, [1, 5], 1e-10)
 
 

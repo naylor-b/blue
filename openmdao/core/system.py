@@ -548,9 +548,7 @@ class System(object):
         """
         # save root vecs as an attribute so that we can reuse the nonlinear scaling vecs in the
         # linear root vec
-        self._root_vecs = root_vectors = {'input': {},
-                                          'output': {},
-                                          'residual': {}}
+        self._root_vecs = self._vectors = root_vectors = {'input': {}, 'output': {}, 'residual': {}}
 
         relevant = self._relevant
         vec_names = self._rel_vec_name_list if self._use_derivatives else self._vec_names
@@ -598,7 +596,7 @@ class System(object):
                             owner = self._owning_rank[vec_name]
                             ncol = sizes[owner, abs2idx[vec_name][vec_name]]
 
-            for key in ['input', 'output', 'residual']:
+            for key in ['output', 'residual', 'input']:
                 root_vectors[key][vec_name] = self._vector_class(vec_name, key, self,
                                                                  alloc_complex=alloc_complex,
                                                                  ncol=ncol)
@@ -1665,35 +1663,38 @@ class System(object):
         alloc_complex : bool
             Whether to allocate any imaginary storage to perform complex step. Default is False.
         """
-        self._vectors = vectors = {'input': {}, 'output': {}, 'residual': {}}
+        if self._vectors is root_vectors:
+            vectors = root_vectors
+        else:
+            self._vectors = vectors = {'input': {}, 'output': {}, 'residual': {}}
 
-        # Allocate complex if root vector was allocated complex.
-        alloc_complex = root_vectors['output']['nonlinear']._alloc_complex
-
-        # This happens if you reconfigure and switch to 'cs' without forcing the vectors to be
-        # initially allocated as complex.
-        if not alloc_complex and 'cs' in self._approx_schemes:
-            raise RuntimeError("{}: In order to activate complex step during reconfiguration, "
-                               "you need to set 'force_alloc_complex' to True during setup. e.g. "
-                               "'problem.setup(force_alloc_complex=True)'".format(self.msginfo))
-
-        if self._vector_class is None:
-            self._vector_class = self._local_vector_class
-
-        vector_class = self._vector_class
-
-        vec_names = self._rel_vec_name_list if self._use_derivatives else self._vec_names
-
-        for vec_name in vec_names:
-
-            # Only allocate complex in the vectors we need.
-            vec_alloc_complex = root_vectors['output'][vec_name]._alloc_complex
-
-            for kind in ['input', 'output', 'residual']:
-                rootvec = root_vectors[kind][vec_name]
-                vectors[kind][vec_name] = vector_class(
-                    vec_name, kind, self, rootvec,
-                    alloc_complex=vec_alloc_complex, ncol=rootvec._ncol)
+            # Allocate complex if root vector was allocated complex.
+            alloc_complex = root_vectors['output']['nonlinear']._alloc_complex
+    
+            # This happens if you reconfigure and switch to 'cs' without forcing the vectors to be
+            # initially allocated as complex.
+            if not alloc_complex and 'cs' in self._approx_schemes:
+                raise RuntimeError("{}: In order to activate complex step during reconfiguration, "
+                                   "you need to set 'force_alloc_complex' to True during setup. e.g. "
+                                   "'problem.setup(force_alloc_complex=True)'".format(self.msginfo))
+    
+            if self._vector_class is None:
+                self._vector_class = self._local_vector_class
+    
+            vector_class = self._vector_class
+    
+            vec_names = self._rel_vec_name_list if self._use_derivatives else self._vec_names
+    
+            for vec_name in vec_names:
+    
+                # Only allocate complex in the vectors we need.
+                vec_alloc_complex = root_vectors['output'][vec_name]._alloc_complex
+    
+                for kind in ['output', 'residual', 'input']:
+                    rootvec = root_vectors[kind][vec_name]
+                    vectors[kind][vec_name] = vector_class(
+                        vec_name, kind, self, rootvec,
+                        alloc_complex=vec_alloc_complex, ncol=rootvec._ncol)
 
         self._inputs = vectors['input']['nonlinear']
         self._outputs = vectors['output']['nonlinear']
@@ -4769,7 +4770,7 @@ class System(object):
     def _resolve_ambiguous_input_meta(self):
         pass
 
-    def can_share_mem(self, vname):
+    def _can_share_mem(self, vname):
         """
         Return True if the named input can share memory with a connected output.
 
@@ -4789,7 +4790,7 @@ class System(object):
         except KeyError:
             return False  # shouldn't happen unless vname is an output
 
-        if src not in self._var_abs2meta['output']:
+        if src not in model._var_abs2meta['output']:
             return False  # both vars must be local to share
 
         meta_in = self._var_abs2meta['input'][vname]
@@ -4800,7 +4801,7 @@ class System(object):
 
         units_in = meta_in['units']
         units_out = meta_out['units']
-        if unit_in != units_out and not (units_in is None or units_out is None):
+        if units_in != units_out and not (units_in is None or units_out is None):
             # could actually compare _find_unit(in) vs _find_unit(out) but the slowdown
             # isn't worth it.
             return False

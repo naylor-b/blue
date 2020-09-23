@@ -273,17 +273,31 @@ class Component(System):
         """
         iproc = self.comm.rank
 
-        for io in ('input', 'output'):
-            sizes = self._var_sizes['nonlinear'][io] = np.zeros((self.comm.size,
-                                                                len(self._var_rel_names[io])),
-                                                                dtype=INT_DTYPE)
+        # get input sizes
+        sizes = self._var_sizes['nonlinear']['input'] = \
+            np.zeros((self.comm.size, len(self._var_rel_names['input'])), dtype=INT_DTYPE)
 
-            for i, (name, metadata) in enumerate(self._var_allprocs_abs2meta[io].items()):
+        local_meta = self._var_abs2meta['input']
+        for i, (name, metadata) in enumerate(self._var_allprocs_abs2meta['input'].items()):
+            if self._can_share_mem(name):
+                local_meta[name]['shared'] = True
+            else:
                 sizes[iproc, i] = metadata['size']
 
-            if self.comm.size > 1:
-                my_sizes = sizes[iproc, :].copy()
-                self.comm.Allgather(my_sizes, sizes)
+        if self.comm.size > 1:
+            my_sizes = sizes[iproc, :].copy()
+            self.comm.Allgather(my_sizes, sizes)
+
+        # get output sizes
+        sizes = self._var_sizes['nonlinear']['output'] = \
+            np.zeros((self.comm.size, len(self._var_rel_names['output'])), dtype=INT_DTYPE)
+
+        for i, (name, metadata) in enumerate(self._var_allprocs_abs2meta['output'].items()):
+            sizes[iproc, i] = metadata['size']
+
+        if self.comm.size > 1:
+            my_sizes = sizes[iproc, :].copy()
+            self.comm.Allgather(my_sizes, sizes)
 
         # all names are relevant for the 'nonlinear' and 'linear' vectors.  We
         # can then use them to compute the size arrays of for all other vectors

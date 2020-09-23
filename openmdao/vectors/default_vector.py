@@ -8,6 +8,7 @@ from openmdao.core.constants import INT_DTYPE
 from openmdao.vectors.vector import Vector, _full_slice
 from openmdao.vectors.default_transfer import DefaultTransfer
 from openmdao.utils.mpi import MPI, multi_proc_exception_check
+from openmdao.utils.general_utils import _slice_indices
 
 
 class DefaultVector(Vector):
@@ -43,16 +44,18 @@ class DefaultVector(Vector):
         ndarray
             zeros array of correct size.
         """
-        system = self._system()
-        type_ = self._typ
-        ncol = self._ncol
+        io = self._typ
         root_vec = self._root_vector
+        system = root_vec._system()
+        mynames = self._system()._var_relevant_names[self._name][io]
 
-        slices = root_vec.get_slice_dict()
-
-        mynames = system._var_relevant_names[self._name][type_]
         if mynames:
-            myslice = slice(slices[mynames[0]].start // ncol, slices[mynames[-1]].stop // ncol)
+            abs2idx = system._var_allprocs_abs2idx[self._name]
+            sizes = system._var_sizes[self._name][io][system.comm.rank]
+            istart = abs2idx[mynames[0]]
+            start = np.sum(sizes[:istart])
+            stop = start + np.sum(sizes[istart:abs2idx[mynames[-1]]+1])
+            myslice = slice(start, stop)
         else:
             myslice = slice(0, 0)
 
@@ -122,6 +125,11 @@ class DefaultVector(Vector):
         io = self._typ
         kind = self._kind
         ncol = self._ncol
+        isinp = io == 'input'
+        if isinp:
+            root_sys = self._root_vector._system()
+            root_out_vec = root_sys._vectors['output'][self._name]
+            conns = root_sys._conn_global_abs_in2out
 
         do_scaling = self._do_scaling
         if do_scaling:
@@ -139,6 +147,16 @@ class DefaultVector(Vector):
         start = end = 0
         for abs_name in system._var_relevant_names[self._name][io]:
             meta = abs2meta[abs_name]
+            if isinp and meta['shared']:
+                src = conns[abs_name]
+                views_flat[abs_name] = v = root_out_vec._views_flat[src]
+                views[abs_name] = root_out_vec._views[src]
+                if alloc_complex:
+                    cplx_views_flat[abs_name] = root_out_vec._cplx_views_flat[src]
+                    cplx_views[abs_name] = root_out_vec._cplx_views[src]
+                self._len += v.size
+                continue
+
             end = start + meta['size']
             shape = meta['shape']
             if ncol > 1:
@@ -147,6 +165,8 @@ class DefaultVector(Vector):
                 shape = tuple(list(shape) + [ncol])
 
             views_flat[abs_name] = v = self._data[start:end]
+            self._len += v.size
+            self._data_len += v.size
             if shape != v.shape:
                 v = v.view()
                 v.shape = shape
@@ -170,7 +190,6 @@ class DefaultVector(Vector):
             start = end
 
         self._names = frozenset(views)
-        self._len = end
 
     def _in_matvec_context(self):
         """
@@ -189,8 +208,8 @@ class DefaultVector(Vector):
 
         Parameters
         ----------
-        vec : <Vector>
-            vector to add to self.
+        vec : <Vector> or ndarray
+            vector or array to add to self.
 
         Returns
         -------
@@ -198,9 +217,9 @@ class DefaultVector(Vector):
             self + vec
         """
         if isinstance(vec, Vector):
-            self.iadd(vec._data)
+            self.iadd(vec.asarray())
         else:
-            self._data += vec
+            self.iadd(vec)
         return self
 
     def __isub__(self, vec):
@@ -218,9 +237,9 @@ class DefaultVector(Vector):
             self - vec
         """
         if isinstance(vec, Vector):
-            self.isub(vec._data)
+            self.isub(vec.asarray())
         else:
-            self._data -= vec
+            self.isub(vec)
         return self
 
     def __imul__(self, vec):
@@ -238,23 +257,32 @@ class DefaultVector(Vector):
             self * vec
         """
         if isinstance(vec, Vector):
-            self.imul(vec._data)
+            self.imul(vec.asarray())
         else:
-            self._data *= vec
+            self.imul(vec)
         return self
 
-    def add_scal_vec(self, val, vec):
-        """
-        Perform in-place addition of a vector times a scalar.
+    def _sub_arr_iter(self, idxs):
+        start = end = 0
+        if idxs is _full_slice:
+            for arr in self._views_flat.values():
+                end += arr.size
+                yield arr, start, end, idxs
+                start = end
+            return
 
-        Parameters
-        ----------
-        val : int or float
-            scalar.
-        vec : <Vector>
-            this vector times val is added to self.
-        """
-        self._data += (val * vec._data)
+        if isinstance(idxs, slice):
+            # TODO: more efficiently support other slices
+            sz = len(self)
+            idxs = _slice_indices(idxs, sz, (sz,))
+        else:
+            idxs = np.asarray(idxs)
+
+        for arr in self._views_flat.values():
+            end += arr.size
+            in_arr = np.logical_and(start <= idxs, idxs < end)
+            yield arr, start, end, idxs[in_arr] - start
+            start = end
 
     def set_vec(self, vec):
         """
@@ -265,7 +293,7 @@ class DefaultVector(Vector):
         vec : <Vector>
             the vector whose values self is set to.
         """
-        self._data[:] = vec._data
+        self.set_val(vec.asarray())
 
     def set_val(self, val, idxs=_full_slice):
         """
@@ -279,6 +307,23 @@ class DefaultVector(Vector):
             The locations where the data array should be updated.
         """
         self._data[idxs] = val
+
+    def _nocopy_set_val(self, val, idxs=_full_slice):
+        """
+        Fill the data array with the value at the specified indices or slice(s).
+        Parameters
+        ----------
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
+        """
+        if np.isscalar(val):
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] = val
+        else:
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] = val[start:end]
 
     def scale(self, scale_to):
         """
@@ -299,14 +344,39 @@ class DefaultVector(Vector):
             if adder is not None:  # nonlinear only
                 self._data += adder
 
-    def asarray(self, copy=False):
+    def asarray(self, copy=False, idxs=_full_slice):
         """
-        Return an array representation of this vector.
+        Return a flat array representation of this vector, including shared memory parts.
 
         If copy is True, return a copy.  Otherwise, try to avoid it.
 
         Parameters
         ----------
+        copy : bool
+            If True, return a copy of the array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations to pull from the data array.
+
+        Returns
+        -------
+        ndarray
+            Array representation of this vector.
+        """
+        if copy and (idxs is _full_slice or isinstance(idxs, slice)):
+            return self._data[idxs].copy()
+
+        return self._data[idxs]  # idxs is not a slice, so we'll get a copy regardless
+
+    def _nocopy_asarray(self, idxs=_full_slice, copy=False):
+        """
+        Return a flat array representation of this vector, including shared memory parts.
+
+        If copy is True, return a copy.  Otherwise, try to avoid it.
+
+        Parameters
+        ----------
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations to pull from the data array.
         copy : bool
             If True, return a copy of the array.
 
@@ -315,10 +385,14 @@ class DefaultVector(Vector):
         ndarray
             Array representation of this vector.
         """
-        if copy:
-            return self._data.copy()
-
-        return self._data
+        # we have shared memory parts, so must assemble a new array
+        arr = np.empty(self._len, dtype=self._data.dtype)
+        start = end = 0
+        for dat in self._views_flat.values():
+            end += dat.size
+            arr[start:end] = dat
+            start = end
+        return arr[idxs]
 
     def iscomplex(self):
         """
@@ -346,6 +420,23 @@ class DefaultVector(Vector):
         """
         self._data[idxs] += val
 
+    def _nocopy_iadd(self, val, idxs=_full_slice):
+        """
+        Add the value to the data array at the specified indices or slice(s).
+        Parameters
+        ----------
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
+        """
+        if np.isscalar(val):
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] += val
+        else:
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] += val[start:end]
+
     def isub(self, val, idxs=_full_slice):
         """
         Subtract the value from the data array at the specified indices or slice(s).
@@ -359,6 +450,23 @@ class DefaultVector(Vector):
         """
         self._data[idxs] -= val
 
+    def _nocopy_isub(self, val, idxs=_full_slice):
+        """
+        Subtract the value from the data array at the specified indices or slice(s).
+        Parameters
+        ----------
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
+        """
+        if np.isscalar(val):
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] -= val
+        else:
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] -= val[start:end]
+
     def imul(self, val, idxs=_full_slice):
         """
         Multiply the value to the data array at the specified indices or slice(s).
@@ -371,6 +479,23 @@ class DefaultVector(Vector):
             The locations where the data array should be updated.
         """
         self._data[idxs] *= val
+
+    def _nocopy_imul(self, val, idxs=_full_slice):
+        """
+        Multiply the value to the data array at the specified indices or slice(s).
+        Parameters
+        ----------
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
+        """
+        if np.isscalar(val):
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] *= val
+        else:
+            for arr, start, end, in_arr in self._sub_arr_iter(idxs):
+                arr[in_arr] *= val[start:end]
 
     def dot(self, vec):
         """
@@ -386,7 +511,7 @@ class DefaultVector(Vector):
         float
             The computed dot product value.
         """
-        return np.dot(self._data, vec.asarray())
+        return np.dot(self.asarray(), vec.asarray())
 
     def get_norm(self):
         """
@@ -397,11 +522,14 @@ class DefaultVector(Vector):
         float
             norm of this vector.
         """
-        return np.linalg.norm(self._data)
+        return np.linalg.norm(self.asarray())
 
     def get_slice_dict(self):
         """
-        Return a dict of var names mapped to their slice in the local data array.
+        Return a dict of var names mapped to their slice in the local array.
+
+        The slice indices reflect the position within the array returned from self.asarray(),
+        which may include input variables that share memory with their connected outputs.
 
         Returns
         -------
@@ -411,8 +539,8 @@ class DefaultVector(Vector):
         if self._slices is None:
             slices = {}
             start = end = 0
-            for name in self._system()._var_relevant_names[self._name][self._typ]:
-                end += self._views_flat[name].size
+            for name, arr in self._views_flat.items():
+                end += arr.size
                 slices[name] = slice(start, end)
                 start = end
             self._slices = slices

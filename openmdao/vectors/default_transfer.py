@@ -37,7 +37,7 @@ class DefaultTransfer(Transfer):
             Parent group.
         """
         iproc = group.comm.rank
-        rev = group._mode == 'rev' or group._mode == 'auto'
+        rev = group._mode != 'fwd'
 
         for subsys in group._subgroups_myproc:
             subsys._setup_transfers()
@@ -80,15 +80,15 @@ class DefaultTransfer(Transfer):
                 if abs_out not in relvars_out or abs_in not in relvars_in:
                     continue
 
-                # Only continue if the input exists on this processor
-                if abs_in in abs2meta['input']:
+                idx_in = allprocs_abs2idx[abs_in]
 
-                    indices = None
+                # Only continue if the input exists on this processor
+                if sizes_in[iproc, idx_in] > 0:
+
                     # Get meta
                     meta_in = abs2meta['input'][abs_in]
                     meta_out = allprocs_abs2meta_out[abs_out]
 
-                    idx_in = allprocs_abs2idx[abs_in]
                     idx_out = allprocs_abs2idx[abs_out]
 
                     # Read in and process src_indices
@@ -108,8 +108,6 @@ class DefaultTransfer(Transfer):
                     input_inds = np.arange(offsets_in[iproc, idx_in],
                                            offsets_in[iproc, idx_in] +
                                            sizes_in[iproc, idx_in], dtype=INT_DTYPE)
-                    if indices is not None:
-                        input_inds = input_inds.reshape(indices.shape)
 
                     # Now the indices are ready - input_inds, output_inds
                     sub_in = abs_in[mypathlen:].split('.', 1)[0]
@@ -268,11 +266,11 @@ class DefaultTransfer(Transfer):
         """
         if mode == 'fwd':
             # this works whether the vecs have multi columns or not due to broadcasting
-            in_vec.set_val(out_vec.asarray()[self._out_inds], self._in_inds)
+            in_vec._data[self._in_inds] = out_vec._data[self._out_inds]
 
         else:  # rev
             if out_vec._ncol == 1:
-                out_vec.iadd(np.bincount(self._out_inds, in_vec._data[self._in_inds],
-                                         minlength=out_vec._data.size))
+                out_vec._data += np.bincount(self._out_inds, in_vec._data[self._in_inds],
+                                             minlength=out_vec._data.size)
             else:  # matrix-matrix   (bincount only works with 1d arrays)
                 np.add.at(out_vec._data, self._out_inds, in_vec._data[self._in_inds])

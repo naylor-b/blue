@@ -315,7 +315,7 @@ class BroydenSolver(NonlinearSolver):
         # to trigger reconvergence, so nudge the outputs slightly so that we always get at least
         # one iteration of Broyden.
         if system.under_complex_step and self.options['cs_reconverge']:
-            system._outputs._data += np.linalg.norm(system._outputs._data) * 1e-10
+            system._outputs.iadd(system._outputs.get_norm() * 1e-10)
 
         # Start with initial states.
         self.xm = self.get_vector(system._outputs)
@@ -347,15 +347,13 @@ class BroydenSolver(NonlinearSolver):
         self.fxm = fxm = self.get_vector(self._system()._residuals)
         if not self._full_inverse:
             # Use full model residual for driving the main loop convergence.
-            fxm = self._system()._residuals._data
+            fxm = self._system()._residuals.asarray()
 
         return self.compute_norm(fxm)
 
     def compute_norm(self, vec):
         """
         Compute norm of the vector.
-
-        Under MPI, compute the norm on rank 0, and broadcast it to all other ranks.
 
         Parameters
         ----------
@@ -474,10 +472,9 @@ class BroydenSolver(NonlinearSolver):
 
     def get_vector(self, vec):
         """
-        Return a vector containing the values of vec at the states specified in options.
+        Return a vector copy containing the values of vec at the states specified in options.
 
-        This is the full incoming vec when no states are defined. When under MPI, the values are
-        appopriately gathered without duplicates to rank 0.
+        This is the full incoming vec when no states are defined.
 
         Parameters
         ----------

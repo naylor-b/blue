@@ -300,7 +300,10 @@ class ApproximationScheme(object):
         system._set_approx_mode(True)
 
         # Clean vector for results
-        results_array = system._outputs.asarray(True) if total else system._residuals.asarray(True)
+        if total:
+            results_array = system._outputs.asarray(copy=True)
+        else:
+            results_array = system._residuals.asarray(copy=True)
 
         # To support driver src_indices, we need to override some checks in Jacobian, but do it
         # selectively.
