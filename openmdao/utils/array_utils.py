@@ -483,3 +483,91 @@ def dv_abs_complex(x, x_deriv):
     x_deriv[idx_neg] = -x_deriv[idx_neg]
 
     return x, x_deriv
+
+
+class Iadd2IsubArray(np.ndarray):
+    """
+    An ndarray that, depending on the context, may flip __iadd__/__isub__ behavior.
+    """
+
+    def __new__(subtype, shape, dtype=float, buffer=None, offset=0,
+                strides=None, order=None):
+        # Create the ndarray instance of our type, given the usual
+        # ndarray input arguments.  This will call the standard
+        # ndarray constructor, but return an object of our type.
+        # It also triggers a call to Iadd2IsubArray.__array_finalize__
+        obj = super(Iadd2IsubArray, subtype).__new__(subtype, shape, dtype, buffer, offset,
+                                                     strides, order)
+        # # set the new 'neg' attribute to the value passed
+        # obj.neg = neg
+        # Finally, we must return the newly created object:
+        return obj
+
+    def __array_finalize__(self, obj):
+        # ``self`` is a new object resulting from
+        # ndarray.__new__(Iadd2IsubArray, ...), therefore it only has
+        # attributes that the ndarray.__new__ constructor gave it -
+        # i.e. those of a standard ndarray.
+        #
+        # We could have got to the ndarray.__new__ call in 3 ways:
+        # From an explicit constructor - e.g. Iadd2IsubArray():
+        #    obj is None
+        #    (we're in the middle of the Iadd2IsubArray.__new__
+        #    constructor, and self.neg will be set when we return to
+        #    Iadd2IsubArray.__new__)
+        if obj is None: return
+        # From view casting - e.g arr.view(Iadd2IsubArray):
+        #    obj is arr
+        #    (type(obj) can be Iadd2IsubArray)
+        # From new-from-template - e.g negarr[:3]
+        #    type(obj) is Iadd2IsubArray
+        #
+        # Note that it is here, rather than in the __new__ method,
+        # that we set the default value for 'neg', because this
+        # method sees all creation of default objects - with the
+        # Iadd2IsubArray.__new__ constructor, but also with
+        # arr.view(Iadd2IsubArray).
+        # self.neg = getattr(obj, 'neg', True)
+
+    def __iadd__(self, val):
+        return super().__isub__(val)
+
+    def __isub__(self, val):
+        return super().__iadd__(val)
+
+
+if __name__ == '__main__':
+    print("explicit ctor")
+    a = Iadd2IsubArray((2,3))
+    print("type", type(a).__name__)
+    a[:] = 0
+    print(a)
+    a += 2
+    print(a)
+    a += 3
+    print(a)
+
+    print("view cast")
+    a = np.zeros((3,2))
+    a = a.view(Iadd2IsubArray)
+    print("type", type(a).__name__)
+    print(a)
+    a += 2
+    print(a)
+    a += 3
+    print(a)
+
+    print("from template")
+    a = a[1:]
+    print("type", type(a).__name__)
+    print(a)
+    a += 2
+    print(a)
+    a += 3
+    print(a)
+
+    print("back to ndarray")
+    a = a.view(np.ndarray)
+
+    print("type", type(a).__name__)
+    print(a)

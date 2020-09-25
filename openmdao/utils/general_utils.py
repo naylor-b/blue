@@ -498,6 +498,9 @@ class ContainsAll(object):
         """
         return True
 
+    def __repr__(self):
+        return self.__class__.__name__
+
 
 def all_ancestors(pathname, delim='.'):
     """

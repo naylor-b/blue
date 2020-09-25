@@ -3,6 +3,7 @@ import numpy as np
 from scipy.sparse import csc_matrix
 
 from openmdao.jacobians.jacobian import Jacobian, _full_slice
+from openmdao.utils.code_utils import trace
 
 
 class DictionaryJacobian(Jacobian):
@@ -65,6 +66,7 @@ class DictionaryJacobian(Jacobian):
 
         return self._iter_keys[entry]
 
+    #  @trace(show_args=True, suffix='dict_jac')
     def _apply(self, system, d_inputs, d_outputs, d_residuals, mode):
         """
         Compute matrix-vector product.
@@ -98,7 +100,7 @@ class DictionaryJacobian(Jacobian):
         iflat = d_inputs._abs_get_val
         ncol = d_residuals._ncol
         subjacs_info = self._subjacs_info
-        is_explicit = isinstance(system, ExplicitComponent)
+        # is_explicit = isinstance(system, ExplicitComponent)
 
         with system._unscaled_context(outputs=[d_outputs], residuals=[d_residuals]):
             for abs_key in self._iter_abs_keys(system, d_residuals._name):
@@ -112,14 +114,14 @@ class DictionaryJacobian(Jacobian):
 
                     if other_name in d_out_names:
                         # skip the matvec mult completely for identity subjacs
-                        if is_explicit and res_name is other_name:
-                            if fwd:
-                                val = rflat(res_name)
-                                val -= oflat(other_name)
-                            else:
-                                val = oflat(other_name)
-                                val -= rflat(res_name)
-                            continue
+                        # if is_explicit and res_name is other_name:
+                        #     if fwd:
+                        #         val = rflat(res_name)
+                        #         val -= oflat(other_name)
+                        #     else:
+                        #         val = oflat(other_name)
+                        #         val -= rflat(res_name)
+                        #     continue
 
                         if fwd:
                             left_vec = rflat(res_name)

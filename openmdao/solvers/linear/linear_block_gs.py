@@ -3,6 +3,7 @@
 import numpy as np
 
 from openmdao.solvers.solver import BlockLinearSolver
+from openmdao.utils.code_utils import trace
 
 
 class LinearBlockGS(BlockLinearSolver):
@@ -34,6 +35,7 @@ class LinearBlockGS(BlockLinearSolver):
 
         self._theta_n_1 = {}
         self._delta_d_n_1 = {}
+        self._neg = True
 
     def _declare_options(self):
         """
@@ -50,6 +52,7 @@ class LinearBlockGS(BlockLinearSolver):
         self.options.declare('aitken_initial_factor', default=1.0,
                              desc='initial value for Aitken relaxation factor')
 
+    #  @trace()
     def _iter_initialize(self):
         """
         Perform any necessary pre-processing operations.
@@ -74,6 +77,7 @@ class LinearBlockGS(BlockLinearSolver):
 
         return super(LinearBlockGS, self)._iter_initialize()
 
+    #  @trace()
     def _single_iteration(self):
         """
         Perform the operations in the iteration loop.
@@ -115,7 +119,8 @@ class LinearBlockGS(BlockLinearSolver):
                     continue
 
                 scope_out, scope_in = system._get_scope(subsys)
-                subsys._apply_linear(None, vec_names, self._rel_systems, mode, scope_out, scope_in)
+                subsys._apply_linear(None, vec_names, self._rel_systems, mode, scope_out, scope_in,
+                                     neg=True)
                 for vec_name in vec_names:
                     if vec_name in subsys._rel_vec_names:
                         b_vec = system._vectors['residual'][vec_name]
@@ -126,6 +131,8 @@ class LinearBlockGS(BlockLinearSolver):
         else:  # rev
             subsystems = list(system._subsystems_allprocs)
             subsystems.reverse()
+            b_vec = system._vectors['output'][vec_name]
+            b_vec.set_val(0.0)
             for sname in subsystems:
                 subsys, _ = system._subsystems_allprocs[sname]
 
@@ -135,16 +142,16 @@ class LinearBlockGS(BlockLinearSolver):
                 if subsys._is_local:
                     for vec_name in vec_names:
                         if vec_name in subsys._rel_vec_names:
-                            b_vec = system._vectors['output'][vec_name]
-                            b_vec.set_val(0.0)
+                            # b_vec = system._vectors['output'][vec_name]
+                            # b_vec.set_val(0.0)
                             system._transfer(vec_name, mode, sname)
-                            b_vec *= -1.0
-                            b_vec += self._rhs_vecs[vec_name]
+                            # b_vec *= -1.0
+                            # b_vec += self._rhs_vecs[vec_name]
 
                     subsys._solve_linear(vec_names, mode, self._rel_systems)
                     scope_out, scope_in = system._get_scope(subsys)
                     subsys._apply_linear(None, vec_names, self._rel_systems, mode,
-                                         scope_out, scope_in)
+                                         scope_out, scope_in, neg=True)
                 else:   # subsys not local
                     for vec_name in vec_names:
                         system._transfer(vec_name, mode, sname)

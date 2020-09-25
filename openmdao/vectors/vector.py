@@ -2,10 +2,12 @@
 from copy import deepcopy
 import os
 import weakref
+from contextlib import contextmanager
 
 import numpy as np
 
 from openmdao.utils.name_maps import prom_name2abs_name, rel_name2abs_name
+from openmdao.utils.array_utils import Iadd2IsubArray
 
 
 _full_slice = slice(None)
@@ -112,6 +114,7 @@ class Vector(object):
         self._icol = None
         self._len = 0
         self._data_len = 0
+        self._neg = False
 
         self._system = weakref.ref(system)
 
@@ -163,6 +166,9 @@ class Vector(object):
         """
         return str(self.asarray())
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.asarray()})"
+
     def __len__(self):
         """
         Return the length of the array that would be returned from self.asarray().
@@ -191,6 +197,31 @@ class Vector(object):
             The length of the internal _data array.
         """
         return self._data_len
+
+    def _get_arr(self, arr):
+        """
+        Return an ndarray or a Iadd2IsubArray depending on the value of self._neg.
+
+        Parameters
+        ----------
+        arr : ndarray
+            Array containing data for return value.
+
+        Returns
+        -------
+        ndarray or Iadd2IsubArray
+            The current type of array based on self._neg.
+        """
+        if self._neg:
+            return arr.view(Iadd2IsubArray)  # inverts __iadd__ and __isub__
+        return arr
+
+    def _negative_mode(self, neg=True):
+        self._neg = neg
+        if neg:
+            self._data = self._data.view(Iadd2IsubArray)
+        else:
+            self._data = self._data.view(np.ndarray)
 
     def _init_nocopy(self):
         """
@@ -344,9 +375,10 @@ class Vector(object):
         abs_name = self._name2abs_name(name)
         if abs_name is not None:
             if self._icol is None:
-                return self._views[abs_name]
+                return self._get_arr(self._views[abs_name])
             else:
-                return self._views[abs_name][:, self._icol]
+                return self._get_arr(self._views[abs_name][:, self._icol])
+            return val
         else:
             raise KeyError(f"{self._system().msginfo}: Variable name '{name}' not found.")
 
@@ -368,7 +400,7 @@ class Vector(object):
         float or ndarray
             variable value.
         """
-        return self._views_flat[name] if flat else self._views[name]
+        return self._get_arr(self._views_flat[name] if flat else self._views[name])
 
     def __setitem__(self, name, value):
         """
@@ -410,6 +442,66 @@ class Vector(object):
         """
         Perform in-place vector addition.
 
+        Parameters
+        ----------
+        vec : <Vector> or ndarray
+            vector or array to add to self.
+
+        Returns
+        -------
+        <Vector>
+            self + vec
+        """
+        if isinstance(vec, Vector):
+            self.iadd(vec.asarray())
+        else:
+            self.iadd(vec)
+        return self
+
+    def __isub__(self, vec):
+        """
+        Perform in-place vector substraction.
+
+        Parameters
+        ----------
+        vec : <Vector>
+            vector to subtract from self.
+
+        Returns
+        -------
+        <Vector>
+            self - vec
+        """
+        if isinstance(vec, Vector):
+            self.isub(vec.asarray())
+        else:
+            self.isub(vec)
+        return self
+
+    def __imul__(self, vec):
+        """
+        Perform in-place multiplication.
+
+        Parameters
+        ----------
+        vec : Vector, int, float or ndarray
+            Value to multiply self.
+
+        Returns
+        -------
+        <Vector>
+            self * vec
+        """
+        if isinstance(vec, Vector):
+            self.imul(vec.asarray())
+        else:
+            self.imul(vec)
+        return self
+
+    def iadd(self, val, idxs=_full_slice):
+        """
+        Perform in-place vector addition.
+
         Must be implemented by the subclass.
 
         Parameters
@@ -417,10 +509,10 @@ class Vector(object):
         vec : <Vector>
             vector to add to self.
         """
-        raise NotImplementedError('__iadd__ not defined for vector type %s' %
+        raise NotImplementedError('iadd not defined for vector type %s' %
                                   type(self).__name__)
 
-    def __isub__(self, vec):
+    def isub(self, val, idxs=_full_slice):
         """
         Perform in-place vector substraction.
 
@@ -431,10 +523,10 @@ class Vector(object):
         vec : <Vector>
             vector to subtract from self.
         """
-        raise NotImplementedError('__isub__ not defined for vector type %s' %
+        raise NotImplementedError('isub not defined for vector type %s' %
                                   type(self).__name__)
 
-    def __imul__(self, val):
+    def imul(self, val, idxs=_full_slice):
         """
         Perform in-place scalar multiplication.
 
@@ -445,7 +537,7 @@ class Vector(object):
         val : int or float
             scalar to multiply self.
         """
-        raise NotImplementedError('__imul__ not defined for vector type %s' %
+        raise NotImplementedError('imul not defined for vector type %s' %
                                   type(self).__name__)
 
     def scale(self, scale_to):

@@ -461,6 +461,9 @@ class System(object):
         self._coloring_info = _DEFAULT_COLORING_META.copy()
         self._first_call_to_linearize = True   # will check in first call to _linearize
 
+    def __repr__(self):
+        return self.msginfo
+
     @property
     def msginfo(self):
         """
@@ -1670,26 +1673,26 @@ class System(object):
 
             # Allocate complex if root vector was allocated complex.
             alloc_complex = root_vectors['output']['nonlinear']._alloc_complex
-    
+
             # This happens if you reconfigure and switch to 'cs' without forcing the vectors to be
             # initially allocated as complex.
             if not alloc_complex and 'cs' in self._approx_schemes:
                 raise RuntimeError("{}: In order to activate complex step during reconfiguration, "
                                    "you need to set 'force_alloc_complex' to True during setup. e.g. "
                                    "'problem.setup(force_alloc_complex=True)'".format(self.msginfo))
-    
+
             if self._vector_class is None:
                 self._vector_class = self._local_vector_class
-    
+
             vector_class = self._vector_class
-    
+
             vec_names = self._rel_vec_name_list if self._use_derivatives else self._vec_names
-    
+
             for vec_name in vec_names:
-    
+
                 # Only allocate complex in the vectors we need.
                 vec_alloc_complex = root_vectors['output'][vec_name]._alloc_complex
-    
+
                 for kind in ['output', 'residual', 'input']:
                     rootvec = root_vectors[kind][vec_name]
                     vectors[kind][vec_name] = vector_class(
@@ -2102,7 +2105,7 @@ class System(object):
                 vec.scale('phys')
 
     @contextmanager
-    def _matvec_context(self, vec_name, scope_out, scope_in, mode, clear=True):
+    def _matvec_context(self, vec_name, scope_out, scope_in, mode, neg, clear=True):
         """
         Context manager for vectors.
 
@@ -2126,6 +2129,8 @@ class System(object):
         clear : bool(True)
             If True, zero out residuals (in fwd mode) or inputs and outputs
             (in rev mode).
+        neg : bool
+            If True, invert __iadd__ and __isub__ for vectors and ndarrays.
 
         Yields
         ------
@@ -2142,7 +2147,7 @@ class System(object):
             if mode == 'fwd':
                 d_residuals.set_val(0.0)
             else:  # rev
-                d_inputs.set_val(0.0)
+                d_inputs._data[:] = 0.0  # only zero out 'copy' inputs
                 d_outputs.set_val(0.0)
 
         if scope_out is None and scope_in is None:
@@ -3779,7 +3784,8 @@ class System(object):
         """
         pass
 
-    def _apply_linear(self, jac, vec_names, rel_systems, mode, scope_in=None, scope_out=None):
+    def _apply_linear(self, jac, vec_names, rel_systems, mode, scope_in=None, scope_out=None,
+                      neg=False):
         """
         Compute jac-vec product. The model is assumed to be in a scaled state.
 
@@ -3799,6 +3805,8 @@ class System(object):
         scope_in : set or None
             Set of absolute input names in the scope of this mat-vec product.
             If None, all are in the scope.
+        neg : bool
+            If True subtract instead of add in apply.
         """
         raise NotImplementedError(self.msginfo + ": _apply_linear has not been overridden")
 

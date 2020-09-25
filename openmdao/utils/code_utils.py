@@ -8,9 +8,64 @@ import inspect
 import ast
 import textwrap
 import importlib
+import functools
 from collections import defaultdict, OrderedDict
 
 import networkx as nx
+
+_tracedepth = 0
+
+class trace(object):
+    """
+    A decorator that prints debug info when entering/leaving the decorated function.
+
+    Parameters
+    ----------
+    fn : function
+        The function being checked for possible memory leaks.
+
+    Returns
+    -------
+    function
+        A wrapper for fn that dumps debug info.
+    """
+    def __init__(self, show_args=False, show_ret=False, suffix=''):
+        self.show_args = show_args
+        self.show_ret = show_ret
+        self.suffix = suffix
+
+    def __call__(self, fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            global _tracedepth
+            try:
+                name = args[0].msginfo
+            except:
+                name = ''
+            if name:
+                name = name + '.'
+
+            if self.suffix:
+                name = name + self.suffix + '.'
+
+            if self.show_args:
+                tot = [f"{a}" for a in args] + [f"{k}={v}" for k,v in kwargs.items()]
+                argstr = ', '.join(tot)
+            else:
+                argstr = ''
+
+            print(f"{_tracedepth*'   '}-> {name}{fn.__name__}({argstr})")
+            _tracedepth += 1
+            try:
+                ret = fn(*args, **kwargs)
+            finally:
+                _tracedepth -= 1
+            retstr = f"{ret}" if self.show_ret else ''
+
+            print(f"{_tracedepth*'   '}<- {retstr} from {name}{fn.__name__}()")
+
+            return ret
+        return wrapper
 
 
 def _get_long_name(node):

@@ -29,6 +29,7 @@ from openmdao.utils.mpi import MPI, check_mpi_exceptions
 import openmdao.utils.coloring as coloring_mod
 from openmdao.utils.array_utils import evenly_distrib_idxs
 from openmdao.core.constants import _SetupStatus
+from openmdao.utils.code_utils import trace
 
 # regex to check for valid names.
 import re
@@ -2389,7 +2390,9 @@ class Group(System):
         """
         pass
 
-    def _apply_linear(self, jac, vec_names, rel_systems, mode, scope_out=None, scope_in=None):
+    #  @trace(show_args=True)
+    def _apply_linear(self, jac, vec_names, rel_systems, mode, scope_out=None, scope_in=None,
+                      neg=False):
         """
         Compute jac-vec product. The model is assumed to be in a scaled state.
 
@@ -2409,6 +2412,8 @@ class Group(System):
         scope_in : set or None
             Set of absolute input names in the scope of this mat-vec product.
             If None, all are in the scope.
+        neg : bool
+            If True subtract instead of add in apply.
         """
         vec_names = [v for v in vec_names if v in self._rel_vec_names]
 
@@ -2419,7 +2424,7 @@ class Group(System):
 
         if jac is not None:
             for vec_name in vec_names:
-                with self._matvec_context(vec_name, scope_out, scope_in, mode) as vecs:
+                with self._matvec_context(vec_name, scope_out, scope_in, mode, neg) as vecs:
                     d_inputs, d_outputs, d_residuals = vecs
                     jac._apply(self, d_inputs, d_outputs, d_residuals, mode)
         # Apply recursion
@@ -2438,7 +2443,7 @@ class Group(System):
             for subsys in self._subsystems_myproc:
                 if rel_systems is None or subsys.pathname in rel_systems:
                     subsys._apply_linear(jac, vec_names, rel_systems, mode,
-                                         scope_out, scope_in)
+                                         scope_out, scope_in, self._linear_solver._neg)
 
             if mode == 'rev':
                 for vec_name in vec_names:
@@ -2448,6 +2453,7 @@ class Group(System):
                             # zero out dvecs of irrelevant subsystems
                             s._vectors['output']['linear'].set_val(0.0)
 
+    #  @trace(show_args=True)
     def _solve_linear(self, vec_names, mode, rel_systems):
         """
         Apply inverse jac product. The model is assumed to be in a scaled state.

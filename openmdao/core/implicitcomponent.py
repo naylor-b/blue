@@ -5,6 +5,7 @@ import numpy as np
 from openmdao.core.component import Component
 from openmdao.recorders.recording_iteration_stack import Recording
 from openmdao.utils.class_util import overrides_method
+from openmdao.utils.code_utils import trace
 
 _inst_functs = ['apply_linear', 'apply_multi_linear', 'solve_multi_linear']
 
@@ -132,7 +133,9 @@ class ImplicitComponent(Component):
                     self._residuals._under_complex_step = True
                 self._inputs.read_only = self._residuals.read_only = False
 
-    def _apply_linear(self, jac, vec_names, rel_systems, mode, scope_out=None, scope_in=None):
+    #  @trace(show_args=True)
+    def _apply_linear(self, jac, vec_names, rel_systems, mode, scope_out=None, scope_in=None,
+                      neg=False):
         """
         Compute jac-vec product. The model is assumed to be in a scaled state.
 
@@ -152,6 +155,8 @@ class ImplicitComponent(Component):
         scope_in : set or None
             Set of absolute input names in the scope of this mat-vec product.
             If None, all are in the scope.
+        neg : bool
+            If True subtract instead of add in apply.
         """
         if jac is None:
             jac = self._assembled_jac if self._assembled_jac is not None else self._jacobian
@@ -160,7 +165,7 @@ class ImplicitComponent(Component):
             if vec_name not in self._rel_vec_names:
                 continue
 
-            with self._matvec_context(vec_name, scope_out, scope_in, mode) as vecs:
+            with self._matvec_context(vec_name, scope_out, scope_in, mode, neg) as vecs:
                 d_inputs, d_outputs, d_residuals = vecs
 
                 # Jacobian and vectors are all scaled, unitless
@@ -206,6 +211,7 @@ class ImplicitComponent(Component):
                         self._inputs.read_only = self._outputs.read_only = False
                         d_inputs.read_only = d_outputs.read_only = d_residuals.read_only = False
 
+    #  @trace(show_args=True)
     def _solve_linear(self, vec_names, mode, rel_systems):
         """
         Apply inverse jac product. The model is assumed to be in a scaled state.

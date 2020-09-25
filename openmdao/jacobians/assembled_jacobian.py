@@ -10,6 +10,7 @@ from openmdao.matrices.coo_matrix import COOMatrix
 from openmdao.matrices.csr_matrix import CSRMatrix
 from openmdao.matrices.csc_matrix import CSCMatrix
 from openmdao.utils.units import unit_conversion
+from openmdao.utils.code_utils import trace
 
 _empty_dict = {}
 
@@ -357,6 +358,7 @@ class AssembledJacobian(Jacobian):
         if ext_mtx is not None:
             ext_mtx._post_update()
 
+    #  @trace(show_args=True, suffix='assembled_jac')
     def _apply(self, system, d_inputs, d_outputs, d_residuals, mode):
         """
         Compute matrix-vector product.

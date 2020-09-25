@@ -202,72 +202,12 @@ class DefaultVector(Vector):
         """
         return len(self._names) != len(self._views)
 
-    def __iadd__(self, vec):
-        """
-        Perform in-place vector addition.
-
-        Parameters
-        ----------
-        vec : <Vector> or ndarray
-            vector or array to add to self.
-
-        Returns
-        -------
-        <Vector>
-            self + vec
-        """
-        if isinstance(vec, Vector):
-            self.iadd(vec.asarray())
-        else:
-            self.iadd(vec)
-        return self
-
-    def __isub__(self, vec):
-        """
-        Perform in-place vector substraction.
-
-        Parameters
-        ----------
-        vec : <Vector>
-            vector to subtract from self.
-
-        Returns
-        -------
-        <Vector>
-            self - vec
-        """
-        if isinstance(vec, Vector):
-            self.isub(vec.asarray())
-        else:
-            self.isub(vec)
-        return self
-
-    def __imul__(self, vec):
-        """
-        Perform in-place multiplication.
-
-        Parameters
-        ----------
-        vec : Vector, int, float or ndarray
-            Value to multiply self.
-
-        Returns
-        -------
-        <Vector>
-            self * vec
-        """
-        if isinstance(vec, Vector):
-            self.imul(vec.asarray())
-        else:
-            self.imul(vec)
-        return self
-
     def _sub_arr_iter(self, idxs):
         start = end = 0
         if idxs is _full_slice:
             for arr in self._views_flat.values():
                 end += arr.size
-                yield arr, start, end, idxs
+                yield self._get_arr(arr), start, end, idxs
                 start = end
             return
 
@@ -281,7 +221,7 @@ class DefaultVector(Vector):
         for arr in self._views_flat.values():
             end += arr.size
             in_arr = np.logical_and(start <= idxs, idxs < end)
-            yield arr, start, end, idxs[in_arr] - start
+            yield self._get_arr(arr), start, end, idxs[in_arr] - start
             start = end
 
     def set_vec(self, vec):
@@ -386,7 +326,7 @@ class DefaultVector(Vector):
             Array representation of this vector.
         """
         # we have shared memory parts, so must assemble a new array
-        arr = np.empty(self._len, dtype=self._data.dtype)
+        arr = self._get_arr(np.empty(self._len, dtype=self._data.dtype))
         start = end = 0
         for dat in self._views_flat.values():
             end += dat.size

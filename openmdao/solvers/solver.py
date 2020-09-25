@@ -754,6 +754,7 @@ class LinearSolver(Solver):
         """
         self._rel_systems = None
         self._assembled_jac = None
+        self._neg = False
         super(LinearSolver, self).__init__(**kwargs)
 
     def _assembled_jac_solver_iter(self):
@@ -892,12 +893,24 @@ class LinearSolver(Solver):
 
         system = self._system()
         scope_out, scope_in = system._get_scope()
-
+        if self._neg:
+            self._set_neg_mode(True)
         try:
             system._apply_linear(self._assembled_jac, self._vec_names, self._rel_systems,
-                                 self._mode, scope_out, scope_in)
+                                 self._mode, scope_out, scope_in, self._neg)
         finally:
             self._recording_iter.pop()
+            if self._neg:
+                self._set_neg_mode(False)
+
+    def _set_neg_mode(self, neg):
+        system = self._system()
+        for vec_name in self._vec_names:
+            if self._mode == 'fwd':
+                system._vectors['residual'][vec_name]._negative_mode(neg)
+            else:  # rev
+                system._vectors['input'][vec_name]._negative_mode(neg)
+                system._vectors['output'][vec_name]._negative_mode(neg)
 
 
 class BlockLinearSolver(LinearSolver):

@@ -95,6 +95,9 @@ class Jacobian(object):
             sz = abs2meta['output'][wrt]['size']
         return (abs2meta['output'][of]['size'], sz)
 
+    def __repr__(self):
+        return self.__class__.__name__
+
     def __contains__(self, key):
         """
         Return whether there is a subjac for the given promoted or relative name pair.

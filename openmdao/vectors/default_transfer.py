@@ -267,10 +267,10 @@ class DefaultTransfer(Transfer):
         if mode == 'fwd':
             # this works whether the vecs have multi columns or not due to broadcasting
             in_vec._data[self._in_inds] = out_vec._data[self._out_inds]
-
         else:  # rev
             if out_vec._ncol == 1:
                 out_vec._data += np.bincount(self._out_inds, in_vec._data[self._in_inds],
                                              minlength=out_vec._data.size)
-            else:  # matrix-matrix   (bincount only works with 1d arrays)
+            else:  # matrix-matrix   (bincount is faster but only works with 1d arrays)
                 np.add.at(out_vec._data, self._out_inds, in_vec._data[self._in_inds])
+
