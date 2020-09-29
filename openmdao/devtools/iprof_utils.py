@@ -167,6 +167,9 @@ def _setup_func_group():
             ('_linearize', (System, Solver)),
             # include NewtonSolver to provide some context
             ('solve', (LinearSolver, NewtonSolver)),
+            ('_run_apply', (LinearSolver,)),
+            ('_single_iteration', (LinearSolver,)),
+            ('_iter_initialize', (LinearSolver,)),
             ('_update', (Jacobian,)),
             ('_apply', (Jacobian,)),
             ('_initialize', (Jacobian,)),

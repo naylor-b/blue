@@ -2444,6 +2444,7 @@ class Group(System):
                 if rel_systems is None or subsys.pathname in rel_systems:
                     subsys._apply_linear(jac, vec_names, rel_systems, mode,
                                          scope_out, scope_in, self._linear_solver._neg)
+                    #print(f"GROUP: dins: {self._vectors['input']['linear']}, douts: {self._vectors['output']['linear']}, dresids: {self._vectors['residual']['linear']}")
 
             if mode == 'rev':
                 for vec_name in vec_names:

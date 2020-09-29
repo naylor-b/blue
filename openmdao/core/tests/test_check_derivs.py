@@ -1438,7 +1438,7 @@ class TestProblemCheckPartials(unittest.TestCase):
                 if mode == 'rev':
                     if 'out' in d_outputs:
                         if 'in' in d_inputs:
-                            d_inputs['in'] = fac * d_outputs['out']
+                            d_inputs['in'] += fac * d_outputs['out']
                             self.n_rev += 1
 
         prob = om.Problem()

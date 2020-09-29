@@ -100,7 +100,7 @@ class DictionaryJacobian(Jacobian):
         iflat = d_inputs._abs_get_val
         ncol = d_residuals._ncol
         subjacs_info = self._subjacs_info
-        # is_explicit = isinstance(system, ExplicitComponent)
+        is_explicit = isinstance(system, ExplicitComponent)
 
         with system._unscaled_context(outputs=[d_outputs], residuals=[d_residuals]):
             for abs_key in self._iter_abs_keys(system, d_residuals._name):
@@ -114,14 +114,15 @@ class DictionaryJacobian(Jacobian):
 
                     if other_name in d_out_names:
                         # skip the matvec mult completely for identity subjacs
-                        # if is_explicit and res_name is other_name:
-                        #     if fwd:
-                        #         val = rflat(res_name)
-                        #         val -= oflat(other_name)
-                        #     else:
-                        #         val = oflat(other_name)
-                        #         val -= rflat(res_name)
-                        #     continue
+                        if is_explicit and res_name is other_name:
+                            if fwd:
+                                val = rflat(res_name)
+                                val -= oflat(other_name)
+                            else:
+                                val = oflat(other_name)
+                                val -= rflat(res_name)
+                            #print(f"{system.msginfo} dict_jac._apply: ({res_name}, {other_name}): {val}, DRESID: {rflat(res_name)}")
+                            continue
 
                         if fwd:
                             left_vec = rflat(res_name)
@@ -174,3 +175,4 @@ class DictionaryJacobian(Jacobian):
                             subjac = subjac.transpose()
 
                         left_vec += subjac.dot(right_vec)
+                        # print(f"dict_jac._apply: ({res_name}, {other_name}): right: {right_vec}, left: {left_vec}")

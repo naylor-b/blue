@@ -944,18 +944,19 @@ class BlockLinearSolver(LinearSolver):
         self._rhs_vecs = rhs = {}
         system = self._system()
         for vec_name in system._lin_rel_vec_name_list:
+            rhs[vec_name] = {}
             if self._mode == 'fwd':
-                rhs[vec_name] = system._vectors['residual'][vec_name].asarray(copy=True)
+                rhs[vec_name][None] = system._vectors['residual'][vec_name].asarray(copy=True)
             else:
-                rhs[vec_name] = system._vectors['output'][vec_name].asarray(copy=True)
+                rhs[vec_name][None] = system._vectors['output'][vec_name].asarray(copy=True)
 
     def _update_rhs_vecs(self):
         system = self._system()
         for vec_name in system._lin_rel_vec_name_list:
             if self._mode == 'fwd':
-                self._rhs_vecs[vec_name][:] = system._vectors['residual'][vec_name].asarray()
+                self._rhs_vecs[vec_name][None][:] = system._vectors['residual'][vec_name].asarray()
             else:
-                self._rhs_vecs[vec_name][:] = system._vectors['output'][vec_name].asarray()
+                self._rhs_vecs[vec_name][None][:] = system._vectors['output'][vec_name].asarray()
 
     def _set_complex_step_mode(self, active):
         """
@@ -970,9 +971,9 @@ class BlockLinearSolver(LinearSolver):
         """
         for vec_name in self._system()._lin_rel_vec_name_list:
             if active:
-                self._rhs_vecs[vec_name] = self._rhs_vecs[vec_name].astype(np.complex)
+                self._rhs_vecs[vec_name][None] = self._rhs_vecs[vec_name][None].astype(np.complex)
             else:
-                self._rhs_vecs[vec_name] = self._rhs_vecs[vec_name].real
+                self._rhs_vecs[vec_name][None] = self._rhs_vecs[vec_name][None].real
 
     def _iter_initialize(self):
         """
@@ -1015,7 +1016,7 @@ class BlockLinearSolver(LinearSolver):
 
         norm = 0
         for vec_name in system._lin_rel_vec_name_list:
-            b_vecs[vec_name].isub(self._rhs_vecs[vec_name])
+            b_vecs[vec_name].isub(self._rhs_vecs[vec_name][None])
             norm += b_vecs[vec_name].get_norm()**2
 
         return norm ** 0.5

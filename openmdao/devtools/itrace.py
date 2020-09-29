@@ -22,6 +22,7 @@ except ImportError:
 from openmdao.devtools.iprof_utils import _create_profile_callback, find_qualified_name, \
                                          func_group, _collect_methods, _Options, _setup_func_group,\
                                          _get_methods
+from openmdao.utils.file_utils import _load_and_exec, _to_filename
 from openmdao.devtools.memory import mem_usage
 from openmdao.utils.mpi import MPI
 
@@ -387,21 +388,6 @@ def _itrace_exec(options, user_args):
     """
     Process command line args and perform tracing on a specified python file.
     """
-    progname = options.file[0]
-    sys.path.insert(0, os.path.dirname(progname))
-
-    with open(progname, 'rb') as fp:
-        code = compile(fp.read(), progname, 'exec')
-
-    globals_dict = {
-        '__file__': progname,
-        '__name__': '__main__',
-        '__package__': None,
-        '__cached__': None,
-    }
-
     _setup(options)
     start()
-
-    sys.argv[:] = [progname] + user_args
-    exec (code, globals_dict)
+    _load_and_exec(options.file[0], user_args)

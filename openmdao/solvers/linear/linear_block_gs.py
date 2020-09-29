@@ -35,7 +35,7 @@ class LinearBlockGS(BlockLinearSolver):
 
         self._theta_n_1 = {}
         self._delta_d_n_1 = {}
-        self._neg = True
+        self._neg = False
 
     def _declare_options(self):
         """
@@ -77,6 +77,26 @@ class LinearBlockGS(BlockLinearSolver):
 
         return super(LinearBlockGS, self)._iter_initialize()
 
+    def _create_rhs_vecs(self):
+        super()._create_rhs_vecs()
+
+        rhs = self._rhs_vecs
+        system = self._system()
+        for vec_name in system._lin_rel_vec_name_list:
+            rhsvec = rhs[vec_name]
+            if self._mode == 'fwd':
+                start = end = 0
+                for sub in system._subsystems_myproc:
+                    end += len(sub._vectors['residual'][vec_name])
+                    rhsvec[sub.name] = rhsvec[None][start:end]
+                    start = end
+            else:
+                start = end = 0
+                for sub in system._subsystems_myproc:
+                    end += len(sub._vectors['output'][vec_name])
+                    rhsvec[sub.name] = rhsvec[None][start:end]
+                    start = end
+
     #  @trace()
     def _single_iteration(self):
         """
@@ -88,24 +108,7 @@ class LinearBlockGS(BlockLinearSolver):
         use_aitken = self.options['use_aitken']
 
         if use_aitken:
-            aitken_min_factor = self.options['aitken_min_factor']
-            aitken_max_factor = self.options['aitken_max_factor']
-
-            # some variables that are used for Aitken's relaxation
-            delta_d_n_1 = self._delta_d_n_1
-            theta_n_1 = self._theta_n_1
-
-            # store a copy of the outputs, used to compute the change in outputs later
-            d_n = {}
-            delta_d_n = {}
-            if self._mode == 'fwd':
-                d_out_vec = system._vectors['output']
-            else:
-                d_out_vec = system._vectors['residual']
-
-            for vec_name in vec_names:
-                d_n[vec_name] = d_out_vec[vec_name].asarray(copy=True)
-                delta_d_n[vec_name] = d_out_vec[vec_name].asarray(copy=True)
+            d_n, delta_d_n = self._aitken_pre_iteration()
 
         if mode == 'fwd':
             for subsys, _ in system._subsystems_allprocs.values():
@@ -123,16 +126,18 @@ class LinearBlockGS(BlockLinearSolver):
                                      neg=True)
                 for vec_name in vec_names:
                     if vec_name in subsys._rel_vec_names:
-                        b_vec = system._vectors['residual'][vec_name]
+                        b_vec = subsys._vectors['residual'][vec_name]
                         b_vec *= -1.0
-                        b_vec.iadd(self._rhs_vecs[vec_name])
+                        b_vec.iadd(self._rhs_vecs[vec_name][subsys.name])
                 subsys._solve_linear(vec_names, mode, self._rel_systems)
 
         else:  # rev
+            for vec_name in vec_names:
+                system._vectors['output'][vec_name].set_val(self._rhs_vecs[vec_name][None])
+                system._vectors['output'][vec_name] *= -1.
+
             subsystems = list(system._subsystems_allprocs)
             subsystems.reverse()
-            b_vec = system._vectors['output'][vec_name]
-            b_vec.set_val(0.0)
             for sname in subsystems:
                 subsys, _ = system._subsystems_allprocs[sname]
 
@@ -142,11 +147,13 @@ class LinearBlockGS(BlockLinearSolver):
                 if subsys._is_local:
                     for vec_name in vec_names:
                         if vec_name in subsys._rel_vec_names:
-                            # b_vec = system._vectors['output'][vec_name]
+                            b_vec = subsys._vectors['output'][vec_name]
+                            #print(sname, 'pre-transfer doutputs', b_vec, 'dinputs', system._vectors['input'][vec_name])
                             # b_vec.set_val(0.0)
                             system._transfer(vec_name, mode, sname)
-                            # b_vec *= -1.0
-                            # b_vec += self._rhs_vecs[vec_name]
+                            #print(sname, 'post-transfer doutputs', b_vec)
+                            b_vec *= -1.0
+                            # b_vec += self._rhs_vecs[vec_name][None]
 
                     subsys._solve_linear(vec_names, mode, self._rel_systems)
                     scope_out, scope_in = system._get_scope(subsys)
@@ -157,66 +164,93 @@ class LinearBlockGS(BlockLinearSolver):
                         system._transfer(vec_name, mode, sname)
 
         if use_aitken:
-            for vec_name in vec_names:
-                if self._mode == 'fwd':
-                    d_resid_vec = system._vectors['residual'][vec_name]
-                    d_out_vec = system._vectors['output'][vec_name]
+            self._aitken_post_iteration(d_n, delta_d_n)
+
+    def _aitken_pre_iteration(self):
+        # store a copy of the outputs, used to compute the change in outputs later
+        d_n = {}
+        delta_d_n = {}
+        if self._mode == 'fwd':
+            d_out_vec = self._system()._vectors['output']
+        else:
+            d_out_vec = self._system()._vectors['residual']
+
+        for vec_name in self._vec_names:
+            d_n[vec_name] = d_out_vec[vec_name].asarray(copy=True)
+            delta_d_n[vec_name] = d_out_vec[vec_name].asarray(copy=True)
+
+        return d_n, delta_d_n
+
+    def _aitken_post_iteration(self, d_n, delta_d_n):
+        system = self._system()
+
+        # some variables that are used for Aitken's relaxation
+        aitken_min_factor = self.options['aitken_min_factor']
+        aitken_max_factor = self.options['aitken_max_factor']
+
+        delta_d_n_1 = self._delta_d_n_1
+        theta_n_1 = self._theta_n_1
+
+        for vec_name in self._vec_names:
+            if self._mode == 'fwd':
+                d_resid_vec = system._vectors['residual'][vec_name]
+                d_out_vec = system._vectors['output'][vec_name]
+            else:
+                d_resid_vec = system._vectors['output'][vec_name]
+                d_out_vec = system._vectors['residual'][vec_name]
+
+            theta_n = self.options['aitken_initial_factor']
+
+            # compute the change in the outputs after the NLBGS iteration
+            delta_d_n[vec_name] -= d_out_vec.asarray()
+            delta_d_n[vec_name] *= -1
+
+            if self._iter_count >= 2:
+                # Compute relaxation factor. This method is used by Kenway et al. in
+                # "Scalable Parallel Approach for High-Fidelity Steady-State Aero-
+                # elastic Analysis and Adjoint Derivative Computations" (ln 22 of Algo 1)
+
+                temp = delta_d_n[vec_name].copy()
+                temp -= delta_d_n_1[vec_name]
+
+                # If MPI, piggyback on the residual vector to perform a distributed norm.
+                if system.comm.size > 1:
+                    backup_r = d_resid_vec.asarray(copy=True)
+                    d_resid_vec.set_val(temp)
+                    temp_norm = d_resid_vec.get_norm()
                 else:
-                    d_resid_vec = system._vectors['output'][vec_name]
-                    d_out_vec = system._vectors['residual'][vec_name]
+                    temp_norm = np.linalg.norm(temp)
 
-                theta_n = self.options['aitken_initial_factor']
+                if temp_norm == 0.:
+                    temp_norm = 1e-12  # prevent division by 0 below
 
-                # compute the change in the outputs after the NLBGS iteration
-                delta_d_n[vec_name] -= d_out_vec.asarray()
-                delta_d_n[vec_name] *= -1
-
-                if self._iter_count >= 2:
-                    # Compute relaxation factor. This method is used by Kenway et al. in
-                    # "Scalable Parallel Approach for High-Fidelity Steady-State Aero-
-                    # elastic Analysis and Adjoint Derivative Computations" (ln 22 of Algo 1)
-
-                    temp = delta_d_n[vec_name].copy()
-                    temp -= delta_d_n_1[vec_name]
-
-                    # If MPI, piggyback on the residual vector to perform a distributed norm.
-                    if system.comm.size > 1:
-                        backup_r = d_resid_vec.asarray(copy=True)
-                        d_resid_vec.set_val(temp)
-                        temp_norm = d_resid_vec.get_norm()
-                    else:
-                        temp_norm = np.linalg.norm(temp)
-
-                    if temp_norm == 0.:
-                        temp_norm = 1e-12  # prevent division by 0 below
-
-                    # If MPI, piggyback on the output and residual vectors to perform a distributed
-                    # dot product.
-                    if system.comm.size > 1:
-                        backup_o = d_out_vec.asarray(copy=True)
-                        d_out_vec.set_val(delta_d_n[vec_name])
-                        tddo = d_resid_vec.dot(d_out_vec)
-                        d_resid_vec.set_val(backup_r)
-                        d_out_vec.set_val(backup_o)
-                    else:
-                        tddo = temp.dot(delta_d_n[vec_name])
-
-                    theta_n = theta_n_1[vec_name] * (1 - tddo / temp_norm ** 2)
-
+                # If MPI, piggyback on the output and residual vectors to perform a distributed
+                # dot product.
+                if system.comm.size > 1:
+                    backup_o = d_out_vec.asarray(copy=True)
+                    d_out_vec.set_val(delta_d_n[vec_name])
+                    tddo = d_resid_vec.dot(d_out_vec)
+                    d_resid_vec.set_val(backup_r)
+                    d_out_vec.set_val(backup_o)
                 else:
-                    # keep the initial the relaxation factor
-                    pass
+                    tddo = temp.dot(delta_d_n[vec_name])
 
-                # limit relaxation factor to the specified range
-                theta_n = max(aitken_min_factor, min(aitken_max_factor, theta_n))
+                theta_n = theta_n_1[vec_name] * (1 - tddo / temp_norm ** 2)
 
-                # save relaxation factor for the next iteration
-                self._theta_n_1[vec_name] = theta_n
+            else:
+                # keep the initial the relaxation factor
+                pass
 
-                d_out_vec.set_val(d_n[vec_name])
+            # limit relaxation factor to the specified range
+            theta_n = max(aitken_min_factor, min(aitken_max_factor, theta_n))
 
-                # compute relaxed outputs
-                d_out_vec.iadd(theta_n * delta_d_n[vec_name])
+            # save relaxation factor for the next iteration
+            self._theta_n_1[vec_name] = theta_n
 
-                # save update to use in next iteration
-                delta_d_n_1[vec_name][:] = delta_d_n[vec_name]
+            d_out_vec.set_val(d_n[vec_name])
+
+            # compute relaxed outputs
+            d_out_vec.iadd(theta_n * delta_d_n[vec_name])
+
+            # save update to use in next iteration
+            delta_d_n_1[vec_name][:] = delta_d_n[vec_name]

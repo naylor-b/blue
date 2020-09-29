@@ -306,6 +306,8 @@ class ExplicitComponent(Component):
             with self._matvec_context(vec_name, scope_out, scope_in, mode, neg) as vecs:
                 d_inputs, d_outputs, d_residuals = vecs
 
+                #print(f"dins: {d_inputs}, douts: {d_outputs}, dresids: {d_residuals}")
+
                 # Jacobian and vectors are all scaled, unitless
                 J._apply(self, d_inputs, d_outputs, d_residuals, mode)
 
@@ -381,6 +383,7 @@ class ExplicitComponent(Component):
                     d_outputs *= -1.0
 
                 else:  # rev
+                    # print(f"douts -> dresids, dout: {d_outputs}, dresid: {d_residuals}")
                     if self._has_resid_scaling:
                         with self._unscaled_context(outputs=[d_outputs],
                                                     residuals=[d_residuals]):

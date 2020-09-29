@@ -48,7 +48,7 @@ class TestBGSSolver(LinearSolverTests.LinearSolverTestCase):
         self.assertEqual(str(context.exception),
                          "Linear solver LinearBlockGS in Group (<model>) doesn't support assembled jacobians.")
 
-    def test_simple_explicit(self):
+    def test_simple_explicit_fwd(self):
         prob = om.Problem()
         model = prob.model
         model.add_subsystem('p', om.IndepVarComp('a', 5.0))
@@ -56,12 +56,23 @@ class TestBGSSolver(LinearSolverTests.LinearSolverTestCase):
         model.connect('p.a', 'comp.a')
 
         model.linear_solver = self.linear_solver_class()
+        model.linear_solver.options['maxiter'] = 2
 
-        #prob.setup(mode='fwd')
-        #prob.run_model()
+        prob.setup(mode='fwd')
+        prob.run_model()
 
-        #deriv = prob.compute_totals(of=['comp.b'], wrt=['p.a'])
-        #self.assertEqual(deriv['comp.b', 'p.a'], 3.)
+        deriv = prob.compute_totals(of=['comp.b'], wrt=['p.a'])
+        self.assertEqual(deriv['comp.b', 'p.a'], 3.)
+
+    def test_simple_explicit_rev(self):
+        prob = om.Problem()
+        model = prob.model
+        model.add_subsystem('p', om.IndepVarComp('a', 5.0))
+        comp = model.add_subsystem('comp', om.ExecComp('b=3.*a'))
+        model.connect('p.a', 'comp.a')
+
+        model.linear_solver = self.linear_solver_class()
+        model.linear_solver.options['maxiter'] = 2
 
         prob.setup(mode='rev')
         prob.run_model()

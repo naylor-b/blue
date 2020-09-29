@@ -2143,10 +2143,13 @@ class System(object):
         d_outputs = self._vectors['output'][vec_name]
         d_residuals = self._vectors['residual'][vec_name]
 
+        #print("matvec_context")
         if clear:
             if mode == 'fwd':
+                #print("zero dresids")
                 d_residuals.set_val(0.0)
             else:  # rev
+                #print(f'zero dinputs (copied ones) and doutputs')
                 d_inputs._data[:] = 0.0  # only zero out 'copy' inputs
                 d_outputs.set_val(0.0)
 
@@ -4792,6 +4795,7 @@ class System(object):
         bool
             True if the named input variable can share memory with its connected output.
         """
+        # return False
         model = self._problem_meta['model_ref']()
         try:
             src = model._conn_global_abs_in2out[vname]
