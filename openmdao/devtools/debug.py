@@ -64,7 +64,8 @@ def _get_color_printer(stream=sys.stdout, colors=True, rank=0):
 
 
 def tree(top, show_solvers=True, show_jacs=True, show_colors=True, show_approx=True,
-         filter=None, show_sizes=False, max_depth=0, rank=0, stream=sys.stdout):
+         show_sizes=False, show_promotes=False, filter=None, max_depth=0, rank=0,
+         stream=sys.stdout):
     """
     Dump the model tree structure to the given stream.
 
@@ -83,12 +84,14 @@ def tree(top, show_solvers=True, show_jacs=True, show_colors=True, show_approx=T
         If True and stream is a terminal that supports it, display in color.
     show_approx : bool
         If True, mark systems that are approximating their derivatives.
+    show_sizes : bool
+        If True, show input and output sizes for each System.
+    show_promotes: bool
+        If True, show promotes for each System.
     filter : function(System)
         A function taking a System arg and returning None or an iter of (name, value) tuples.
         If None is returned, that system will not be displayed.  Otherwise, the system will
         be displayed along with any name, value pairs returned from the filter.
-    show_sizes : bool
-        If True, show input and output sizes for each System.
     max_depth : int
         Maximum depth for display.
     rank : int
@@ -196,6 +199,13 @@ def tree(top, show_solvers=True, show_jacs=True, show_colors=True, show_approx=T
         cprint('', end='\n')
 
         vindent = indent + '  '
+        if show_promotes:
+            pinfo = (('any', 'promotes'), ('input', 'promotes_inputs'), ('output', 'promotes_outputs'))
+            for ptype, name in pinfo:
+                if s._var_promotes[ptype]:
+                    cprint(f"{vindent}{name}: ", color=Fore.WHITE + Style.BRIGHT)
+                    cprint(f"{list(s._var_promotes[ptype])}\n")
+
         for name, val in ret:
             cprint("%s%s: %s\n" % (vindent, name, val))
 

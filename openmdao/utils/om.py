@@ -308,6 +308,8 @@ def _tree_setup_parser(parser):
                         help="Display input and output sizes.")
     parser.add_argument('--approx', action='store_true', dest='show_approx',
                         help="Show which components compute approximations.")
+    parser.add_argument('--promotes', action='store_true', dest='show_promotes',
+                        help="Display promotions for each System.")
 
 
 def _get_tree_filter(attrs, vecvars):
@@ -375,8 +377,8 @@ def _tree_cmd(options, user_args):
 
     def _tree(prob):
         tree(prob, show_colors=options.show_colors, show_sizes=options.show_sizes,
-             show_approx=options.show_approx, filter=filt, max_depth=options.depth,
-             rank=options.rank, stream=out)
+             show_approx=options.show_approx, show_promotes=options.show_promotes,
+             filter=filt, max_depth=options.depth, rank=options.rank, stream=out)
         exit()
 
     # register the hook
