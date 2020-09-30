@@ -23,7 +23,7 @@ from openmdao.solvers.linear.linear_runonce import LinearRunOnce
 from openmdao.utils.array_utils import array_connection_compatible, _flatten_src_indices, \
     shape_to_len
 from openmdao.utils.general_utils import ContainsAll, simple_warning, common_subpath, \
-    conditional_error, _is_slicer_op
+    conditional_error, _is_slicer_op, dprint
 from openmdao.utils.units import is_compatible, unit_conversion, _has_val_mismatch, _find_unit
 from openmdao.utils.mpi import MPI, check_mpi_exceptions
 import openmdao.utils.coloring as coloring_mod
@@ -2444,7 +2444,8 @@ class Group(System):
                 if rel_systems is None or subsys.pathname in rel_systems:
                     subsys._apply_linear(jac, vec_names, rel_systems, mode,
                                          scope_out, scope_in, self._linear_solver._neg)
-                    #print(f"GROUP: dins: {self._vectors['input']['linear']}, douts: {self._vectors['output']['linear']}, dresids: {self._vectors['residual']['linear']}")
+                    dprint(f"GROUP: dins: {list(self._vectors['input']['linear'].keys())}, douts: {list(self._vectors['output']['linear'].keys())}")
+                    dprint(f"GROUP: dins: {self._vectors['input']['linear']}, douts: {self._vectors['output']['linear']}, dresids: {self._vectors['residual']['linear']}")
 
             if mode == 'rev':
                 for vec_name in vec_names:

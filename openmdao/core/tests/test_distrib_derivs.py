@@ -806,7 +806,7 @@ class DistribStateImplicit(om.ImplicitComponent):
                 d_o['out_var'] += d_r['out_var']
 
             if 'a' in d_i:
-                    d_i['a'] -= np.sum(d_r['states'])
+                d_i['a'] -= np.sum(d_r['states'])
 
 
 class DistParab2(om.ExplicitComponent):

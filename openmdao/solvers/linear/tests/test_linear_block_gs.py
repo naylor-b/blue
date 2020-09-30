@@ -106,6 +106,7 @@ class TestBGSSolver(LinearSolverTests.LinearSolverTestCase):
         model.add_subsystem('p1', om.IndepVarComp('x', 1.0))
         model.add_subsystem('d1', SellarImplicitDis1())
         model.add_subsystem('d2', SellarImplicitDis2())
+        model.connect('p1.x', 'd1.x')
         model.connect('d1.y1', 'd2.y1')
         model.connect('d2.y2', 'd1.y2')
 
@@ -113,7 +114,7 @@ class TestBGSSolver(LinearSolverTests.LinearSolverTestCase):
         model.nonlinear_solver.options['maxiter'] = 5
         model.linear_solver = self.linear_solver_class()
 
-        prob.setup()
+        prob.setup(mode='rev')
         prob.set_solver_print(level=0)
 
         prob.run_model()

@@ -1113,3 +1113,14 @@ def prom2ivc_src_dict(prom_dict):
             src_dict[name] = meta
 
     return src_dict
+
+
+om_debug = env_truthy('OPENMDAO_DEBUG')
+
+
+if om_debug:
+    def dprint(*args, **kwargs):
+        print(*args, **kwargs)
+else:
+    def dprint(*args, **kwargs):
+        pass

@@ -4,6 +4,7 @@ import numpy as np
 
 from openmdao.solvers.solver import BlockLinearSolver
 from openmdao.utils.code_utils import trace
+from openmdao.utils.general_utils import dprint
 
 
 class LinearBlockGS(BlockLinearSolver):
@@ -148,10 +149,10 @@ class LinearBlockGS(BlockLinearSolver):
                     for vec_name in vec_names:
                         if vec_name in subsys._rel_vec_names:
                             b_vec = subsys._vectors['output'][vec_name]
-                            #print(sname, 'pre-transfer doutputs', b_vec, 'dinputs', system._vectors['input'][vec_name])
+                            dprint(sname, 'pre-transfer doutputs', b_vec, 'dinputs', system._vectors['input'][vec_name])
                             # b_vec.set_val(0.0)
                             system._transfer(vec_name, mode, sname)
-                            #print(sname, 'post-transfer doutputs', b_vec)
+                            dprint(sname, 'post-transfer doutputs', b_vec)
                             b_vec *= -1.0
                             # b_vec += self._rhs_vecs[vec_name][None]
 

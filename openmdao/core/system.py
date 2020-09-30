@@ -35,7 +35,7 @@ from openmdao.utils.coloring import _compute_coloring, Coloring, \
 import openmdao.utils.coloring as coloring_mod
 from openmdao.utils.general_utils import determine_adder_scaler, \
     format_as_float_or_array, ContainsAll, all_ancestors, _slice_indices, \
-    simple_warning, make_set, ensure_compatible, match_prom_or_abs, _is_slicer_op
+    simple_warning, make_set, ensure_compatible, match_prom_or_abs, _is_slicer_op, dprint
 from openmdao.approximation_schemes.complex_step import ComplexStep
 from openmdao.approximation_schemes.finite_difference import FiniteDifference
 from openmdao.utils.units import unit_conversion
@@ -2143,13 +2143,13 @@ class System(object):
         d_outputs = self._vectors['output'][vec_name]
         d_residuals = self._vectors['residual'][vec_name]
 
-        #print("matvec_context")
+        dprint("matvec_context")
         if clear:
             if mode == 'fwd':
-                #print("zero dresids")
+                dprint("zero dresids")
                 d_residuals.set_val(0.0)
             else:  # rev
-                #print(f'zero dinputs (copied ones) and doutputs')
+                dprint(f'zero dinputs (copied ones) and doutputs')
                 d_inputs._data[:] = 0.0  # only zero out 'copy' inputs
                 d_outputs.set_val(0.0)
 

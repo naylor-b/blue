@@ -16,7 +16,7 @@ from openmdao.approximation_schemes.finite_difference import FiniteDifference
 from openmdao.approximation_schemes.complex_step import ComplexStep
 from openmdao.utils.mpi import MPI
 from openmdao.utils.name_maps import abs_key2rel_key, rel_key2abs_key
-from openmdao.utils.general_utils import simple_warning
+from openmdao.utils.general_utils import simple_warning, env_truthy
 from openmdao.core.constants import _SetupStatus
 
 # an object used to detect when a named value isn't found

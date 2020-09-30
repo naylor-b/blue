@@ -4,7 +4,7 @@ import numpy as np
 
 from openmdao.core.component import Component, _full_slice
 from openmdao.utils.class_util import overrides_method
-from openmdao.utils.general_utils import ContainsAll
+from openmdao.utils.general_utils import ContainsAll, dprint
 from openmdao.recorders.recording_iteration_stack import Recording
 from openmdao.utils.code_utils import trace
 
@@ -306,7 +306,7 @@ class ExplicitComponent(Component):
             with self._matvec_context(vec_name, scope_out, scope_in, mode, neg) as vecs:
                 d_inputs, d_outputs, d_residuals = vecs
 
-                #print(f"dins: {d_inputs}, douts: {d_outputs}, dresids: {d_residuals}")
+                dprint(f"dins: {d_inputs}, douts: {d_outputs}, dresids: {d_residuals}")
 
                 # Jacobian and vectors are all scaled, unitless
                 J._apply(self, d_inputs, d_outputs, d_residuals, mode)

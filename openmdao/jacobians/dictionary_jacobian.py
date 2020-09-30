@@ -4,6 +4,7 @@ from scipy.sparse import csc_matrix
 
 from openmdao.jacobians.jacobian import Jacobian, _full_slice
 from openmdao.utils.code_utils import trace
+from openmdao.utils.general_utils import dprint
 
 
 class DictionaryJacobian(Jacobian):
@@ -121,7 +122,7 @@ class DictionaryJacobian(Jacobian):
                             else:
                                 val = oflat(other_name)
                                 val -= rflat(res_name)
-                            #print(f"{system.msginfo} dict_jac._apply: ({res_name}, {other_name}): {val}, DRESID: {rflat(res_name)}")
+                            dprint(f"{system.msginfo} dict_jac._apply: ({res_name}, {other_name}): {val}, DRESID: {rflat(res_name)}")
                             continue
 
                         if fwd:
