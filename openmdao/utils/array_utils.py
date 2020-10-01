@@ -515,7 +515,8 @@ class Iadd2IsubArray(np.ndarray):
         #    (we're in the middle of the Iadd2IsubArray.__new__
         #    constructor, and self.neg will be set when we return to
         #    Iadd2IsubArray.__new__)
-        if obj is None: return
+        if obj is None:
+            return
         # From view casting - e.g arr.view(Iadd2IsubArray):
         #    obj is arr
         #    (type(obj) can be Iadd2IsubArray)
@@ -538,7 +539,7 @@ class Iadd2IsubArray(np.ndarray):
 
 if __name__ == '__main__':
     print("explicit ctor")
-    a = Iadd2IsubArray((2,3))
+    a = Iadd2IsubArray((2, 3))
     print("type", type(a).__name__)
     a[:] = 0
     print(a)
@@ -548,7 +549,7 @@ if __name__ == '__main__':
     print(a)
 
     print("view cast")
-    a = np.zeros((3,2))
+    a = np.zeros((3, 2))
     a = a.view(Iadd2IsubArray)
     print("type", type(a).__name__)
     print(a)

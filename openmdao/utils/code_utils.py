@@ -15,6 +15,7 @@ import networkx as nx
 
 _tracedepth = 0
 
+
 class trace(object):
     """
     A decorator that prints debug info when entering/leaving the decorated function.
@@ -40,7 +41,7 @@ class trace(object):
             global _tracedepth
             try:
                 name = args[0].msginfo
-            except:
+            except Exception:
                 name = ''
             if name:
                 name = name + '.'
@@ -49,7 +50,7 @@ class trace(object):
                 name = name + self.suffix + '.'
 
             if self.show_args:
-                tot = [f"{a}" for a in args] + [f"{k}={v}" for k,v in kwargs.items()]
+                tot = [f"{a}" for a in args] + [f"{k}={v}" for k, v in kwargs.items()]
                 argstr = ', '.join(tot)
             else:
                 argstr = ''

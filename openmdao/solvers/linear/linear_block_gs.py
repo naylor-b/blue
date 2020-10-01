@@ -85,18 +85,29 @@ class LinearBlockGS(BlockLinearSolver):
         system = self._system()
         for vec_name in system._lin_rel_vec_name_list:
             rhsvec = rhs[vec_name]
-            if self._mode == 'fwd':
-                start = end = 0
-                for sub in system._subsystems_myproc:
-                    end += len(sub._vectors['residual'][vec_name])
-                    rhsvec[sub.name] = rhsvec[None][start:end]
-                    start = end
-            else:
-                start = end = 0
-                for sub in system._subsystems_myproc:
-                    end += len(sub._vectors['output'][vec_name])
-                    rhsvec[sub.name] = rhsvec[None][start:end]
-                    start = end
+            kind = 'residual' if self._mode == 'fwd' else 'output'
+            start = end = 0
+            for sub in system._subsystems_myproc:
+                end += len(sub._vectors[kind][vec_name]) if vec_name in sub._vectors[kind] else 0
+                rhsvec[sub.name] = rhsvec[None][start:end]
+                start = end
+
+    # def _set_complex_step_mode(self, active):
+    #     """
+    #     Turn on or off complex stepping mode.
+
+    #     Recurses to turn on or off complex stepping mode in all subsystems and their vectors.
+
+    #     Parameters
+    #     ----------
+    #     active : bool
+    #         Complex mode flag; set to True prior to commencing complex step.
+    #     """
+    #     for vec_name in self._system()._lin_rel_vec_name_list:
+    #         if active:
+    #             self._rhs_vecs[vec_name][None] = self._rhs_vecs[vec_name][None].astype(np.complex)
+    #         else:
+    #             self._rhs_vecs[vec_name][None] = self._rhs_vecs[vec_name][None].real
 
     #  @trace()
     def _single_iteration(self):
@@ -149,7 +160,8 @@ class LinearBlockGS(BlockLinearSolver):
                     for vec_name in vec_names:
                         if vec_name in subsys._rel_vec_names:
                             b_vec = subsys._vectors['output'][vec_name]
-                            dprint(sname, 'pre-transfer doutputs', b_vec, 'dinputs', system._vectors['input'][vec_name])
+                            dprint(sname, 'pre-transfer doutputs', b_vec, 'dinputs',
+                                   system._vectors['input'][vec_name])
                             # b_vec.set_val(0.0)
                             system._transfer(vec_name, mode, sname)
                             dprint(sname, 'post-transfer doutputs', b_vec)

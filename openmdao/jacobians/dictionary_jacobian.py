@@ -122,7 +122,9 @@ class DictionaryJacobian(Jacobian):
                             else:
                                 val = oflat(other_name)
                                 val -= rflat(res_name)
-                            dprint(f"{system.msginfo} dict_jac._apply: ({res_name}, {other_name}): {val}, DRESID: {rflat(res_name)}")
+                            dprint(f"{system.msginfo} dict_jac._apply: ")
+                            dprint(f"({res_name}, {other_name}): ")
+                            dprint(f"{val}, DRESID: {rflat(res_name)}")
                             continue
 
                         if fwd:
@@ -176,4 +178,5 @@ class DictionaryJacobian(Jacobian):
                             subjac = subjac.transpose()
 
                         left_vec += subjac.dot(right_vec)
-                        # print(f"dict_jac._apply: ({res_name}, {other_name}): right: {right_vec}, left: {left_vec}")
+                        # print(f"dict_jac._apply: ({res_name}, {other_name}): right: {right_vec},"
+                        # print(f" left: {left_vec}")

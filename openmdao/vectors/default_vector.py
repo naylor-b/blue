@@ -54,7 +54,7 @@ class DefaultVector(Vector):
             sizes = system._var_sizes[self._name][io][system.comm.rank]
             istart = abs2idx[mynames[0]]
             start = np.sum(sizes[:istart])
-            stop = start + np.sum(sizes[istart:abs2idx[mynames[-1]]+1])
+            stop = start + np.sum(sizes[istart:abs2idx[mynames[-1]] + 1])
             myslice = slice(start, stop)
         else:
             myslice = slice(0, 0)

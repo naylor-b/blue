@@ -1677,9 +1677,9 @@ class System(object):
             # This happens if you reconfigure and switch to 'cs' without forcing the vectors to be
             # initially allocated as complex.
             if not alloc_complex and 'cs' in self._approx_schemes:
-                raise RuntimeError("{}: In order to activate complex step during reconfiguration, "
-                                   "you need to set 'force_alloc_complex' to True during setup. e.g. "
-                                   "'problem.setup(force_alloc_complex=True)'".format(self.msginfo))
+                raise RuntimeError(f"{self.msginfo}: In order to activate complex step during "
+                                   "reconfiguration, you need to set 'force_alloc_complex' to True "
+                                   "during setup, e.g. 'problem.setup(force_alloc_complex=True)'")
 
             if self._vector_class is None:
                 self._vector_class = self._local_vector_class
@@ -4796,6 +4796,12 @@ class System(object):
             True if the named input variable can share memory with its connected output.
         """
         # return False
+        if vname not in self._var_abs2meta['input']:
+            return False
+        meta_in = self._var_abs2meta['input'][vname]
+        if meta_in['distributed'] or meta_in['src_indices'] is not None:
+            return False
+
         model = self._problem_meta['model_ref']()
         try:
             src = model._conn_global_abs_in2out[vname]
@@ -4805,11 +4811,9 @@ class System(object):
         if src not in model._var_abs2meta['output']:
             return False  # both vars must be local to share
 
-        meta_in = self._var_abs2meta['input'][vname]
-        if meta_in['src_indices'] is not None:
-            return False
-
         meta_out = model._var_abs2meta['output'][src]
+        if meta_out['distributed'] is not None:
+            return False
 
         units_in = meta_in['units']
         units_out = meta_out['units']
@@ -4818,7 +4822,10 @@ class System(object):
             # isn't worth it.
             return False
 
-        return meta_out['ref'] == 1.0 and meta_out['ref0'] == 0.0 and meta_out['res_ref'] == 1.0
+        try:
+            return meta_out['ref'] == 1.0 and meta_out['ref0'] == 0.0 and meta_out['res_ref'] == 1.0
+        except ValueError:
+            return False  # return False if any scalers are arrays
 
     def get_relevant_vars(self, desvars, responses, mode):
         """
