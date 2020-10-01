@@ -2390,7 +2390,6 @@ class Group(System):
         """
         pass
 
-    #  @trace(show_args=True)
     def _apply_linear(self, jac, vec_names, rel_systems, mode, scope_out=None, scope_in=None,
                       neg=False):
         """

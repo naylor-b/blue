@@ -462,6 +462,14 @@ class System(object):
         self._first_call_to_linearize = True   # will check in first call to _linearize
 
     def __repr__(self):
+        """
+        Return a simple string representation.
+
+        Returns
+        -------
+        str
+            A string representation.
+        """
         return self.msginfo
 
     @property

@@ -273,4 +273,3 @@ class DefaultTransfer(Transfer):
                                              minlength=out_vec._data.size)
             else:  # matrix-matrix   (bincount is faster but only works with 1d arrays)
                 np.add.at(out_vec._data, self._out_inds, in_vec._data[self._in_inds])
-

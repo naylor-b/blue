@@ -499,6 +499,14 @@ class ContainsAll(object):
         return True
 
     def __repr__(self):
+        """
+        Return a simple string representation.
+
+        Returns
+        -------
+        str
+            A string representation.
+        """
         return self.__class__.__name__
 
 
@@ -1120,7 +1128,13 @@ om_debug = env_truthy('OPENMDAO_DEBUG')
 
 if om_debug:
     def dprint(*args, **kwargs):
+        """
+        Print only if OPENMDAO_DEBUG is set in the environment.
+        """
         print(*args, **kwargs)
 else:
     def dprint(*args, **kwargs):
+        """
+        Do nothing.
+        """
         pass

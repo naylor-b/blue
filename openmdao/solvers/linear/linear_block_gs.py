@@ -19,6 +19,8 @@ class LinearBlockGS(BlockLinearSolver):
     _theta_n_1 : dict of float
         Cached relaxation factor from previous iteration. Only used if the aitken acceleration
         option is turned on. The dictionary is keyed by linear vector name.
+    _neg : bool
+        Currently does nothing.
     """
 
     SOLVER = 'LN: LNBGS'
@@ -80,34 +82,37 @@ class LinearBlockGS(BlockLinearSolver):
 
     def _create_rhs_vecs(self):
         super()._create_rhs_vecs()
+        self._subdivide_rhsvecs()
 
+    def _subdivide_rhsvecs(self):
         rhs = self._rhs_vecs
         system = self._system()
+        kind = 'residual' if self._mode == 'fwd' else 'output'
         for vec_name in system._lin_rel_vec_name_list:
             rhsvec = rhs[vec_name]
-            kind = 'residual' if self._mode == 'fwd' else 'output'
             start = end = 0
             for sub in system._subsystems_myproc:
                 end += len(sub._vectors[kind][vec_name]) if vec_name in sub._vectors[kind] else 0
                 rhsvec[sub.name] = rhsvec[None][start:end]
                 start = end
 
-    # def _set_complex_step_mode(self, active):
-    #     """
-    #     Turn on or off complex stepping mode.
+    def _set_complex_step_mode(self, active):
+        """
+        Turn on or off complex stepping mode.
 
-    #     Recurses to turn on or off complex stepping mode in all subsystems and their vectors.
+        Recurses to turn on or off complex stepping mode in all subsystems and their vectors.
 
-    #     Parameters
-    #     ----------
-    #     active : bool
-    #         Complex mode flag; set to True prior to commencing complex step.
-    #     """
-    #     for vec_name in self._system()._lin_rel_vec_name_list:
-    #         if active:
-    #             self._rhs_vecs[vec_name][None] = self._rhs_vecs[vec_name][None].astype(np.complex)
-    #         else:
-    #             self._rhs_vecs[vec_name][None] = self._rhs_vecs[vec_name][None].real
+        Parameters
+        ----------
+        active : bool
+            Complex mode flag; set to True prior to commencing complex step.
+        """
+        for vec_name in self._system()._lin_rel_vec_name_list:
+            if active:
+                self._rhs_vecs[vec_name][None] = self._rhs_vecs[vec_name][None].astype(np.complex)
+            else:
+                self._rhs_vecs[vec_name][None] = self._rhs_vecs[vec_name][None].real
+        self._subdivide_rhsvecs()
 
     #  @trace()
     def _single_iteration(self):

@@ -7,7 +7,7 @@ from contextlib import contextmanager
 import numpy as np
 
 from openmdao.utils.name_maps import prom_name2abs_name, rel_name2abs_name
-from openmdao.utils.array_utils import Iadd2IsubArray
+# from openmdao.utils.array_utils import Iadd2IsubArray
 
 
 _full_slice = slice(None)
@@ -83,6 +83,8 @@ class Vector(object):
         Total length of data vector (including shared memory parts).
     _data_len : int
         Total length of only the internal _data array (does not include shared memory parts).
+    _neg : bool
+        Currently does nothing.
     """
 
     # Listing of relevant citations that should be referenced when
@@ -167,6 +169,14 @@ class Vector(object):
         return str(self.asarray())
 
     def __repr__(self):
+        """
+        Return a simple string representation.
+
+        Returns
+        -------
+        str
+            A string representation.
+        """
         return f"{self.__class__.__name__}({self.asarray()})"
 
     def __len__(self):
@@ -212,16 +222,16 @@ class Vector(object):
         ndarray or Iadd2IsubArray
             The current type of array based on self._neg.
         """
-        if self._neg:
-            return arr.view(Iadd2IsubArray)  # inverts __iadd__ and __isub__
+        # if self._neg:
+        #     return arr.view(Iadd2IsubArray)  # inverts __iadd__ and __isub__
         return arr
 
     def _negative_mode(self, neg=True):
         self._neg = neg
-        if neg:
-            self._data = self._data.view(Iadd2IsubArray)
-        else:
-            self._data = self._data.view(np.ndarray)
+        # if neg:
+        #     self._data = self._data.view(Iadd2IsubArray)
+        # else:
+        #     self._data = self._data.view(np.ndarray)
 
     def _init_nocopy(self):
         """
@@ -506,22 +516,26 @@ class Vector(object):
 
         Parameters
         ----------
-        vec : <Vector>
-            vector to add to self.
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
         """
         raise NotImplementedError('iadd not defined for vector type %s' %
                                   type(self).__name__)
 
     def isub(self, val, idxs=_full_slice):
         """
-        Perform in-place vector substraction.
+        Subtract the value from the data array at the specified indices or slice(s).
 
         Must be implemented by the subclass.
 
         Parameters
         ----------
-        vec : <Vector>
-            vector to subtract from self.
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
         """
         raise NotImplementedError('isub not defined for vector type %s' %
                                   type(self).__name__)
@@ -534,8 +548,10 @@ class Vector(object):
 
         Parameters
         ----------
-        val : int or float
-            scalar to multiply self.
+        val : ndarray
+            Value to set into the data array.
+        idxs : int or slice or tuple of ints and/or slices.
+            The locations where the data array should be updated.
         """
         raise NotImplementedError('imul not defined for vector type %s' %
                                   type(self).__name__)

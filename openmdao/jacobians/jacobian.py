@@ -96,6 +96,14 @@ class Jacobian(object):
         return (abs2meta['output'][of]['size'], sz)
 
     def __repr__(self):
+        """
+        Return a simple string representation.
+
+        Returns
+        -------
+        str
+            A string representation.
+        """
         return self.__class__.__name__
 
     def __contains__(self, key):

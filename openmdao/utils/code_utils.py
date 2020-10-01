@@ -20,22 +20,42 @@ class trace(object):
     """
     A decorator that prints debug info when entering/leaving the decorated function.
 
-    Parameters
+    Attributes
     ----------
-    fn : function
-        The function being checked for possible memory leaks.
-
-    Returns
-    -------
-    function
-        A wrapper for fn that dumps debug info.
+    show_args : bool
+        If True, show the args passed to the decorated function.
+    show_ret : bool
+        If True, show the value returned from the decorated function.
     """
-    def __init__(self, show_args=False, show_ret=False, suffix=''):
+
+    def __init__(self, show_args=False, show_ret=False):
+        """
+        Initialize attributes.
+
+        Parameters
+        ----------
+        show_args : bool
+            If True, show the args passed to the decorated function.
+        show_ret : bool
+            If True, show the value returned from the decorated function.
+        """
         self.show_args = show_args
         self.show_ret = show_ret
-        self.suffix = suffix
 
     def __call__(self, fn):
+        """
+        Wrap the function.
+
+        Parameters
+        ----------
+        fn : function
+            The function to be wrapped.
+
+        Returns
+        -------
+        function
+            The wrapped function.
+        """
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             global _tracedepth
@@ -45,9 +65,6 @@ class trace(object):
                 name = ''
             if name:
                 name = name + '.'
-
-            if self.suffix:
-                name = name + self.suffix + '.'
 
             if self.show_args:
                 tot = [f"{a}" for a in args] + [f"{k}={v}" for k, v in kwargs.items()]

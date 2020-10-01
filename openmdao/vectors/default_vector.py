@@ -251,6 +251,7 @@ class DefaultVector(Vector):
     def _nocopy_set_val(self, val, idxs=_full_slice):
         """
         Fill the data array with the value at the specified indices or slice(s).
+
         Parameters
         ----------
         val : ndarray
@@ -363,6 +364,7 @@ class DefaultVector(Vector):
     def _nocopy_iadd(self, val, idxs=_full_slice):
         """
         Add the value to the data array at the specified indices or slice(s).
+
         Parameters
         ----------
         val : ndarray
@@ -393,6 +395,7 @@ class DefaultVector(Vector):
     def _nocopy_isub(self, val, idxs=_full_slice):
         """
         Subtract the value from the data array at the specified indices or slice(s).
+
         Parameters
         ----------
         val : ndarray
@@ -423,6 +426,7 @@ class DefaultVector(Vector):
     def _nocopy_imul(self, val, idxs=_full_slice):
         """
         Multiply the value to the data array at the specified indices or slice(s).
+
         Parameters
         ----------
         val : ndarray

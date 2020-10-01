@@ -741,6 +741,8 @@ class LinearSolver(Solver):
         Names of systems relevant to the current solve.
     _assembled_jac : AssembledJacobian or None
         If not None, the AssembledJacobian instance used by this solver.
+    _neg : bool
+        Currently does nothing.
     """
 
     def __init__(self, **kwargs):
