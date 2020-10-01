@@ -91,6 +91,7 @@ class LinearBlockGS(BlockLinearSolver):
         for vec_name in system._lin_rel_vec_name_list:
             rhsvec = rhs[vec_name]
             start = end = 0
+            ncol = system._vectors[kind][vec_name]._ncol
             for sub in system._subsystems_myproc:
                 end += len(sub._vectors[kind][vec_name]) if vec_name in sub._vectors[kind] else 0
                 rhsvec[sub.name] = rhsvec[None][start:end]
@@ -114,7 +115,6 @@ class LinearBlockGS(BlockLinearSolver):
                 self._rhs_vecs[vec_name][None] = self._rhs_vecs[vec_name][None].real
         self._subdivide_rhsvecs()
 
-    #  @trace()
     def _single_iteration(self):
         """
         Perform the operations in the iteration loop.
@@ -143,9 +143,9 @@ class LinearBlockGS(BlockLinearSolver):
                                      neg=True)
                 for vec_name in vec_names:
                     if vec_name in subsys._rel_vec_names:
-                        b_vec = subsys._vectors['residual'][vec_name]
+                        b_vec = system._vectors['residual'][vec_name]
                         b_vec *= -1.0
-                        b_vec.iadd(self._rhs_vecs[vec_name][subsys.name])
+                        b_vec.iadd(self._rhs_vecs[vec_name][None])
                 subsys._solve_linear(vec_names, mode, self._rel_systems)
 
         else:  # rev
