@@ -1711,6 +1711,10 @@ class System(object):
         self._outputs = vectors['output']['nonlinear']
         self._residuals = vectors['residual']['nonlinear']
 
+        # if self.pathname == '':
+        #     print("input data size:", self._inputs._data.size, "full size:",
+        #           self._inputs.asarray().size)
+
         for subsys in self._subsystems_myproc:
             subsys._scale_factors = self._scale_factors
             subsys._setup_vectors(root_vectors)
@@ -4854,7 +4858,7 @@ class System(object):
             return False  # both vars must be local to share
 
         meta_out = model._var_abs2meta['output'][src]
-        if meta_out['distributed'] is not None:
+        if meta_out['distributed']:
             return False
 
         units_in = meta_in['units']

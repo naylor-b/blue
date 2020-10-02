@@ -221,7 +221,9 @@ class DefaultVector(Vector):
         for arr in self._views_flat.values():
             end += arr.size
             in_arr = np.logical_and(start <= idxs, idxs < end)
-            yield self._get_arr(arr), start, end, idxs[in_arr] - start
+            inds = idxs[in_arr]
+            if inds.size > 0:
+                yield self._get_arr(arr), start, end, inds - start
             start = end
 
     def set_vec(self, vec):

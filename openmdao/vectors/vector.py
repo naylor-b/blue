@@ -722,9 +722,9 @@ class Vector(object):
             need to do this when temporarily disabling complex step for guess_nonlinear.
         """
         if active:
-            arr = self._data
+            arr = self.asarray()
         elif keep_real:
-            arr = self._data.real
+            arr = self.asarray().real
         else:
             arr = None
 
