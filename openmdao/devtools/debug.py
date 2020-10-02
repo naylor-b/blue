@@ -199,12 +199,21 @@ def tree(top, show_solvers=True, show_jacs=True, show_colors=True, show_approx=T
         cprint('', end='\n')
 
         vindent = indent + '  '
-        if show_promotes:
-            pinfo = (('any', 'promotes'), ('input', 'promotes_inputs'), ('output', 'promotes_outputs'))
-            for ptype, name in pinfo:
-                if s._var_promotes[ptype]:
-                    cprint(f"{vindent}{name}: ", color=Fore.WHITE + Style.BRIGHT)
-                    cprint(f"{list(s._var_promotes[ptype])}\n")
+        if show_promotes and s.pathname:
+            maps = s._get_maps(s._var_allprocs_prom2abs_list)
+            prefix = s.name + '.'
+            for io in ('input', 'output'):
+                proms = []
+                for subprom, prom in maps[io].items():
+                    if subprom == prom:
+                        proms.append((prom, ''))
+                    elif prefix + subprom != prom:
+                        proms.append((f"{subprom} -> {prom}", Fore.GREEN))
+                if proms:
+                    cprint(f"{vindent}promoted {io}s: ", color=Fore.WHITE + Style.BRIGHT)
+                    for p, color in sorted(proms):
+                        cprint(f"{p}, ", color=color)
+                    cprint("\n")
 
         for name, val in ret:
             cprint("%s%s: %s\n" % (vindent, name, val))
