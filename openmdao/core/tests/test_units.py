@@ -280,7 +280,7 @@ class TestUnitConversion(unittest.TestCase):
         prob.model.add_subsystem('tgt', om.ExecComp('yy=xx', xx={'value': 0.0, 'units': None}))
         prob.model.connect('src.x2', 'tgt.xx')
 
-        msg = "Group (<model>): Output 'src.x2' with units of 'degC' is connected to input 'tgt.xx' which has no units."
+        msg = "<model> <class Group>: Output 'src.x2' with units of 'degC' is connected to input 'tgt.xx' which has no units."
 
         with assert_warning(UserWarning, msg):
             prob.setup()
@@ -458,7 +458,7 @@ class TestUnitConversion(unittest.TestCase):
             #"""
 
             #def __init__(self, n=2):
-                #super(Attitude_Angular, self).__init__()
+                #super().__init__()
 
                 #self.n = n
 
@@ -574,7 +574,7 @@ class TestUnitConversion(unittest.TestCase):
         with self.assertRaises(Exception) as cm:
             prob.setup()
 
-        expected_msg = "Group (<model>): Output units of 'degC' for 'src.x2' are incompatible with input units of 'm' for 'dest.x2'."
+        expected_msg = "<model> <class Group>: Output units of 'degC' for 'src.x2' are incompatible with input units of 'm' for 'dest.x2'."
 
         self.assertEqual(expected_msg, str(cm.exception))
 
@@ -585,7 +585,7 @@ class TestUnitConversion(unittest.TestCase):
         with self.assertRaises(Exception) as cm:
             prob.setup()
 
-        expected_msg = "Group (<model>): Output units of 'degC' for 'src.x2' are incompatible with input units of 'm' for 'dest.x2'."
+        expected_msg = "<model> <class Group>: Output units of 'degC' for 'src.x2' are incompatible with input units of 'm' for 'dest.x2'."
 
         self.assertEqual(expected_msg, str(cm.exception))
 
@@ -721,7 +721,7 @@ class TestUnitConversion(unittest.TestCase):
         #class TestComp(Component):
 
             #def __init__(self):
-                #super(TestComp, self).__init__()
+                #super().__init__()
 
                 ## Params
                 #self.add_param('x1', 1.0, units='mm')

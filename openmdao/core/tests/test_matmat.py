@@ -83,7 +83,7 @@ class QCVProblem(om.Problem):
     """
 
     def __init__(self, comp_class=QuadraticCompVectorized):
-        super(QCVProblem, self).__init__()
+        super().__init__()
 
         model = self.model
 
@@ -703,7 +703,7 @@ class MatMatTestCase(unittest.TestCase):
             prob.compute_totals()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (comp): Attempt to set value of 'a' in input vector "
+                         "'comp' <class BadComp>: Attempt to set value of 'a' in input vector "
                          "when it is read only.")
 
     def test_apply_multi_linear_outputs_read_only(self):
@@ -722,7 +722,7 @@ class MatMatTestCase(unittest.TestCase):
             prob.compute_totals()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (comp): Attempt to set value of 'x' in output vector "
+                         "'comp' <class BadComp>: Attempt to set value of 'x' in output vector "
                          "when it is read only.")
 
     def test_apply_multi_linear_dinputs_read_only(self):
@@ -741,7 +741,7 @@ class MatMatTestCase(unittest.TestCase):
             prob.compute_totals()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (comp): Attempt to set value of 'a' in input vector "
+                         "'comp' <class BadComp>: Attempt to set value of 'a' in input vector "
                          "when it is read only.")
 
     def test_apply_multi_linear_doutputs_read_only(self):
@@ -760,7 +760,7 @@ class MatMatTestCase(unittest.TestCase):
             prob.compute_totals()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (comp): Attempt to set value of 'x' in output vector "
+                         "'comp' <class BadComp>: Attempt to set value of 'x' in output vector "
                          "when it is read only.")
 
     def test_apply_multi_linear_dresids_read_only(self):
@@ -779,14 +779,14 @@ class MatMatTestCase(unittest.TestCase):
             prob.compute_totals()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (comp): Attempt to set value of 'x' in residual vector "
+                         "'comp' <class BadComp>: Attempt to set value of 'x' in residual vector "
                          "when it is read only.")
 
 
 class JacVec(om.ExplicitComponent):
 
     def __init__(self, size):
-        super(JacVec, self).__init__()
+        super().__init__()
         self.size = size
 
     def setup(self):
@@ -923,7 +923,7 @@ class ComputeMultiJacVecTestCase(unittest.TestCase):
             p.compute_totals()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (comp): Attempt to set value of 'x' in input vector "
+                         "'comp' <class BadComp>: Attempt to set value of 'x' in input vector "
                          "when it is read only.")
 
         p = self.setup_model(size=5, comp_class=BadComp, vectorize=True, mode='rev')
@@ -932,7 +932,7 @@ class ComputeMultiJacVecTestCase(unittest.TestCase):
             p.compute_totals()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (comp): Attempt to set value of 'f_xy' in residual vector "
+                         "'comp' <class BadComp>: Attempt to set value of 'f_xy' in residual vector "
                          "when it is read only.")
 
     def test_compute_jacvec_product_inputs_read_only(self):
@@ -947,7 +947,7 @@ class ComputeMultiJacVecTestCase(unittest.TestCase):
             p.compute_totals()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (comp): Attempt to set value of 'x' in input vector "
+                         "'comp' <class BadComp>: Attempt to set value of 'x' in input vector "
                          "when it is read only.")
 
     def test_compute_multi_jacvec_product_mode_read_only(self):
@@ -972,7 +972,7 @@ class ComputeMultiJacVecTestCase(unittest.TestCase):
             p.compute_totals()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (comp): Attempt to set value of 'x' in input vector "
+                         "'comp' <class BadComp>: Attempt to set value of 'x' in input vector "
                          "when it is read only.")
 
         p = self.setup_model(size=5, comp_class=BadComp, vectorize=True, mode='rev')
@@ -981,7 +981,7 @@ class ComputeMultiJacVecTestCase(unittest.TestCase):
             p.compute_totals()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (comp): Attempt to set value of 'f_xy' in residual vector "
+                         "'comp' <class BadComp>: Attempt to set value of 'f_xy' in residual vector "
                          "when it is read only.")
 
     def test_compute_multi_jacvec_product_inputs_read_only(self):
@@ -996,7 +996,7 @@ class ComputeMultiJacVecTestCase(unittest.TestCase):
             p.compute_totals()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (comp): Attempt to set value of 'x' in input vector "
+                         "'comp' <class BadComp>: Attempt to set value of 'x' in input vector "
                          "when it is read only.")
 
 

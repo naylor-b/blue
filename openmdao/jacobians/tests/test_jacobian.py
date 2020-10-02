@@ -23,7 +23,7 @@ except ImportError:
 
 class MyExplicitComp(ExplicitComponent):
     def __init__(self, jac_type):
-        super(MyExplicitComp, self).__init__()
+        super().__init__()
         self._jac_type = jac_type
 
     def setup(self):
@@ -71,7 +71,7 @@ class MyExplicitComp(ExplicitComponent):
 
 class MyExplicitComp2(ExplicitComponent):
     def __init__(self, jac_type):
-        super(MyExplicitComp2, self).__init__()
+        super().__init__()
         self._jac_type = jac_type
 
     def setup(self):
@@ -117,7 +117,7 @@ class ExplicitSetItemComp(ExplicitComponent):
         self._shape = shape
         self._value = value
         self._constructor = constructor
-        super(ExplicitSetItemComp, self).__init__()
+        super().__init__()
 
     def setup(self):
         if self._shape == 'scalar':
@@ -596,7 +596,7 @@ class TestJacobian(unittest.TestCase):
         model = prob.model
         model.add_subsystem('comp', Comp1())
 
-        msg = "Comp1 \(comp\): d\(y\)/d\(x\): declare_partials has been called with rows and cols, which" + \
+        msg = "'comp' <class Comp1>: d\(y\)/d\(x\): declare_partials has been called with rows and cols, which" + \
               " should be arrays of equal length, but rows is length 2 while " + \
               "cols is length 1."
         with self.assertRaisesRegex(RuntimeError, msg):
@@ -606,7 +606,7 @@ class TestJacobian(unittest.TestCase):
         model = prob.model
         model.add_subsystem('comp', Comp2())
 
-        msg = "Comp2 \(comp\): d\(y\)/d\(x\): declare_partials has been called with rows and cols, which" + \
+        msg = "'comp' <class Comp2>: d\(y\)/d\(x\): declare_partials has been called with rows and cols, which" + \
             " should be arrays of equal length, but rows is length 1 while " + \
             "cols is length 2."
         with self.assertRaisesRegex(RuntimeError, msg):

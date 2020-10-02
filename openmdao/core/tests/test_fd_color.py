@@ -80,18 +80,18 @@ def setup_indeps(isplit, ninputs, indeps_name, comp_name):
 
 class CounterGroup(Group):
     def __init__(self, *args, **kwargs):
-        super(CounterGroup, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._nruns = 0
 
     def _solve_nonlinear(self, *args, **kwargs):
-        super(CounterGroup, self)._solve_nonlinear(*args, **kwargs)
+        super()._solve_nonlinear(*args, **kwargs)
         self._nruns += 1
 
 
 class SparseCompImplicit(ImplicitComponent):
 
     def __init__(self, sparsity, method='fd', isplit=1, osplit=1, **kwargs):
-        super(SparseCompImplicit, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.sparsity = sparsity
         self.isplit = isplit
         self.osplit = osplit
@@ -127,7 +127,7 @@ class SparseCompImplicit(ImplicitComponent):
 class SparseCompExplicit(ExplicitComponent):
 
     def __init__(self, sparsity, method='fd', isplit=1, osplit=1, **kwargs):
-        super(SparseCompExplicit, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.sparsity = sparsity
         self.isplit = isplit
         self.osplit = osplit
@@ -659,7 +659,7 @@ class TestColoring(unittest.TestCase):
         prob.setup(check=False, mode='fwd')
         prob.set_solver_print(level=0)
         prob.run_model()
-        with assert_warning(UserWarning, 'SparseCompExplicit (comp): Coloring was deactivated.  Improvement of 16.7% was less than min allowed (20.0%).'):
+        with assert_warning(UserWarning, "'comp' <class SparseCompExplicit>: Coloring was deactivated.  Improvement of 16.7% was less than min allowed (20.0%)."):
             prob.model._linearize(None)
 
         start_nruns = comp._nruns
@@ -708,7 +708,7 @@ class TestColoring(unittest.TestCase):
 
         for i, comp in enumerate(comps):
             if i == 0:
-                with assert_warning(UserWarning, 'SparseCompExplicit (comp0): Coloring was deactivated.  Improvement of 16.7% was less than min allowed (20.0%).'):
+                with assert_warning(UserWarning, "'comp0' <class SparseCompExplicit>: Coloring was deactivated.  Improvement of 16.7% was less than min allowed (20.0%)."):
                     comp._linearize()
 
             start_nruns = comp._nruns
@@ -805,7 +805,7 @@ class TestColoring(unittest.TestCase):
         prob.setup(check=False, mode='fwd')
         prob.set_solver_print(level=0)
 
-        with assert_warning(UserWarning, "CounterGroup (<model>): Coloring was deactivated.  Improvement of 20.0% was less than min allowed (25.0%)."):
+        with assert_warning(UserWarning, "<model> <class CounterGroup>: Coloring was deactivated.  Improvement of 20.0% was less than min allowed (25.0%)."):
             prob.run_driver()  # need this to trigger the dynamic coloring
 
         prob.driver._total_jac = None

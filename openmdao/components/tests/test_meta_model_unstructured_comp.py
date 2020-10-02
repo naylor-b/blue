@@ -50,7 +50,7 @@ class MetaModelTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError) as cm:
             prob.run_model()
 
-        msg = ("MetaModelUnStructuredComp (sin_mm): The following training data sets must be "
+        msg = ("'sin_mm' <class MetaModelUnStructuredComp>: The following training data sets must be "
                "provided as options: ['train:x', 'train:f_x']")
         self.assertEqual(str(cm.exception), msg)
 
@@ -82,7 +82,7 @@ class MetaModelTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError) as cm:
             prob.run_model()
 
-        msg = ("MetaModelUnStructuredComp (sin_mm): No surrogate specified for output 'f_x'")
+        msg = ("'sin_mm' <class MetaModelUnStructuredComp>: No surrogate specified for output 'f_x'")
         self.assertEqual(str(cm.exception), msg)
 
     def test_sin_metamodel_preset_data(self):
@@ -351,7 +351,7 @@ class MetaModelTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError) as cm:
             prob.run_model()
 
-        expected = ("MetaModelUnStructuredComp (mm): Each variable must have the same number"
+        expected = ("'mm' <class MetaModelUnStructuredComp>: Each variable must have the same number"
                     " of training points. Expected 4 but found"
                     " 2 points for 'y'.")
 
@@ -379,7 +379,7 @@ class MetaModelTestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError) as cm:
             prob.run_model()
 
-        expected = ("MetaModelUnStructuredComp (mm): Each variable must have the same number"
+        expected = ("'mm' <class MetaModelUnStructuredComp>: Each variable must have the same number"
                     " of training points. Expected 4 but found"
                     " 2 points for 'f'.")
         self.assertEqual(str(cm.exception), expected)
@@ -951,7 +951,7 @@ class MetaModelTestCase(unittest.TestCase):
     def test_metamodel_setup_called_twice_bug_called_outside_setup(self):
         class Trig(om.MetaModelUnStructuredComp):
             def __init__(self):
-                super(Trig, self).__init__()
+                super().__init__()
                 self.add_input('x', 0.,
                                training_data=np.linspace(0, 10, 20))
 
@@ -1065,8 +1065,8 @@ class MetaModelTestCase(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             prob.run_model()
 
-        self.assertEqual(str(cm.exception), 'sin_mm: KrigingSurrogate requires at least'
-                                            ' 2 training points.')
+        self.assertEqual(str(cm.exception), "'sin_mm' <class MetaModelUnStructuredComp>: "
+                         "Error calling compute(), KrigingSurrogate requires at least 2 training points.")
 
 
 class MetaModelUnstructuredSurrogatesFeatureTestCase(unittest.TestCase):

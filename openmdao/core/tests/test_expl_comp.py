@@ -514,7 +514,7 @@ class ExplCompTestCase(unittest.TestCase):
             """
 
             def __init__(self, size):
-                super(ArrayAdder, self).__init__()
+                super().__init__()
                 self.size = size
 
             def setup(self):
@@ -693,7 +693,7 @@ class ExplCompTestCase(unittest.TestCase):
             """
 
             def __init__(self, size):
-                super(ArrayAdder, self).__init__()
+                super().__init__()
                 self.size = size
 
             def setup(self):
@@ -870,7 +870,7 @@ class ExplCompTestCase(unittest.TestCase):
     def test_compute_inputs_read_only(self):
         class BadComp(TestExplCompSimple):
             def compute(self, inputs, outputs):
-                super(BadComp, self).compute(inputs, outputs)
+                super().compute(inputs, outputs)
                 inputs['length'] = 0.  # should not be allowed
 
         prob = om.Problem(BadComp())
@@ -880,12 +880,12 @@ class ExplCompTestCase(unittest.TestCase):
             prob.run_model()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (<model>): Attempt to set value of 'length' in input vector when it is read only.")
+                         "<model> <class BadComp>: Attempt to set value of 'length' in input vector when it is read only.")
 
     def test_compute_inputs_read_only_reset(self):
         class BadComp(TestExplCompSimple):
             def compute(self, inputs, outputs):
-                super(BadComp, self).compute(inputs, outputs)
+                super().compute(inputs, outputs)
                 raise om.AnalysisError("It's just a scratch.")
 
         prob = om.Problem(BadComp())
@@ -899,7 +899,7 @@ class ExplCompTestCase(unittest.TestCase):
     def test_compute_partials_inputs_read_only(self):
         class BadComp(TestExplCompSimpleDense):
             def compute_partials(self, inputs, partials):
-                super(BadComp, self).compute_partials(inputs, partials)
+                super().compute_partials(inputs, partials)
                 inputs['length'] = 0.  # should not be allowed
 
         prob = om.Problem(BadComp())
@@ -910,13 +910,13 @@ class ExplCompTestCase(unittest.TestCase):
             prob.check_partials()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (<model>): Attempt to set value of 'length' in input vector "
+                         "<model> <class BadComp>: Attempt to set value of 'length' in input vector "
                          "when it is read only.")
 
     def test_compute_partials_inputs_read_only_reset(self):
         class BadComp(TestExplCompSimpleDense):
             def compute_partials(self, inputs, partials):
-                super(BadComp, self).compute_partials(inputs, partials)
+                super().compute_partials(inputs, partials)
                 raise om.AnalysisError("It's just a scratch.")
 
         prob = om.Problem(BadComp())
@@ -932,7 +932,7 @@ class ExplCompTestCase(unittest.TestCase):
     def test_compute_jacvec_product_inputs_read_only(self):
         class BadComp(RectangleJacVec):
             def compute_jacvec_product(self, inputs, d_inputs, d_outputs, mode):
-                super(BadComp, self).compute_jacvec_product(inputs, d_inputs, d_outputs, mode)
+                super().compute_jacvec_product(inputs, d_inputs, d_outputs, mode)
                 inputs['length'] = 0.  # should not be allowed
 
         prob = om.Problem(BadComp())
@@ -943,13 +943,13 @@ class ExplCompTestCase(unittest.TestCase):
             prob.check_partials()
 
         self.assertEqual(str(cm.exception),
-                         "BadComp (<model>): Attempt to set value of 'length' in input vector "
+                         "<model> <class BadComp>: Attempt to set value of 'length' in input vector "
                          "when it is read only.")
 
     def test_compute_jacvec_product_inputs_read_only_reset(self):
         class BadComp(RectangleJacVec):
             def compute_jacvec_product(self, inputs, d_inputs, d_outputs, mode):
-                super(BadComp, self).compute_jacvec_product(inputs, d_inputs, d_outputs, mode)
+                super().compute_jacvec_product(inputs, d_inputs, d_outputs, mode)
                 raise om.AnalysisError("It's just a scratch.")
 
         prob = om.Problem(BadComp())

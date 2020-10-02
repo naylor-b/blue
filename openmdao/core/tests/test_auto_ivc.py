@@ -38,7 +38,7 @@ def _test_func_name(func, num, param):
 
 class PathCompEx(om.ExplicitComponent):
     def __init__(self, s=''):
-        super(PathCompEx, self).__init__()
+        super().__init__()
         self.s = s
 
     def setup(self):
@@ -206,7 +206,7 @@ class SerialTests(unittest.TestCase):
         try:
             p.setup()
         except Exception as err:
-            self.assertEqual(str(err), "Group (<model>): The following inputs, ['par.C1.x', 'par.C2.x'], promoted to 'x', are connected but their metadata entries ['value'] differ. Call <group>.set_input_defaults('x', val=?), where <group> is the Group named 'par' to remove the ambiguity.")
+            self.assertEqual(str(err), "<model> <class Group>: The following inputs, ['par.C1.x', 'par.C2.x'], promoted to 'x', are connected but their metadata entries ['value'] differ. Call <group>.set_input_defaults('x', val=?), where <group> is the Group named 'par' to remove the ambiguity.")
         else:
             self.fail("Exception expected.")
 

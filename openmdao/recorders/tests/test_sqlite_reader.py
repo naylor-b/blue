@@ -1998,7 +1998,7 @@ class TestSqliteCaseReader(unittest.TestCase):
         prob.setup()
 
         msg = ("Trying to record option 'options value to fail' which cannot be pickled on system "
-               "IndepVarComp (subs). Set 'recordable' to False. Skipping recording options for "
+               "'subs' <class IndepVarComp>. Set 'recordable' to False. Skipping recording options for "
                "this system.")
         with assert_warning(UserWarning, msg):
             prob.run_model()
@@ -2660,7 +2660,7 @@ class TestSqliteCaseReader(unittest.TestCase):
             A simple component that has array inputs and outputs
             """
             def __init__(self, size):
-                super(ArrayAdder, self).__init__()
+                super().__init__()
                 self.size = size
 
             def setup(self):

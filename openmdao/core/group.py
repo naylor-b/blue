@@ -14,21 +14,20 @@ import networkx as nx
 from openmdao.jacobians.dictionary_jacobian import DictionaryJacobian
 from openmdao.core.system import System
 from openmdao.core.component import Component, _DictValues, _full_slice
-from openmdao.core.constants import _UNDEFINED, INT_DTYPE
+from openmdao.core.constants import _UNDEFINED, INT_DTYPE, _SetupStatus
 from openmdao.proc_allocators.default_allocator import DefaultAllocator, ProcAllocationError
 from openmdao.jacobians.jacobian import SUBJAC_META_DEFAULTS
 from openmdao.recorders.recording_iteration_stack import Recording
 from openmdao.solvers.nonlinear.nonlinear_runonce import NonlinearRunOnce
 from openmdao.solvers.linear.linear_runonce import LinearRunOnce
 from openmdao.utils.array_utils import array_connection_compatible, _flatten_src_indices, \
-    shape_to_len
+    shape_to_len, evenly_distrib_idxs
 from openmdao.utils.general_utils import ContainsAll, simple_warning, common_subpath, \
     conditional_error, _is_slicer_op, dprint
-from openmdao.utils.units import is_compatible, unit_conversion, _has_val_mismatch, _find_unit
+from openmdao.utils.units import is_compatible, unit_conversion, _has_val_mismatch, _find_unit, \
+    _is_unitless
 from openmdao.utils.mpi import MPI, check_mpi_exceptions
 import openmdao.utils.coloring as coloring_mod
-from openmdao.utils.array_utils import evenly_distrib_idxs
-from openmdao.core.constants import _SetupStatus
 from openmdao.utils.code_utils import trace
 
 # regex to check for valid names.
@@ -120,7 +119,7 @@ class Group(System):
         self._mpi_proc_allocator = DefaultAllocator()
         self._proc_info = {}
 
-        super(Group, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         self._subgroups_myproc = None
         self._manual_connections = {}
@@ -278,7 +277,7 @@ class Group(System):
         dict
             Mapping of each absolute var name to its corresponding scaling factor tuple.
         """
-        scale_factors = super(Group, self)._compute_root_scale_factors()
+        scale_factors = super()._compute_root_scale_factors()
 
         if self._has_input_scaling:
             abs2meta_in = self._var_abs2meta['input']
@@ -395,7 +394,7 @@ class Group(System):
         prob_meta : dict
             Problem level metadata.
         """
-        super(Group, self)._setup_procs(pathname, comm, mode, prob_meta)
+        super()._setup_procs(pathname, comm, mode, prob_meta)
         self._setup_procs_finished = False
 
         nproc = comm.size
@@ -514,7 +513,7 @@ class Group(System):
         for subsys in self._subsystems_myproc:
             subsys._configure_check()
 
-        super(Group, self)._configure_check()
+        super()._configure_check()
 
     def _list_states(self):
         """
@@ -687,7 +686,7 @@ class Group(System):
         else:
             old_prom2abs = self._var_allprocs_prom2abs_list['input']
 
-        super(Group, self)._setup_var_data()
+        super()._setup_var_data()
 
         var_discrete = self._var_discrete
         allprocs_discrete = self._var_allprocs_discrete
@@ -1666,9 +1665,10 @@ class Group(System):
 
             if out_units:
                 if not in_units:
-                    msg = f"{self.msginfo}: Output '{abs_out}' with units of '{out_units}' " + \
-                          f"is connected to input '{abs_in}' which has no units."
-                    simple_warning(msg)
+                    if not _is_unitless(out_units):
+                        msg = f"{self.msginfo}: Output '{abs_out}' with units of '{out_units}' " + \
+                            f"is connected to input '{abs_in}' which has no units."
+                        simple_warning(msg)
                 elif not is_compatible(in_units, out_units):
                     msg = f"{self.msginfo}: Output units of '{out_units}' for '{abs_out}' " + \
                           f"are incompatible with input units of '{in_units}' for '{abs_in}'."
@@ -1677,9 +1677,10 @@ class Group(System):
                     else:
                         simple_warning(msg)
             elif in_units is not None:
-                msg = f"{self.msginfo}: Input '{abs_in}' with units of '{in_units}' is " + \
-                      f"connected to output '{abs_out}' which has no units."
-                simple_warning(msg)
+                if not _is_unitless(in_units):
+                    msg = f"{self.msginfo}: Input '{abs_in}' with units of '{in_units}' is " + \
+                        f"connected to output '{abs_out}' which has no units."
+                    simple_warning(msg)
 
             fail = False
 
@@ -2713,7 +2714,7 @@ class Group(System):
                 yield of, offset, end, sub_of_idx
                 offset = end
         else:
-            for tup in super(Group, self)._jacobian_of_iter():
+            for tup in super()._jacobian_of_iter():
                 yield tup
 
     def _jacobian_wrt_iter(self, wrt_matches=None):
@@ -2760,7 +2761,7 @@ class Group(System):
                     yield wrt, offset, end, sub_wrt_idx
                     offset = end
         else:
-            yield from super(Group, self)._jacobian_wrt_iter(wrt_matches)
+            yield from super()._jacobian_wrt_iter(wrt_matches)
 
     def _update_wrt_matches(self, info):
         """

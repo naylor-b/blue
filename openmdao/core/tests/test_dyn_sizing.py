@@ -194,7 +194,7 @@ class TestPassSize(unittest.TestCase):
 
         exception = raises_cm.exception
 
-        msg = "Group (<model>): Failed to resolve shapes for ['B.in', 'B.out', 'C.in', 'C.out']. To see the dynamic shape dependency graph, do 'openmdao view_dyn_shapes <your_py_file>'."
+        msg = "<model> <class Group>: Failed to resolve shapes for ['B.in', 'B.out', 'C.in', 'C.out']. To see the dynamic shape dependency graph, do 'openmdao view_dyn_shapes <your_py_file>'."
         self.assertEqual(exception.args[0], msg)
 
 
@@ -322,7 +322,7 @@ class TestPassSizeDistributed(unittest.TestCase):
 class ResizableComp(om.ExplicitComponent):
     # this is just a component that allows us to resize between setups
     def __init__(self, n_inputs=1, size=5, mult=2.):
-        super(ResizableComp, self).__init__()
+        super().__init__()
         self.n_inputs = n_inputs
         self.size = size
         self.mult = mult
@@ -340,7 +340,7 @@ class ResizableComp(om.ExplicitComponent):
 class DynShapeComp(om.ExplicitComponent):
     # component whose inputs and outputs are dynamically shaped
     def __init__(self, n_inputs=1):
-        super(DynShapeComp, self).__init__()
+        super().__init__()
         self.n_inputs = n_inputs
 
         for i in range(self.n_inputs):
@@ -355,7 +355,7 @@ class DynShapeComp(om.ExplicitComponent):
 class DistribDynShapeComp(om.ExplicitComponent):
     # a distributed component whose inputs and outputs are dynamically shaped
     def __init__(self, n_inputs=1):
-        super(DistribDynShapeComp, self).__init__()
+        super().__init__()
         self.n_inputs = n_inputs
         self.options['distributed'] = True
 
@@ -372,7 +372,7 @@ class DistribDynShapeComp(om.ExplicitComponent):
 class DistribComp(om.ExplicitComponent):
     # a distributed component with inputs and outputs that are not dynamically shaped
     def __init__(self, global_size, n_inputs=2):
-        super(DistribComp, self).__init__()
+        super().__init__()
         self.n_inputs = n_inputs
         self.global_size = global_size
         self.options['distributed'] = True
@@ -395,7 +395,7 @@ class DynShapeGroupSeries(om.Group):
     # strings together some number of components in series.
     # component type is determined by comp_class
     def __init__(self, n_comps, n_inputs, comp_class):
-        super(DynShapeGroupSeries, self).__init__()
+        super().__init__()
         self.n_comps = n_comps
         self.n_inputs = n_inputs
         self.comp_class = comp_class
@@ -412,7 +412,7 @@ class DynShapeGroupConnectedInputs(om.Group):
     # contains some number of components with all of their matching inputs connected.
     # component type is determined by comp_class
     def __init__(self, n_comps, n_inputs, comp_class):
-        super(DynShapeGroupConnectedInputs, self).__init__()
+        super().__init__()
         self.n_comps = n_comps
         self.n_inputs = n_inputs
         self.comp_class = comp_class
@@ -520,7 +520,7 @@ class TestDynShapes(unittest.TestCase):
         with self.assertRaises(RuntimeError) as cm:
             p.setup()
 
-        msg = "Group (<model>): Failed to resolve shapes for ['comp.x1', 'comp.x2']. To see the dynamic shape dependency graph, do 'openmdao view_dyn_shapes <your_py_file>'."
+        msg = "<model> <class Group>: Failed to resolve shapes for ['comp.x1', 'comp.x2']. To see the dynamic shape dependency graph, do 'openmdao view_dyn_shapes <your_py_file>'."
         self.assertEqual(cm.exception.args[0], msg)
 
     def test_mismatched_dyn_shapes(self):
@@ -541,7 +541,7 @@ class TestDynShapes(unittest.TestCase):
         with self.assertRaises(Exception) as cm:
             p.setup()
 
-        msg = "Group (<model>): Shape mismatch,  (3, 2) vs. (4, 2) for variable 'sink.x2' during dynamic shape determination."
+        msg = "<model> <class Group>: Shape mismatch,  (3, 2) vs. (4, 2) for variable 'sink.x2' during dynamic shape determination."
         self.assertEqual(str(cm.exception), msg)
 
     def test_baseline_conn_inputs(self):
@@ -650,7 +650,7 @@ class TestDynShapes(unittest.TestCase):
         with self.assertRaises(RuntimeError) as cm:
             p.setup()
 
-        msg = "Group (<model>): Failed to resolve shapes for ['Gdyn.C1.x2', 'Gdyn.C1.y2', 'Gdyn.C2.x2', 'Gdyn.C2.y2', 'Gdyn.C3.x2', 'Gdyn.C3.y2', 'sink.x2', 'sink.y2']. To see the dynamic shape dependency graph, do 'openmdao view_dyn_shapes <your_py_file>'."
+        msg = "<model> <class Group>: Failed to resolve shapes for ['Gdyn.C1.x2', 'Gdyn.C1.y2', 'Gdyn.C2.x2', 'Gdyn.C2.y2', 'Gdyn.C3.x2', 'Gdyn.C3.y2', 'sink.x2', 'sink.y2']. To see the dynamic shape dependency graph, do 'openmdao view_dyn_shapes <your_py_file>'."
         self.assertEqual(str(cm.exception), msg)
 
     def test_bad_copy_shape_name(self):
@@ -663,7 +663,7 @@ class TestDynShapes(unittest.TestCase):
         with self.assertRaises(RuntimeError) as cm:
             p.setup()
 
-        msg = "Group (<model>): Can't copy shape of variable 'sink.x11'. Variable doesn't exist."
+        msg = "<model> <class Group>: Can't copy shape of variable 'sink.x11'. Variable doesn't exist."
         self.assertEqual(str(cm.exception), msg)
 
 
