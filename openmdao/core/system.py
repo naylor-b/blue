@@ -4100,7 +4100,11 @@ class System(object):
         """
         iproc = self.comm.rank
         out_sizes = self._var_sizes['nonlinear']['output'][iproc]
-        in_sizes = self._var_sizes['nonlinear']['input'][iproc]
+        abs2meta = self._var_abs2meta['input']
+        in_sizes = np.zeros(len(self._var_allprocs_abs2meta['input']), dtype=INT_DTYPE)
+        for i, name in enumerate(self._var_allprocs_abs2meta['input']):
+            if name in abs2meta:
+                in_sizes[i] = abs2meta[name]['size']
         return out_sizes, np.hstack((out_sizes, in_sizes))
 
     def _get_gradient_nl_solver_systems(self):
@@ -4176,13 +4180,14 @@ class System(object):
         discrete = distrib = False
         val = _UNDEFINED
         if from_root:
-            all_meta = self._problem_meta['model_ref']()._var_allprocs_abs2meta
-            my_meta = self._problem_meta['model_ref']()._var_abs2meta
-            io = 'output' if abs_name in all_meta['output'] else 'input'
+            model = self._problem_meta['model_ref']()
+            all_meta = model._var_allprocs_abs2meta
+            my_meta = model._var_abs2meta
+            io = 'output' if abs_name in model._var_allprocs_abs2prom['output'] else 'input'
             all_meta = all_meta[io]
             my_meta = my_meta[io]
         else:
-            io = 'output' if abs_name in self._var_allprocs_abs2meta['output'] else 'input'
+            io = 'output' if abs_name in self._var_allprocs_abs2prom['output'] else 'input'
             all_meta = self._var_allprocs_abs2meta[io]
             my_meta = self._var_abs2meta[io]
 
@@ -4221,9 +4226,8 @@ class System(object):
             else:
                 return _UNDEFINED
 
-        typ = 'output' if abs_name in self._var_allprocs_abs2prom['output'] else 'input'
         if kind is None:
-            kind = typ
+            kind = io
         if vec_name is None:
             vec_name = 'nonlinear'
 
@@ -4249,7 +4253,7 @@ class System(object):
             if rank is None:   # bcast
                 if distrib:
                     idx = self._var_allprocs_abs2idx[vec_name][abs_name]
-                    sizes = self._var_sizes[vec_name][typ][:, idx]
+                    sizes = self._var_sizes[vec_name][io][:, idx]
                     # TODO: could cache these offsets
                     offsets = np.zeros(sizes.size, dtype=INT_DTYPE)
                     offsets[1:] = np.cumsum(sizes[:-1])
@@ -4267,7 +4271,7 @@ class System(object):
             else:   # retrieve to rank
                 if distrib:
                     idx = self._var_allprocs_abs2idx[vec_name][abs_name]
-                    sizes = self._var_sizes[vec_name][typ][:, idx]
+                    sizes = self._var_sizes[vec_name][io][:, idx]
                     # TODO: could cache these offsets
                     offsets = np.zeros(sizes.size, dtype=INT_DTYPE)
                     offsets[1:] = np.cumsum(sizes[:-1])

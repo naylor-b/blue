@@ -957,8 +957,8 @@ class Group(System):
 
             proc_locs = self.comm.allgather(locality)
             for io in ('input', 'output'):
-                all_abs2prom = self._var_allprocs_abs2prom[io]
                 if proc_locs[0][io].size > 0:
+                    all_abs2prom = self._var_allprocs_abs2prom[io]
                     abs2meta = self._var_allprocs_abs2meta[io]
                     locs = np.vstack([loc[io] for loc in proc_locs])
                     for i, name in enumerate(snames[io]):
@@ -996,7 +996,10 @@ class Group(System):
             for i, name in enumerate(self._var_allprocs_abs2meta[io]):
                 if name in abs2meta:
                     meta = abs2meta[name]
-                    if not (isinp and meta['shared']):
+                    if isinp and meta['shared']:
+                        # temporarily set to -size until we compute owning ranks
+                        sizes[iproc, i] = -meta['size']
+                    else:
                         sizes[iproc, i] = meta['size']
 
             if self.comm.size > 1:
@@ -1009,6 +1012,8 @@ class Group(System):
         relnames = self._var_allprocs_relevant_names
         vec_names = self._lin_rel_vec_name_list[1:] if self._use_derivatives else []
         abs2idx = self._var_allprocs_abs2idx['nonlinear']
+
+        self._compute_owning_ranks()
 
         sizes = self._var_sizes
         nl_sizes = sizes['nonlinear']
@@ -1045,13 +1050,13 @@ class Group(System):
             self._var_relevant_names['linear'] = self._var_relevant_names['nonlinear']
             self._var_allprocs_abs2idx['linear'] = self._var_allprocs_abs2idx['nonlinear']
 
-        self._compute_owning_ranks()
-
     def _compute_owning_ranks(self):
         abs2meta = self._var_allprocs_abs2meta
+        loc_abs2meta = self._var_abs2meta
         abs2discrete = self._var_allprocs_discrete
 
         if self.comm.size > 1:
+            myrank = self.comm.rank
             owns = self._owning_rank
             self._owned_sizes = self._var_sizes['nonlinear']['output'].copy()
             abs2idx = self._var_allprocs_abs2idx['nonlinear']
@@ -1060,7 +1065,7 @@ class Group(System):
                 for name, meta in abs2meta[io].items():
                     i = abs2idx[name]
                     for rank in range(self.comm.size):
-                        if sizes[rank, i] > 0:
+                        if sizes[rank, i] != 0:
                             owns[name] = rank
                             if io == 'output' and not meta['distributed']:
                                 self._owned_sizes[rank + 1:, i] = 0  # zero out all dups
@@ -1078,6 +1083,10 @@ class Group(System):
                         remote.update(all_set - names)
         else:
             self._owned_sizes = self._var_sizes['nonlinear']['output']
+
+        # get rid of negative sizes for shared inputs
+        in_sizes = self._var_sizes['nonlinear']['input']
+        in_sizes[in_sizes < 0] = 0
 
     def _setup_global_connections(self, conns=None):
         """

@@ -296,7 +296,12 @@ class FiniteDifference(ApproximationScheme):
         """
         for vec, idxs in idx_info:
             if vec is not None:
-                vec.iadd(delta, idxs)
+                if len(vec) == delta.size:
+                    vec.iadd(delta, idxs)
+                else:
+                    tmp = vec.asarray()
+                    tmp[idxs] += delta
+                    vec.set_val(tmp)
 
         if total:
             system.run_solve_nonlinear()

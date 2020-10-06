@@ -181,9 +181,15 @@ class ComplexStep(ApproximationScheme):
         Vector
             Copy of the results from running the perturbed system.
         """
+        delta_size = 1 if np.isscalar(delta) else delta.size
         for vec, idxs in idx_info:
             if vec is not None:
-                vec.iadd(delta, idxs)
+                if len(vec) == delta_size:
+                    vec.iadd(delta, idxs)
+                else:
+                    tmp = vec.asarray()
+                    tmp[idxs] += delta
+                    vec.set_val(tmp)
 
         if total:
             system.run_solve_nonlinear()
@@ -194,7 +200,12 @@ class ComplexStep(ApproximationScheme):
 
         for vec, idxs in idx_info:
             if vec is not None:
-                vec.isub(delta, idxs)
+                if len(vec) == delta_size:
+                    vec.isub(delta, idxs)
+                else:
+                    tmp = vec.asarray()
+                    tmp[idxs] -= delta
+                    vec.set_val(tmp)
 
         return result_array
 
