@@ -147,10 +147,18 @@ class DefaultVector(Vector):
         start = end = 0
         for abs_name in system._var_relevant_names[self._name][io]:
             meta = abs2meta[abs_name]
+            shape = meta['shape']
+
+            if ncol > 1:
+                if not isinstance(shape, tuple):
+                    shape = (shape,)
+                shape = tuple(list(shape) + [ncol])
+
             if isinp and meta['shared']:
                 src = conns[abs_name]
                 views_flat[abs_name] = v = root_out_vec._views_flat[src]
-                views[abs_name] = root_out_vec._views[src]
+                views[abs_name] = root_out_vec._views[src].view()
+                views[abs_name].shape = shape
                 if alloc_complex:
                     cplx_views_flat[abs_name] = root_out_vec._cplx_views_flat[src]
                     cplx_views[abs_name] = root_out_vec._cplx_views[src]
@@ -158,11 +166,6 @@ class DefaultVector(Vector):
                 continue
 
             end = start + meta['size']
-            shape = meta['shape']
-            if ncol > 1:
-                if not isinstance(shape, tuple):
-                    shape = (shape,)
-                shape = tuple(list(shape) + [ncol])
 
             views_flat[abs_name] = v = self._data[start:end]
             self._len += v.size
@@ -333,7 +336,7 @@ class DefaultVector(Vector):
         start = end = 0
         for dat in self._views_flat.values():
             end += dat.size
-            arr[start:end] = dat
+            arr[start:end] = dat.flat
             start = end
         return arr[idxs]
 
